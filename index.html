@@ -3,10 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Jueceo Calistenia IA</title>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/pose.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.5/camera_utils.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.5/drawing_utils.js"></script>
+<title>Jueceo Calistenia IA - MoveNet</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.3.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@0.0.7/dist/pose-detection.min.js"></script>
 <style>
   body { background: #111; color: white; text-align: center; font-family: sans-serif; }
   video, canvas { border-radius: 12px; margin-top: 20px; }
@@ -16,88 +15,105 @@
 </style>
 </head>
 <body>
-<h1>💪 Jueceo Calistenia IA</h1>
+<h1>💪 Jueceo Calistenia IA - MoveNet</h1>
 
-<!-- Video con tamaño fijo -->
 <video id="video" playsinline autoplay muted width="640" height="480"></video>
 <canvas id="output"></canvas>
 <div id="status" class="red">Toca la pantalla para iniciar la cámara...</div>
 
 <script>
-const videoElement = document.getElementById('video');
-const canvasElement = document.getElementById('output');
-const canvasCtx = canvasElement.getContext('2d');
+const video = document.getElementById('video');
+const canvas = document.getElementById('output');
+const ctx = canvas.getContext('2d');
 const statusText = document.getElementById('status');
 
-// Inicializar MediaPipe Pose
-const pose = new Pose({
-  locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/${file}`
-});
-pose.setOptions({
-  modelComplexity: 1,
-  smoothLandmarks: true,
-  enableSegmentation: false,
-  minDetectionConfidence: 0.5,
-  minTrackingConfidence: 0.5
-});
+let detector;
 
-// Función para calcular ángulo del codo
-function calcAngle(a, b, c) {
-  const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
-  let angle = Math.abs(radians * 180 / Math.PI);
-  if(angle > 180) angle = 360 - angle;
+// Función para calcular ángulo entre 3 puntos
+function calcAngle(a,b,c){
+  const radians = Math.atan2(c.y-b.y, c.x-b.x) - Math.atan2(a.y-b.y, a.x-b.x);
+  let angle = Math.abs(radians*180/Math.PI);
+  if(angle>180) angle = 360-angle;
   return angle;
 }
 
-// Evento al recibir resultados de MediaPipe
-pose.onResults(results => {
-  canvasCtx.save();
-  canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-  canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+// Dibuja puntos y conexiones
+function drawPose(pose){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  if(pose.keypoints){
+    ctx.fillStyle = "#FF3366";
+    ctx.strokeStyle = "#00FFAA";
+    ctx.lineWidth = 2;
+    // Dibuja keypoints
+    pose.keypoints.forEach(kp=>{
+      if(kp.score>0.3){
+        ctx.beginPath();
+        ctx.arc(kp.x, kp.y, 5, 0, 2*Math.PI);
+        ctx.fill();
+      }
+    });
+    // Dibuja conexiones simples (brazo izquierdo)
+    const leftShoulder = pose.keypoints.find(k=>k.name==='left_shoulder');
+    const leftElbow = pose.keypoints.find(k=>k.name==='left_elbow');
+    const leftWrist = pose.keypoints.find(k=>k.name==='left_wrist');
+    if(leftShoulder && leftElbow && leftWrist){
+      ctx.beginPath();
+      ctx.moveTo(leftShoulder.x, leftShoulder.y);
+      ctx.lineTo(leftElbow.x, leftElbow.y);
+      ctx.lineTo(leftWrist.x, leftWrist.y);
+      ctx.stroke();
 
-  if(results.poseLandmarks){
-    drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color:'#00FFAA', lineWidth:4});
-    drawLandmarks(canvasCtx, results.poseLandmarks, {color:'#FF3366', lineWidth:2});
-
-    const shoulder = results.poseLandmarks[11];
-    const elbow = results.poseLandmarks[13];
-    const wrist = results.poseLandmarks[15];
-    const angle = calcAngle(shoulder, elbow, wrist);
-
-    if(angle < 100){
-      statusText.textContent = "✅ ¡90 grados alcanzados!";
-      statusText.className = "green";
-    } else {
-      statusText.textContent = "⬇️ Baja más";
-      statusText.className = "red";
+      const angle = calcAngle(leftShoulder, leftElbow, leftWrist);
+      if(angle<100){
+        statusText.textContent="✅ ¡90 grados alcanzados!";
+        statusText.className="green";
+      }else{
+        statusText.textContent="⬇️ Baja más";
+        statusText.className="red";
+      }
     }
   }
-  canvasCtx.restore();
-});
+}
 
-// Configuración de la cámara MediaPipe
-const camera = new Camera(videoElement, {
-  onFrame: async () => { await pose.send({image: videoElement}); },
-  width: 640,
-  height: 480
-});
+// Inicia la cámara y el detector MoveNet
+async function startCamera(){
+  try{
+    // Inicia video
+    const stream = await navigator.mediaDevices.getUserMedia({video:true});
+    video.srcObject = stream;
+    await video.play();
 
-// Iniciar cámara al tocar la pantalla
-document.body.addEventListener('click', async () => {
-  try {
-    await camera.start();
-    statusText.textContent = "Cámara activada ✅";
-  } catch(err) {
-    statusText.textContent = "❌ No se pudo acceder a la cámara";
+    // Ajusta canvas
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // Crea detector MoveNet
+    detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet);
+
+    statusText.textContent="Cámara activada ✅";
+
+    // Loop para detectar poses
+    async function detectPose(){
+      const poses = await detector.estimatePoses(video);
+      if(poses.length>0){
+        drawPose(poses[0]);
+      } else {
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.drawImage(video,0,0,canvas.width,canvas.height);
+      }
+      requestAnimationFrame(detectPose);
+    }
+    detectPose();
+
+  }catch(err){
+    statusText.textContent="❌ No se pudo acceder a la cámara";
     console.error(err);
   }
-}, {once: true});
+}
 
-// Ajustar canvas al tamaño del video
-videoElement.addEventListener('loadedmetadata', () => {
-  canvasElement.width = videoElement.videoWidth;
-  canvasElement.height = videoElement.videoHeight;
-});
+// Evento tap para iniciar
+document.body.addEventListener('click', startCamera, {once:true});
 </script>
 </body>
 </html>
