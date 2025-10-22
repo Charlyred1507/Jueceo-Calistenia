@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jueceo Calistenia IA</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/pose.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.5/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.5/drawing_utils.js"></script>
+  <style>
+    body { background: #111; color: white; text-align: center; font-family: sans-serif; }
+    video, canvas { width: 90%; border-radius: 12px; margin-top: 20px; }
+    #status { font-size: 1.5rem; margin-top: 20px; }
+    .green { color: #00ff88; }
+    .red { color: #ff4444; }
+  </style>
+</head>
+<body>
+  <h1>💪 Jueceo Calistenia IA</h1>
+  <video id="video" playsinline></video>
+  <canvas id="output"></canvas>
+  <div id="status" class="red">Cargando cámara...</div>
+
+  <script>
+    const videoElement = document.getElementById('video');
+    const canvasElement = document.getElementById('output');
+    const canvasCtx = canvasElement.getContext('2d');
+    const statusText = document.getElementById('status');
+
+    const pose = new Pose({locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/${file}`});
+    pose.setOptions({modelComplexity: 1, smoothLandmarks: true, enableSegmentation: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5});
+
+    pose.onResults(results => {
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+      if (results.poseLandmarks) {
+        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FFAA', lineWidth: 4});
+        drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#FF3366', lineWidth: 2});
+
+        const shoulder = results.poseLandmarks[11]; // hombro izquierdo
+        const elbow = results.poseLandmarks[13]; // codo izquierdo
+        const wrist = results.poseLandmarks[15]; // muñeca izquierda
+
+        const angle = calcAngle(shoulder, elbow, wrist);
+        if (angle < 100) {
+          statusText.textContent = "✅ ¡90 grados alcanzados!";
+          statusText.className = "green";
+        } else {
+          statusText.textContent = "⬇️ Baja más";
+          statusText.className = "red";
+        }
+      }
+      canvasCtx.restore();
+    });
+
+    function calcAngle(a, b, c) {
+      const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+      let angle = Math.abs(radians * 180.0 / Math.PI);
+      if (angle > 180.0) angle = 360 - angle;
+      return angle;
+    }
+
+    const camera = new Camera(videoElement, {
+      onFrame: async () => await pose.send({image: videoElement}),
+      width: 640,
+      height: 480
+    });
+    camera.start();
+  </script>
+</body>
+</html>
