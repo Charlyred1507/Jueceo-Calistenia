@@ -15,7 +15,7 @@ h1 { margin-top:15px; font-size:1.8rem; text-align:center; }
   position: relative;
   width: 100%;
   max-width: 640px;
-  padding-top: 56.25%; /* 16:9 ratio */
+  padding-top: 56.25%;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -35,9 +35,13 @@ video, canvas {
 #overlay { position:absolute; top:10px; left:50%; transform:translateX(-50%); text-align:center; z-index:10; width:95%; pointer-events:none; }
 #exercise { font-size:2rem; font-weight:bold; color:#00ff88; margin-bottom:5px; text-shadow:1px 1px 4px black; }
 #repCounter { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:4rem; font-weight:bold; color:#ffdd00; text-shadow:2px 2px 8px black; pointer-events:none; }
-#feedback { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); font-size:1.2rem; font-weight:bold; color:#00ff88; text-shadow:1px 1px 4px black; z-index:15; }
+#status { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); font-size:1.2rem; font-weight:bold; text-shadow:1px 1px 4px black; z-index:15; }
 #startCamera { font-size:1rem; padding:10px 15px; margin-top:15px; border:none; border-radius:10px; cursor:pointer; background:#00ff88; color:#111; font-weight:bold; transition:all 0.2s ease; }
 #startCamera:active { transform:scale(0.95); background:#ffaa00; }
+#detectorIndicator { display:inline-block; margin-left:10px; font-weight:bold; }
+.green { color:#00ff88; }
+.red { color:#ff4444; }
+.yellow { color:#ffaa00; }
 </style>
 </head>
 <body>
@@ -50,7 +54,7 @@ video, canvas {
     <div id="exercise">Ejercicio: ---</div>
   </div>
   <div id="repCounter">0</div>
-  <div id="feedback">Toca "Activar Cámara"</div>
+  <div id="status">Estado: <span id="detectorIndicator" class="red">Detector Inactivo</span></div>
 </div>
 
 <button id="startCamera">Activar Cámara</button>
@@ -61,7 +65,7 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const exerciseText = document.getElementById('exercise');
 const repCounterEl = document.getElementById('repCounter');
-const feedback = document.getElementById('feedback');
+const status = document.getElementById('detectorIndicator');
 const startCameraBtn = document.getElementById('startCamera');
 
 let detector;
@@ -157,35 +161,46 @@ async function detectLoop(){
   requestAnimationFrame(detectLoop);
 }
 
-async function startCamera(){
-  try{
-    // 1️⃣ Acceso a la cámara
-    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
-    video.srcObject = stream;
-    await video.play();
-    resizeCanvas();
-
-    feedback.textContent="✅ Cámara activada";
-
-  }catch(err){
-    console.error("Error cámara:", err);
-    feedback.textContent="❌ No se pudo acceder a la cámara";
+async function initDetector(){
+  if(!window.tf || !window.poseDetection){
+    status.textContent="⚠️ TensorFlow o pose-detection no cargados";
+    status.className="yellow";
+    return;
+  }
+  if(!document.createElement('canvas').getContext('webgl2')){
+    status.textContent="⚠️ WebGL 2.0 no disponible, detector no funciona";
+    status.className="yellow";
     return;
   }
 
   try{
-    // 2️⃣ Inicialización del detector
     detector = await poseDetection.createDetector(
       poseDetection.SupportedModels.MoveNet,
       {modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING}
     );
-
-    feedback.textContent="✅ Cámara y detector listos";
+    status.textContent="🟢 Detector activo";
+    status.className="green";
     detectLoop();
-
   }catch(err){
     console.error("Error detector:", err);
-    feedback.textContent="⚠️ Detector no disponible, pero cámara funciona";
+    status.textContent="⚠️ Detector no disponible";
+    status.className="yellow";
+  }
+}
+
+async function startCamera(){
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+    video.srcObject = stream;
+    await video.play();
+    resizeCanvas();
+    status.textContent="🟢 Cámara activada";
+    status.className="green";
+    await initDetector();
+  }catch(err){
+    console.error("Error cámara:", err);
+    status.textContent="❌ No se pudo acceder a la cámara";
+    status.className="red";
   }
 }
 
