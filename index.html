@@ -11,14 +11,16 @@
 <style>
 body { margin:0; padding:0; background:#111; font-family:sans-serif; color:white; display:flex; flex-direction:column; align-items:center; }
 h1 { margin-top:15px; font-size:1.8rem; text-align:center; }
-#videoContainer { position:relative; width:100%; max-width:600px; display:flex; justify-content:center; align-items:center; margin-top:10px; }
-video, canvas { border-radius:12px; max-width:100%; }
-#overlay { position:absolute; top:10px; left:50%; transform:translateX(-50%); text-align:center; z-index:10; width:90%; pointer-events:none; }
+#videoContainer { position:relative; width:100%; max-width:640px; display:flex; justify-content:center; align-items:center; margin-top:10px; }
+video, canvas { border-radius:12px; width:100%; height:auto; object-fit:cover; }
+#overlay { position:absolute; top:10px; left:50%; transform:translateX(-50%); text-align:center; z-index:10; width:95%; pointer-events:none; }
 #exercise { font-size:2rem; font-weight:bold; color:#00ff88; margin-bottom:5px; text-shadow:1px 1px 4px black; }
 #counters { display:flex; gap:10px; justify-content:center; font-size:1.2rem; flex-wrap:wrap; margin-bottom:10px; text-shadow:1px 1px 3px black; }
-button { font-size:1rem; padding:10px 15px; margin:5px; border:none; border-radius:10px; cursor:pointer; background:#00ff88; color:#111; font-weight:bold; }
+button { font-size:1rem; padding:10px 15px; margin:5px; border:none; border-radius:10px; cursor:pointer; background:#00ff88; color:#111; font-weight:bold; transition:all 0.2s ease; }
+button:active { transform:scale(0.95); background:#ffaa00; }
 #controls { display:flex; flex-wrap:wrap; justify-content:center; margin-top:15px; margin-bottom:20px; gap:10px; z-index:10; }
 #repCounter { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:4rem; font-weight:bold; color:#ffdd00; text-shadow:2px 2px 8px black; pointer-events:none; }
+#feedback { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); font-size:1.2rem; font-weight:bold; color:#00ff88; text-shadow:1px 1px 4px black; z-index:15; }
 </style>
 </head>
 <body>
@@ -37,6 +39,7 @@ button { font-size:1rem; padding:10px 15px; margin:5px; border:none; border-radi
     </div>
   </div>
   <div id="repCounter">0</div>
+  <div id="feedback"></div>
 </div>
 
 <div id="controls">
@@ -56,18 +59,14 @@ const exerciseText = document.getElementById('exercise');
 const countersElements = document.querySelectorAll("#counters span");
 const repCounterEl = document.getElementById('repCounter');
 const startCameraBtn = document.getElementById('startCamera');
+const feedbackEl = document.getElementById('feedback');
 
 let detector;
-let model;
 
 let counts = { pushup:0, squat:0, muscleup:0, pullup:0 };
 let states = { pushupDown:false, squatDown:false, muscleupDown:false, pullupDown:false };
-let trainingData = [];
-let trainingLabels = [];
 
-// Ajuste canvas tamaño video
-function resizeCanvas() { canvas.width=video.videoWidth; canvas.height=video.videoHeight; }
-function getKeypointVector(keypoints){ return keypoints.map(k=>[k.x,k.y]).flat(); }
+function resizeCanvas(){ canvas.width=video.videoWidth; canvas.height=video.videoHeight; }
 
 function drawPose(keypoints){
   ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -83,9 +82,7 @@ function drawPose(keypoints){
     const p1=keypoints.find(k=>k.name===c[0]);
     const p2=keypoints.find(k=>k.name===c[1]);
     if(p1 && p2 && p1.score>0.3 && p2.score>0.3){
-      const correct = (c[0].includes('elbow') || c[0].includes('knee'))? true : true;
-      ctx.strokeStyle = correct ? "#00FFAA" : "#FF4444";
-      ctx.lineWidth=3;
+      ctx.strokeStyle="#00FFAA"; ctx.lineWidth=3;
       ctx.beginPath();
       ctx.moveTo(p1.x*canvas.width,p1.y*canvas.height);
       ctx.lineTo(p2.x*canvas.width,p2.y*canvas.height);
@@ -96,7 +93,9 @@ function drawPose(keypoints){
 
 function calcAngle(a,b,c){
   const rad=Math.atan2(c.y-b.y,c.x-b.x)-Math.atan2(a.y-b.y,a.x-b.x);
-  let ang=Math.abs(rad*180/Math.PI); if(ang>180) ang=360-ang; return ang;
+  let ang=Math.abs(rad*180/Math.PI);
+  if(ang>180) ang=360-ang; 
+  return ang;
 }
 
 async function detectLoop(){
@@ -141,7 +140,6 @@ async function detectLoop(){
     countersElements[2].textContent=`🔝 Muscle-ups: ${counts.muscleup}`;
     countersElements[3].textContent=`⬆️ Pull-ups: ${counts.pullup}`;
 
-    // Mostrar rep del ejercicio detectado (mayor conteo)
     const maxCount = Math.max(counts.pushup,counts.squat,counts.muscleup,counts.pullup);
     repCounterEl.textContent = maxCount;
     if(maxCount===counts.pushup) exerciseText.textContent="Ejercicio: Lagartija";
@@ -164,6 +162,14 @@ async function startCamera(){
   }catch(err){ console.error(err); alert("No se pudo activar la cámara."); }
 }
 startCameraBtn.addEventListener('click', startCamera);
-</script>
-</body>
-</html>
+
+// Botones con feedback visual
+function buttonFeedback(msg){
+  feedbackEl.textContent = msg;
+  feedbackEl.style.opacity = 1;
+  setTimeout(()=>{ feedbackEl.style.opacity=0; },1200);
+}
+
+document.getElementById('addPushup').addEventListener('click', ()=>buttonFeedback("Ejemplo Lagartija agregado"));
+document.getElementById('addSquat').addEventListener('click', ()=>buttonFeedback("Ejemplo Sentadilla agregado"));
+document.getElementById('addMuscleup').addEventListener('click', ()=>buttonFeedback("Ejemplo Muscle
