@@ -17,7 +17,7 @@
 </head>
 <body>
   <h1>💪 Jueceo Calistenia IA</h1>
-  <video id="video" playsinline autoplay muted></video>
+  <video id="video" playsinline autoplay muted style="width:100%; height:auto;"></video>
   <canvas id="output"></canvas>
   <div id="status" class="red">Toca la pantalla para iniciar la cámara...</div>
 
@@ -74,22 +74,29 @@
       canvasCtx.restore();
     });
 
-    // Configuración de la cámara
+    // Configuración de la cámara con MediaPipe
     const camera = new Camera(videoElement, {
       onFrame: async () => await pose.send({image: videoElement}),
       width: 640,
       height: 480
     });
 
-    // Iniciar cámara al tocar la pantalla (requisito en móviles)
-    document.body.addEventListener('click', () => {
-      camera.start().then(() => {
+    // Función para iniciar la cámara con getUserMedia (compatibilidad móvil)
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        videoElement.srcObject = stream;
+        await videoElement.play();
+        await camera.start();
         statusText.textContent = "Cámara activada ✅";
-      }).catch(err => {
+      } catch(err) {
         statusText.textContent = "❌ No se pudo acceder a la cámara";
         console.error(err);
-      });
-    });
+      }
+    }
+
+    // Inicia cámara al tocar la pantalla (solo una vez)
+    document.body.addEventListener('click', startCamera, { once: true });
 
     // Ajustar canvas al tamaño del video
     videoElement.addEventListener('loadedmetadata', () => {
