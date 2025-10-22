@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Jueceo Calistenia IA</title>
 
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.3.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@0.0.7/dist/pose-detection.min.js"></script>
+<!-- TensorFlow.js completo (más compatible con móviles) -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.3.0/dist/tf.js"></script>
+<!-- Pose Detection global compatible navegador -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
 <style>
 body { margin:0; padding:0; background:#111; font-family:sans-serif; color:white; display:flex; flex-direction:column; align-items:center; }
@@ -162,18 +164,8 @@ async function detectLoop(){
 }
 
 async function initDetector(){
-  if(!window.tf || !window.poseDetection){
-    status.textContent="⚠️ TensorFlow o pose-detection no cargados";
-    status.className="yellow";
-    return;
-  }
-  if(!document.createElement('canvas').getContext('webgl2')){
-    status.textContent="⚠️ WebGL 2.0 no disponible, detector no funciona";
-    status.className="yellow";
-    return;
-  }
-
   try{
+    await tf.ready(); // Espera TF.js
     detector = await poseDetection.createDetector(
       poseDetection.SupportedModels.MoveNet,
       {modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING}
