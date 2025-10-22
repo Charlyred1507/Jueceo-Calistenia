@@ -3,32 +3,38 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Jueceo Calistenia IA - MoveNet</title>
+<title>Jueceo Calistenia IA - Focos</title>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.3.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@0.0.7/dist/pose-detection.min.js"></script>
 <style>
   body { background: #111; color: white; text-align: center; font-family: sans-serif; }
   video, canvas { width: 100%; height: auto; border-radius: 12px; margin-top: 20px; }
-  #status { font-size: 1.5rem; margin-top: 20px; }
-  .green { color: #00ff88; }
-  .red { color: #ff4444; }
+  #status { font-size: 1.3rem; margin-top: 10px; }
+  #counters { font-size: 1.3rem; margin-top: 5px; }
 </style>
 </head>
 <body>
-<h1>💪 Jueceo Calistenia IA - MoveNet</h1>
+<h1>💪 Jueceo Calistenia IA - Focos</h1>
 
 <video id="video" playsinline autoplay muted></video>
 <canvas id="output"></canvas>
 <div id="status" class="red">Toca la pantalla para iniciar la cámara...</div>
+<div id="counters" class="green">💪 Lagartijas: 0 | 🏋️ Sentadillas: 0</div>
 
 <script>
 const video = document.getElementById('video');
 const canvas = document.getElementById('output');
 const ctx = canvas.getContext('2d');
 const statusText = document.getElementById('status');
+const countersText = document.getElementById('counters');
 
 let detector;
 
+// Contadores y flags
+let pushupsCount = 0, squatsCount = 0;
+let pushupDown = false, squatDown = false;
+
+// Función para calcular ángulo entre tres puntos
 function calcAngle(a,b,c){
   const radians = Math.atan2(c.y-b.y, c.x-b.x) - Math.atan2(a.y-b.y, a.x-b.x);
   let angle = Math.abs(radians*180/Math.PI);
@@ -36,50 +42,128 @@ function calcAngle(a,b,c){
   return angle;
 }
 
-function drawPose(pose){
+// Dibuja esqueleto y focos de color
+function drawSkeleton(keypoints){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(video,0,0,canvas.width,canvas.height);
 
-  if(pose.keypoints){
-    ctx.fillStyle = "#FF3366";
-    ctx.strokeStyle = "#00FFAA";
-    ctx.lineWidth = 2;
+  // Conexiones
+  const connections = [
+    ['left_shoulder','left_elbow'], ['left_elbow','left_wrist'],
+    ['right_shoulder','right_elbow'], ['right_elbow','right_wrist'],
+    ['left_hip','left_knee'], ['left_knee','left_ankle'],
+    ['right_hip','right_knee'], ['right_knee','right_ankle'],
+    ['left_shoulder','right_shoulder'], ['left_hip','right_hip'],
+    ['left_shoulder','left_hip'], ['right_shoulder','right_hip']
+  ];
 
-    pose.keypoints.forEach(kp=>{
-      if(kp.score>0.3){
-        ctx.beginPath();
-        ctx.arc(kp.x, kp.y, 5, 0, 2*Math.PI);
-        ctx.fill();
-      }
-    });
-
-    const leftShoulder = pose.keypoints.find(k=>k.name==='left_shoulder');
-    const leftElbow = pose.keypoints.find(k=>k.name==='left_elbow');
-    const leftWrist = pose.keypoints.find(k=>k.name==='left_wrist');
-
-    if(leftShoulder && leftElbow && leftWrist){
+  ctx.strokeStyle="#00FFAA";
+  ctx.lineWidth=2;
+  connections.forEach(c=>{
+    const p1 = keypoints.find(k=>k.name===c[0]);
+    const p2 = keypoints.find(k=>k.name===c[1]);
+    if(p1 && p2 && p1.score>0.3 && p2.score>0.3){
       ctx.beginPath();
-      ctx.moveTo(leftShoulder.x,leftShoulder.y);
-      ctx.lineTo(leftElbow.x,leftElbow.y);
-      ctx.lineTo(leftWrist.x,leftWrist.y);
+      ctx.moveTo(p1.x,p1.y);
+      ctx.lineTo(p2.x,p2.y);
       ctx.stroke();
-
-      const angle = calcAngle(leftShoulder, leftElbow, leftWrist);
-      if(angle<100){
-        statusText.textContent="✅ ¡90 grados alcanzados!";
-        statusText.className="green";
-      }else{
-        statusText.textContent="⬇️ Baja más";
-        statusText.className="red";
-      }
     }
+  });
+
+  // Focos en articulaciones clave (verde si correcto, rojo si no)
+  const checkPoints = [
+    ['left_shoulder','left_elbow','left_wrist'], 
+    ['right_shoulder','right_elbow','right_wrist'],
+    ['left_hip','left_knee','left_ankle'],
+    ['right_hip','right_knee','right_ankle']
+  ];
+
+  checkPoints.forEach(p=>{
+    const a = keypoints.find(k=>k.name===p[0]);
+    const b = keypoints.find(k=>k.name===p[1]);
+    const c = keypoints.find(k=>k.name===p[2]);
+    if(a && b && c){
+      const angle = calcAngle(a,b,c);
+      const color = (angle<100)?"#00FF00":"#FF0000"; // verde o rojo
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(b.x,b.y,10,0,2*Math.PI);
+      ctx.fill();
+    }
+  });
+
+  // Puntos generales
+  keypoints.forEach(k=>{
+    if(k.score>0.3){
+      ctx.fillStyle="#FF3366";
+      ctx.beginPath();
+      ctx.arc(k.x,k.y,4,0,2*Math.PI);
+      ctx.fill();
+    }
+  });
+}
+
+// Chequea ejercicios y actualiza contadores
+function checkExercises(keypoints){
+  let messages = [];
+
+  // BRAZOS
+  const lShoulder = keypoints.find(k=>k.name==='left_shoulder');
+  const lElbow = keypoints.find(k=>k.name==='left_elbow');
+  const lWrist = keypoints.find(k=>k.name==='left_wrist');
+  const rShoulder = keypoints.find(k=>k.name==='right_shoulder');
+  const rElbow = keypoints.find(k=>k.name==='right_elbow');
+  const rWrist = keypoints.find(k=>k.name==='right_wrist');
+
+  let pushupDownCurrent = false;
+  if(lShoulder && lElbow && lWrist && rShoulder && rElbow && rWrist){
+    const angleL = calcAngle(lShoulder,lElbow,lWrist);
+    const angleR = calcAngle(rShoulder,rElbow,rWrist);
+    pushupDownCurrent = (angleL<100 && angleR<100);
+    messages.push(`Brazo izq: ${angleL<100?'✅':'⬇️'} (${angleL.toFixed(0)}°)`);
+    messages.push(`Brazo der: ${angleR<100?'✅':'⬇️'} (${angleR.toFixed(0)}°)`);
+
+    if(pushupDownCurrent && !pushupDown) pushupsCount++;
+    pushupDown = pushupDownCurrent;
+  }
+
+  // SENTADILLAS
+  const lHip = keypoints.find(k=>k.name==='left_hip');
+  const lKnee = keypoints.find(k=>k.name==='left_knee');
+  const lAnkle = keypoints.find(k=>k.name==='left_ankle');
+  const rHip = keypoints.find(k=>k.name==='right_hip');
+  const rKnee = keypoints.find(k=>k.name==='right_knee');
+  const rAnkle = keypoints.find(k=>k.name==='right_ankle');
+
+  let squatDownCurrent = false;
+  if(lHip && lKnee && lAnkle && rHip && rKnee && rAnkle){
+    const angleL = calcAngle(lHip,lKnee,lAnkle);
+    const angleR = calcAngle(rHip,rKnee,rAnkle);
+    squatDownCurrent = (angleL<100 && angleR<100);
+    messages.push(`Sentadilla izq: ${angleL<100?'✅':'⬇️'} (${angleL.toFixed(0)}°)`);
+    messages.push(`Sentadilla der: ${angleR<100?'✅':'⬇️'} (${angleR.toFixed(0)}°)`);
+
+    if(squatDownCurrent && !squatDown) squatsCount++;
+    squatDown = squatDownCurrent;
+  }
+
+  statusText.innerHTML = messages.join('<br>');
+  countersText.textContent = `💪 Lagartijas: ${pushupsCount} | 🏋️ Sentadillas: ${squatsCount}`;
+}
+
+// Dibuja pose y actualiza
+function drawPose(pose){
+  if(pose.keypoints){
+    drawSkeleton(pose.keypoints);
+    checkExercises(pose.keypoints);
   }
 }
 
+// Inicia cámara y detector MoveNet
 async function startCamera(){
   try{
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } } // cámara trasera
+      video: { facingMode: { ideal: "environment" } }
     });
     video.srcObject = stream;
     await video.play();
@@ -91,13 +175,13 @@ async function startCamera(){
 
     statusText.textContent="Cámara activada ✅";
 
-    async function detectPose(){
+    async function detectLoop(){
       const poses = await detector.estimatePoses(video);
       if(poses.length>0) drawPose(poses[0]);
       else ctx.drawImage(video,0,0,canvas.width,canvas.height);
-      requestAnimationFrame(detectPose);
+      requestAnimationFrame(detectLoop);
     }
-    detectPose();
+    detectLoop();
 
   }catch(err){
     statusText.textContent="❌ No se pudo acceder a la cámara";
@@ -105,6 +189,7 @@ async function startCamera(){
   }
 }
 
+// Inicia al tocar la pantalla
 document.body.addEventListener('click', startCamera, {once:true});
 </script>
 </body>
