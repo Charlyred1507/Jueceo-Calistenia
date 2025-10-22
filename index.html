@@ -17,6 +17,8 @@
 </head>
 <body>
 <h1>💪 Jueceo Calistenia IA</h1>
+
+<!-- Video con tamaño fijo -->
 <video id="video" playsinline autoplay muted width="640" height="480"></video>
 <canvas id="output"></canvas>
 <div id="status" class="red">Toca la pantalla para iniciar la cámara...</div>
@@ -40,18 +42,18 @@ pose.setOptions({
 });
 
 // Función para calcular ángulo del codo
-function calcAngle(a,b,c){
-  const radians = Math.atan2(c.y-b.y, c.x-b.x)-Math.atan2(a.y-b.y,a.x-b.x);
-  let angle = Math.abs(radians*180/Math.PI);
-  if(angle>180) angle = 360-angle;
+function calcAngle(a, b, c) {
+  const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+  let angle = Math.abs(radians * 180 / Math.PI);
+  if(angle > 180) angle = 360 - angle;
   return angle;
 }
 
 // Evento al recibir resultados de MediaPipe
 pose.onResults(results => {
   canvasCtx.save();
-  canvasCtx.clearRect(0,0,canvasElement.width,canvasElement.height);
-  canvasCtx.drawImage(results.image,0,0,canvasElement.width,canvasElement.height);
+  canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+  canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
   if(results.poseLandmarks){
     drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color:'#00FFAA', lineWidth:4});
@@ -60,15 +62,14 @@ pose.onResults(results => {
     const shoulder = results.poseLandmarks[11];
     const elbow = results.poseLandmarks[13];
     const wrist = results.poseLandmarks[15];
-
     const angle = calcAngle(shoulder, elbow, wrist);
 
-    if(angle<100){
-      statusText.textContent="✅ ¡90 grados alcanzados!";
-      statusText.className="green";
-    }else{
-      statusText.textContent="⬇️ Baja más";
-      statusText.className="red";
+    if(angle < 100){
+      statusText.textContent = "✅ ¡90 grados alcanzados!";
+      statusText.className = "green";
+    } else {
+      statusText.textContent = "⬇️ Baja más";
+      statusText.className = "red";
     }
   }
   canvasCtx.restore();
@@ -76,26 +77,26 @@ pose.onResults(results => {
 
 // Configuración de la cámara MediaPipe
 const camera = new Camera(videoElement, {
-  onFrame: async()=>{ await pose.send({image:videoElement}) },
-  width:640,
-  height:480
+  onFrame: async () => { await pose.send({image: videoElement}); },
+  width: 640,
+  height: 480
 });
 
-// Iniciar cámara al tocar la pantalla (solo MediaPipe)
-document.body.addEventListener('click', async ()=>{
-  try{
+// Iniciar cámara al tocar la pantalla
+document.body.addEventListener('click', async () => {
+  try {
     await camera.start();
-    statusText.textContent="Cámara activada ✅";
-  }catch(err){
-    statusText.textContent="❌ No se pudo acceder a la cámara";
+    statusText.textContent = "Cámara activada ✅";
+  } catch(err) {
+    statusText.textContent = "❌ No se pudo acceder a la cámara";
     console.error(err);
   }
-},{once:true});
+}, {once: true});
 
 // Ajustar canvas al tamaño del video
-videoElement.addEventListener('loadedmetadata',()=>{
-  canvasElement.width=videoElement.videoWidth;
-  canvasElement.height=videoElement.videoHeight;
+videoElement.addEventListener('loadedmetadata', () => {
+  canvasElement.width = videoElement.videoWidth;
+  canvasElement.height = videoElement.videoHeight;
 });
 </script>
 </body>
