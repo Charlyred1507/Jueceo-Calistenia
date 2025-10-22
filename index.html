@@ -3,29 +3,32 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Jueceo Calistenia IA - Focos</title>
+<title>Jueceo Calistenia IA - Ejercicio automático</title>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.3.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@0.0.7/dist/pose-detection.min.js"></script>
 <style>
   body { background: #111; color: white; text-align: center; font-family: sans-serif; }
   video, canvas { width: 100%; height: auto; border-radius: 12px; margin-top: 20px; }
   #status { font-size: 1.3rem; margin-top: 10px; }
-  #counters { font-size: 1.3rem; margin-top: 5px; }
+  #exercise { font-size: 1.5rem; margin-top: 5px; color: #00ff88; }
+  #counters { font-size: 1.3rem; margin-top: 5px; color: #00ff88; }
 </style>
 </head>
 <body>
-<h1>💪 Jueceo Calistenia IA - Focos</h1>
+<h1>💪 Jueceo Calistenia IA - Ejercicio automático</h1>
 
 <video id="video" playsinline autoplay muted></video>
 <canvas id="output"></canvas>
 <div id="status" class="red">Toca la pantalla para iniciar la cámara...</div>
-<div id="counters" class="green">💪 Lagartijas: 0 | 🏋️ Sentadillas: 0</div>
+<div id="exercise">Ejercicio: ---</div>
+<div id="counters">💪 Lagartijas: 0 | 🏋️ Sentadillas: 0</div>
 
 <script>
 const video = document.getElementById('video');
 const canvas = document.getElementById('output');
 const ctx = canvas.getContext('2d');
 const statusText = document.getElementById('status');
+const exerciseText = document.getElementById('exercise');
 const countersText = document.getElementById('counters');
 
 let detector;
@@ -36,7 +39,7 @@ let pushupDown = false, squatDown = false;
 
 // Función para calcular ángulo entre tres puntos
 function calcAngle(a,b,c){
-  const radians = Math.atan2(c.y-b.y, c.x-b.x) - Math.atan2(a.y-b.y, a.x-b.x);
+  const radians = Math.atan2(c.y-b.y, c.x-b.x) - Math.atan2(a.y-b.y,a.x-b.x);
   let angle = Math.abs(radians*180/Math.PI);
   if(angle>180) angle = 360-angle;
   return angle;
@@ -47,7 +50,6 @@ function drawSkeleton(keypoints){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(video,0,0,canvas.width,canvas.height);
 
-  // Conexiones
   const connections = [
     ['left_shoulder','left_elbow'], ['left_elbow','left_wrist'],
     ['right_shoulder','right_elbow'], ['right_elbow','right_wrist'],
@@ -84,7 +86,7 @@ function drawSkeleton(keypoints){
     const c = keypoints.find(k=>k.name===p[2]);
     if(a && b && c){
       const angle = calcAngle(a,b,c);
-      const color = (angle<100)?"#00FF00":"#FF0000"; // verde o rojo
+      const color = (angle<100)?"#00FF00":"#FF0000";
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(b.x,b.y,10,0,2*Math.PI);
@@ -106,6 +108,7 @@ function drawSkeleton(keypoints){
 // Chequea ejercicios y actualiza contadores
 function checkExercises(keypoints){
   let messages = [];
+  let currentExercise = "---";
 
   // BRAZOS
   const lShoulder = keypoints.find(k=>k.name==='left_shoulder');
@@ -125,6 +128,8 @@ function checkExercises(keypoints){
 
     if(pushupDownCurrent && !pushupDown) pushupsCount++;
     pushupDown = pushupDownCurrent;
+
+    if(angleL<150 || angleR<150) currentExercise = "Lagartija / Fondo";
   }
 
   // SENTADILLAS
@@ -145,9 +150,12 @@ function checkExercises(keypoints){
 
     if(squatDownCurrent && !squatDown) squatsCount++;
     squatDown = squatDownCurrent;
+
+    if(angleL<150 || angleR<150) currentExercise = "Sentadilla";
   }
 
   statusText.innerHTML = messages.join('<br>');
+  exerciseText.textContent = `Ejercicio: ${currentExercise}`;
   countersText.textContent = `💪 Lagartijas: ${pushupsCount} | 🏋️ Sentadillas: ${squatsCount}`;
 }
 
