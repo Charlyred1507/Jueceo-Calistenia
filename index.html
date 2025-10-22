@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Jueceo Calistenia IA - PRO UX</title>
+<title>Jueceo Calistenia IA</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.3.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@0.0.7/dist/pose-detection.min.js"></script>
@@ -16,11 +16,10 @@ video, canvas { border-radius:12px; width:100%; height:auto; object-fit:cover; }
 #overlay { position:absolute; top:10px; left:50%; transform:translateX(-50%); text-align:center; z-index:10; width:95%; pointer-events:none; }
 #exercise { font-size:2rem; font-weight:bold; color:#00ff88; margin-bottom:5px; text-shadow:1px 1px 4px black; }
 #counters { display:flex; gap:10px; justify-content:center; font-size:1.2rem; flex-wrap:wrap; margin-bottom:10px; text-shadow:1px 1px 3px black; }
-button { font-size:1rem; padding:10px 15px; margin:5px; border:none; border-radius:10px; cursor:pointer; background:#00ff88; color:#111; font-weight:bold; transition:all 0.2s ease; }
-button:active { transform:scale(0.95); background:#ffaa00; }
-#controls { display:flex; flex-wrap:wrap; justify-content:center; margin-top:15px; margin-bottom:20px; gap:10px; z-index:10; }
 #repCounter { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:4rem; font-weight:bold; color:#ffdd00; text-shadow:2px 2px 8px black; pointer-events:none; }
 #feedback { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); font-size:1.2rem; font-weight:bold; color:#00ff88; text-shadow:1px 1px 4px black; z-index:15; }
+#startCamera { font-size:1rem; padding:10px 15px; margin-top:15px; border:none; border-radius:10px; cursor:pointer; background:#00ff88; color:#111; font-weight:bold; transition:all 0.2s ease; }
+#startCamera:active { transform:scale(0.95); background:#ffaa00; }
 </style>
 </head>
 <body>
@@ -42,14 +41,7 @@ button:active { transform:scale(0.95); background:#ffaa00; }
   <div id="feedback"></div>
 </div>
 
-<div id="controls">
-  <button id="startCamera">Activar Cámara</button>
-  <button id="addPushup">Agregar Ejemplo Lagartija</button>
-  <button id="addSquat">Agregar Ejemplo Sentadilla</button>
-  <button id="addMuscleup">Agregar Ejemplo Muscle-up</button>
-  <button id="addPullup">Agregar Ejemplo Pull-up</button>
-  <button id="train">Entrenar Modelo</button>
-</div>
+<button id="startCamera">Activar Cámara</button>
 
 <script>
 const video = document.getElementById('video');
@@ -59,10 +51,8 @@ const exerciseText = document.getElementById('exercise');
 const countersElements = document.querySelectorAll("#counters span");
 const repCounterEl = document.getElementById('repCounter');
 const startCameraBtn = document.getElementById('startCamera');
-const feedbackEl = document.getElementById('feedback');
 
 let detector;
-
 let counts = { pushup:0, squat:0, muscleup:0, pullup:0 };
 let states = { pushupDown:false, squatDown:false, muscleupDown:false, pullupDown:false };
 
@@ -135,6 +125,7 @@ async function detectLoop(){
       states.squatDown=down;
     }
 
+    // Actualizar UI
     countersElements[0].textContent=`💪 Lagartijas: ${counts.pushup}`;
     countersElements[1].textContent=`🏋️ Sentadillas: ${counts.squat}`;
     countersElements[2].textContent=`🔝 Muscle-ups: ${counts.muscleup}`;
@@ -150,7 +141,6 @@ async function detectLoop(){
   requestAnimationFrame(detectLoop);
 }
 
-// Activar cámara
 async function startCamera(){
   try{
     const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
@@ -161,15 +151,8 @@ async function startCamera(){
     detectLoop();
   }catch(err){ console.error(err); alert("No se pudo activar la cámara."); }
 }
+
 startCameraBtn.addEventListener('click', startCamera);
-
-// Botones con feedback visual
-function buttonFeedback(msg){
-  feedbackEl.textContent = msg;
-  feedbackEl.style.opacity = 1;
-  setTimeout(()=>{ feedbackEl.style.opacity=0; },1200);
-}
-
-document.getElementById('addPushup').addEventListener('click', ()=>buttonFeedback("Ejemplo Lagartija agregado"));
-document.getElementById('addSquat').addEventListener('click', ()=>buttonFeedback("Ejemplo Sentadilla agregado"));
-document.getElementById('addMuscleup').addEventListener('click', ()=>buttonFeedback("Ejemplo Muscle
+</script>
+</body>
+</html>
