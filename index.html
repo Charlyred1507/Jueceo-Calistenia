@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Jueceo Calistenia IA</title>
 
-<!-- TensorFlow.js completo (más compatible con móviles) -->
+<!-- TensorFlow.js -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.3.0/dist/tf.js"></script>
-<!-- Pose Detection global compatible navegador -->
+<!-- Pose Detection -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
 <style>
@@ -17,7 +17,7 @@ h1 { margin-top:15px; font-size:1.8rem; text-align:center; }
   position: relative;
   width: 100%;
   max-width: 640px;
-  padding-top: 56.25%;
+  padding-top: 75%; /* relación 4:3 */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -30,9 +30,9 @@ video, canvas {
   left:50%;
   width:100%;
   height:auto;
-  transform:translate(-50%, -50%);
+  transform:translate(-50%,-50%);
   border-radius:12px;
-  object-fit: contain;
+  object-fit:cover;
 }
 #overlay { position:absolute; top:10px; left:50%; transform:translateX(-50%); text-align:center; z-index:10; width:95%; pointer-events:none; }
 #exercise { font-size:2rem; font-weight:bold; color:#00ff88; margin-bottom:5px; text-shadow:1px 1px 4px black; }
@@ -40,7 +40,6 @@ video, canvas {
 #status { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); font-size:1.2rem; font-weight:bold; text-shadow:1px 1px 4px black; z-index:15; }
 #startCamera { font-size:1rem; padding:10px 15px; margin-top:15px; border:none; border-radius:10px; cursor:pointer; background:#00ff88; color:#111; font-weight:bold; transition:all 0.2s ease; }
 #startCamera:active { transform:scale(0.95); background:#ffaa00; }
-#detectorIndicator { display:inline-block; margin-left:10px; font-weight:bold; }
 .green { color:#00ff88; }
 .red { color:#ff4444; }
 .yellow { color:#ffaa00; }
@@ -56,7 +55,7 @@ video, canvas {
     <div id="exercise">Ejercicio: ---</div>
   </div>
   <div id="repCounter">0</div>
-  <div id="status">Estado: <span id="detectorIndicator" class="red">Detector Inactivo</span></div>
+  <div id="status"><span id="detectorIndicator" class="red">Detector Inactivo</span></div>
 </div>
 
 <button id="startCamera">Activar Cámara</button>
@@ -74,7 +73,10 @@ let detector;
 let counts = { pushup:0, squat:0 };
 let states = { pushupDown:false, squatDown:false };
 
-function resizeCanvas(){ canvas.width=video.videoWidth; canvas.height=video.videoHeight; }
+function resizeCanvas(){ 
+  canvas.width = video.videoWidth; 
+  canvas.height = video.videoHeight; 
+}
 
 function drawSkeleton(keypoints){
   ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -125,7 +127,7 @@ async function detectLoop(){
     const keypoints = poses[0].keypoints;
     drawSkeleton(keypoints);
 
-    // Lagartijas
+    // Lagartijas (brazo derecho e izquierdo)
     const lS=keypoints.find(k=>k.name==='left_shoulder');
     const lE=keypoints.find(k=>k.name==='left_elbow');
     const lW=keypoints.find(k=>k.name==='left_wrist');
@@ -140,7 +142,7 @@ async function detectLoop(){
       states.pushupDown=down;
     }
 
-    // Sentadillas
+    // Sentadillas (cadera-rodilla)
     const lH=keypoints.find(k=>k.name==='left_hip');
     const lK=keypoints.find(k=>k.name==='left_knee');
     const lA=keypoints.find(k=>k.name==='left_ankle');
@@ -168,7 +170,7 @@ async function initDetector(){
     await tf.ready(); // Espera TF.js
     detector = await poseDetection.createDetector(
       poseDetection.SupportedModels.MoveNet,
-      {modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING}
+      {modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER} // más preciso
     );
     status.textContent="🟢 Detector activo";
     status.className="green";
@@ -185,7 +187,7 @@ async function startCamera(){
     const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
     video.srcObject = stream;
     await video.play();
-    resizeCanvas();
+    video.addEventListener('loadedmetadata', resizeCanvas);
     status.textContent="🟢 Cámara activada";
     status.className="green";
     await initDetector();
