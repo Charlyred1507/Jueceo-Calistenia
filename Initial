@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jueceo Calistenia IA</title>
+  <script type="module">
+    import {
+      PoseLandmarker,
+      FilesetResolver,
+      DrawingUtils,
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest";
+
+    let video = null;
+    let canvas = null;
+    let ctx = null;
+    let poseLandmarker = null;
+
+    async function init() {
+      const filesetResolver = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+      );
+
+      poseLandmarker = await PoseLandmarker.createFromOptions(filesetResolver, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
+        },
+        runningMode: "VIDEO",
+        numPoses: 1
+      });
+
+      video = document.getElementById("video");
+      canvas = document.getElementById("canvas");
+      ctx = canvas.getContext("2d");
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" } // Usa la cámara trasera
+      });
+      video.srcObject = stream;
+      video.play();
+
+      video.onloadedmetadata = () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        requestAnimationFrame(detectPose);
+      };
+    }
+
+    function calcularAngulo(a, b, c) {
+      const AB = [a.x - b.x, a.y - b.y];
+      const CB = [c.x - b.x, c.y - b.y];
+      const dot = AB[0]*CB[0] + AB[1]*CB[1];
+      const magAB = Math.sqrt(AB[0]**2 + AB[1]**2);
+      const magCB = Math.sqrt(CB[0]**2 + CB[1]**2);
+      const cosTheta = dot / (magAB * magCB);
+      return Math.round(Math.acos(cosTheta) * (180 / Math.PI));
+    }
+
+    async function detectPose() {
+      const result = await poseLandmarker.detectForVideo(video, performance.now());
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      if (result.landmarks && result.landmarks.length > 0) {
+        const lm = result.landmarks[0];
+        const shoulder = lm[12]; // Hombro derecho
+        const elbow = lm[14];    // Codo derecho
+        const wrist = lm[16];    // Muñeca derecha
+
+        const angle = calcularAngulo(shoulder, elbow, wrist);
+
+        // Dibuja los puntos del brazo
+        ctx.fillStyle = "white";
+        [shoulder, elbow, wrist].forEach(p => {
+          ctx.beginPath();
+          ctx.arc(p.x * canvas.width, p.y * canvas.height, 5, 0, 2*Math.PI);
+          ctx.fill();
+        });
+
+        // Mostrar ángulo
+        ctx.fillStyle = "white";
+        ctx.font = "24px Arial";
+        ctx.fillText(`${angle}°`, elbow.x * canvas.width + 10, elbow.y * canvas.height);
+
+        // Lógica del indicador
+        const valid = angle >= 85 && angle <= 95;
+        const color = valid ? "limegreen" : "red";
+        const text = valid ? "Perfecto!" : "Corrige";
+
+        ctx.beginPath();
+        ctx.arc(50, 50, 30, 0, 2 * Math.PI);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.fillStyle = "white";
+        ctx.font = "22px Arial";
+        ctx.fillText(text, 100, 60);
+      }
+
+      requestAnimationFrame(detectPose);
+    }
+
+    window.onload = init;
+  </script>
+  <style>
+    body {
+      margin: 0;
+      background: black;
+      color: white;
+      font-family: sans-serif;
+      text-align: center;
+    }
+    video, canvas {
+      width: 100%;
+      max-width: 600px;
+      border-radius: 12px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h2>⚡ Jueceo Calistenia IA</h2>
+  <video id="video" playsinline></video>
+  <canvas id="canvas"></canvas>
+</body>
+</html>
