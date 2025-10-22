@@ -159,22 +159,33 @@ async function detectLoop(){
 
 async function startCamera(){
   try{
+    // 1️⃣ Acceso a la cámara
     const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
     video.srcObject = stream;
     await video.play();
     resizeCanvas();
 
+    feedback.textContent="✅ Cámara activada";
+
+  }catch(err){
+    console.error("Error cámara:", err);
+    feedback.textContent="❌ No se pudo acceder a la cámara";
+    return;
+  }
+
+  try{
+    // 2️⃣ Inicialización del detector
     detector = await poseDetection.createDetector(
       poseDetection.SupportedModels.MoveNet,
       {modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING}
     );
 
-    feedback.textContent="✅ Cámara activada y detector listo";
+    feedback.textContent="✅ Cámara y detector listos";
     detectLoop();
 
   }catch(err){
-    console.error(err);
-    feedback.textContent="❌ No se pudo acceder a la cámara";
+    console.error("Error detector:", err);
+    feedback.textContent="⚠️ Detector no disponible, pero cámara funciona";
   }
 }
 
