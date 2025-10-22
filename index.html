@@ -11,11 +11,29 @@
 <style>
 body { margin:0; padding:0; background:#111; font-family:sans-serif; color:white; display:flex; flex-direction:column; align-items:center; }
 h1 { margin-top:15px; font-size:1.8rem; text-align:center; }
-#videoContainer { position:relative; width:100%; max-width:640px; display:flex; justify-content:center; align-items:center; margin-top:10px; }
-video, canvas { border-radius:12px; width:100%; height:auto; object-fit:cover; }
+#videoContainer {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  padding-top: 56.25%; /* 16:9 ratio */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  margin-top:10px;
+}
+video, canvas {
+  position: absolute;
+  top:50%;
+  left:50%;
+  width:100%;
+  height:auto;
+  transform:translate(-50%, -50%);
+  border-radius:12px;
+  object-fit: contain;
+}
 #overlay { position:absolute; top:10px; left:50%; transform:translateX(-50%); text-align:center; z-index:10; width:95%; pointer-events:none; }
 #exercise { font-size:2rem; font-weight:bold; color:#00ff88; margin-bottom:5px; text-shadow:1px 1px 4px black; }
-#counters { display:flex; gap:10px; justify-content:center; font-size:1.2rem; flex-wrap:wrap; margin-bottom:10px; text-shadow:1px 1px 3px black; }
 #repCounter { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:4rem; font-weight:bold; color:#ffdd00; text-shadow:2px 2px 8px black; pointer-events:none; }
 #feedback { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); font-size:1.2rem; font-weight:bold; color:#00ff88; text-shadow:1px 1px 4px black; z-index:15; }
 #startCamera { font-size:1rem; padding:10px 15px; margin-top:15px; border:none; border-radius:10px; cursor:pointer; background:#00ff88; color:#111; font-weight:bold; transition:all 0.2s ease; }
@@ -30,15 +48,9 @@ video, canvas { border-radius:12px; width:100%; height:auto; object-fit:cover; }
   <canvas id="canvas"></canvas>
   <div id="overlay">
     <div id="exercise">Ejercicio: ---</div>
-    <div id="counters">
-      <span>💪 Lagartijas: 0</span>
-      <span>🏋️ Sentadillas: 0</span>
-      <span>🔝 Muscle-ups: 0</span>
-      <span>⬆️ Pull-ups: 0</span>
-    </div>
   </div>
   <div id="repCounter">0</div>
-  <div id="feedback"></div>
+  <div id="feedback">Toca "Activar Cámara"</div>
 </div>
 
 <button id="startCamera">Activar Cámara</button>
@@ -48,19 +60,20 @@ const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const exerciseText = document.getElementById('exercise');
-const countersElements = document.querySelectorAll("#counters span");
 const repCounterEl = document.getElementById('repCounter');
+const feedback = document.getElementById('feedback');
 const startCameraBtn = document.getElementById('startCamera');
 
 let detector;
-let counts = { pushup:0, squat:0, muscleup:0, pullup:0 };
-let states = { pushupDown:false, squatDown:false, muscleupDown:false, pullupDown:false };
+let counts = { pushup:0, squat:0 };
+let states = { pushupDown:false, squatDown:false };
 
 function resizeCanvas(){ canvas.width=video.videoWidth; canvas.height=video.videoHeight; }
 
-function drawPose(keypoints){
+function drawSkeleton(keypoints){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(video,0,0,canvas.width,canvas.height);
+
   const connections = [
     ['left_shoulder','left_elbow'], ['left_elbow','left_wrist'],
     ['right_shoulder','right_elbow'], ['right_elbow','right_wrist'],
@@ -68,15 +81,26 @@ function drawPose(keypoints){
     ['right_hip','right_knee'], ['right_knee','right_ankle'],
     ['left_shoulder','right_shoulder'], ['left_hip','right_hip']
   ];
+
   connections.forEach(c=>{
     const p1=keypoints.find(k=>k.name===c[0]);
     const p2=keypoints.find(k=>k.name===c[1]);
     if(p1 && p2 && p1.score>0.3 && p2.score>0.3){
-      ctx.strokeStyle="#00FFAA"; ctx.lineWidth=3;
+      ctx.strokeStyle=`rgba(${Math.floor(p1.score*255)},${Math.floor(p2.score*255)},255,0.8)`;
+      ctx.lineWidth=3;
       ctx.beginPath();
       ctx.moveTo(p1.x*canvas.width,p1.y*canvas.height);
       ctx.lineTo(p2.x*canvas.width,p2.y*canvas.height);
       ctx.stroke();
+    }
+  });
+
+  keypoints.forEach(k=>{
+    if(k.score>0.3){
+      ctx.fillStyle = `rgba(255,${Math.floor(k.score*255)},0,0.8)`;
+      ctx.beginPath();
+      ctx.arc(k.x*canvas.width,k.y*canvas.height,6,0,2*Math.PI);
+      ctx.fill();
     }
   });
 }
@@ -84,7 +108,7 @@ function drawPose(keypoints){
 function calcAngle(a,b,c){
   const rad=Math.atan2(c.y-b.y,c.x-b.x)-Math.atan2(a.y-b.y,a.x-b.x);
   let ang=Math.abs(rad*180/Math.PI);
-  if(ang>180) ang=360-ang; 
+  if(ang>180) ang=360-ang;
   return ang;
 }
 
@@ -92,8 +116,8 @@ async function detectLoop(){
   if(!detector) return;
   const poses = await detector.estimatePoses(video);
   if(poses.length>0){
-    const keypoints=poses[0].keypoints;
-    drawPose(keypoints);
+    const keypoints = poses[0].keypoints;
+    drawSkeleton(keypoints);
 
     // Lagartijas
     const lS=keypoints.find(k=>k.name==='left_shoulder');
@@ -125,18 +149,10 @@ async function detectLoop(){
       states.squatDown=down;
     }
 
-    // Actualizar UI
-    countersElements[0].textContent=`💪 Lagartijas: ${counts.pushup}`;
-    countersElements[1].textContent=`🏋️ Sentadillas: ${counts.squat}`;
-    countersElements[2].textContent=`🔝 Muscle-ups: ${counts.muscleup}`;
-    countersElements[3].textContent=`⬆️ Pull-ups: ${counts.pullup}`;
-
-    const maxCount = Math.max(counts.pushup,counts.squat,counts.muscleup,counts.pullup);
-    repCounterEl.textContent = maxCount;
+    const maxCount = Math.max(counts.pushup,counts.squat);
+    repCounterEl.textContent=maxCount;
     if(maxCount===counts.pushup) exerciseText.textContent="Ejercicio: Lagartija";
     else if(maxCount===counts.squat) exerciseText.textContent="Ejercicio: Sentadilla";
-    else if(maxCount===counts.muscleup) exerciseText.textContent="Ejercicio: Muscle-up";
-    else if(maxCount===counts.pullup) exerciseText.textContent="Ejercicio: Pull-up";
   }
   requestAnimationFrame(detectLoop);
 }
@@ -144,12 +160,23 @@ async function detectLoop(){
 async function startCamera(){
   try{
     const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
-    video.srcObject=stream;
+    video.srcObject = stream;
     await video.play();
     resizeCanvas();
-    detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet);
-    detectLoop();
-  }catch(err){ console.error(err); alert("No se pudo activar la cámara."); }
+
+    try{
+      detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet);
+      feedback.textContent="✅ Cámara activada y detector listo";
+      detectLoop();
+    }catch(detectorError){
+      console.error(detectorError);
+      feedback.textContent="⚠️ Detector no disponible, pero cámara funciona";
+      detectLoop();
+    }
+  }catch(err){
+    console.error(err);
+    feedback.textContent="❌ No se pudo acceder a la cámara";
+  }
 }
 
 startCameraBtn.addEventListener('click', startCamera);
