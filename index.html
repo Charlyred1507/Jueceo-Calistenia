@@ -19,7 +19,7 @@
   <h1>💪 Jueceo Calistenia IA</h1>
   <video id="video" playsinline autoplay muted></video>
   <canvas id="output"></canvas>
-  <div id="status" class="red">Cargando cámara...</div>
+  <div id="status" class="red">Toca la pantalla para iniciar la cámara...</div>
 
   <script>
     const videoElement = document.getElementById('video');
@@ -39,7 +39,7 @@
       minTrackingConfidence: 0.5
     });
 
-    // Función para calcular el ángulo del codo
+    // Función para calcular ángulo del codo
     function calcAngle(a, b, c) {
       const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
       let angle = Math.abs(radians * 180.0 / Math.PI);
@@ -81,10 +81,14 @@
       height: 480
     });
 
-    // Manejo de errores de cámara
-    camera.start().catch(err => {
-      statusText.textContent = "❌ No se pudo acceder a la cámara";
-      console.error(err);
+    // Iniciar cámara al tocar la pantalla (requisito en móviles)
+    document.body.addEventListener('click', () => {
+      camera.start().then(() => {
+        statusText.textContent = "Cámara activada ✅";
+      }).catch(err => {
+        statusText.textContent = "❌ No se pudo acceder a la cámara";
+        console.error(err);
+      });
     });
 
     // Ajustar canvas al tamaño del video
