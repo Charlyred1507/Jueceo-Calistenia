@@ -164,15 +164,14 @@ async function startCamera(){
     await video.play();
     resizeCanvas();
 
-    try{
-      detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet);
-      feedback.textContent="✅ Cámara activada y detector listo";
-      detectLoop();
-    }catch(detectorError){
-      console.error(detectorError);
-      feedback.textContent="⚠️ Detector no disponible, pero cámara funciona";
-      detectLoop();
-    }
+    detector = await poseDetection.createDetector(
+      poseDetection.SupportedModels.MoveNet,
+      {modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING}
+    );
+
+    feedback.textContent="✅ Cámara activada y detector listo";
+    detectLoop();
+
   }catch(err){
     console.error(err);
     feedback.textContent="❌ No se pudo acceder a la cámara";
