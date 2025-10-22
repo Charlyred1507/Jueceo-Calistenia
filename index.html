@@ -28,7 +28,7 @@ canvas { position:relative; z-index:1; }
 <video id="video" playsinline autoplay muted></video>
 <canvas id="canvas"></canvas>
 <div id="overlay">
-  <div id="status">Toca la pantalla para iniciar la cámara...</div>
+  <div id="status">Cámara apagada</div>
   <div id="exercise">Ejercicio: ---</div>
   <div id="counters">
     <span>💪 Lagartijas: 0</span>
@@ -40,6 +40,7 @@ canvas { position:relative; z-index:1; }
 </div>
 
 <div id="controls">
+<button id="startCamera">Activar cámara</button>
 <button id="addPushup">Agregar ejemplo Lagartija</button>
 <button id="addSquat">Agregar ejemplo Sentadilla</button>
 <button id="addMuscleup">Agregar ejemplo Muscle-up</button>
@@ -54,6 +55,7 @@ const ctx = canvas.getContext('2d');
 const statusText = document.getElementById('status');
 const exerciseText = document.getElementById('exercise');
 const countersElements = document.querySelectorAll("#counters span");
+const startCameraBtn = document.getElementById('startCamera');
 
 let detector;
 let model;
@@ -70,7 +72,6 @@ function getKeypointVector(keypoints){
 function drawPose(keypoints){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(video,0,0,canvas.width,canvas.height);
-
   const connections = [
     ['left_shoulder','left_elbow'], ['left_elbow','left_wrist'],
     ['right_shoulder','right_elbow'], ['right_elbow','right_wrist'],
@@ -78,9 +79,7 @@ function drawPose(keypoints){
     ['right_hip','right_knee'], ['right_knee','right_ankle'],
     ['left_shoulder','right_shoulder'], ['left_hip','right_hip']
   ];
-
-  ctx.strokeStyle="#00FFAA";
-  ctx.lineWidth=2;
+  ctx.strokeStyle="#00FFAA"; ctx.lineWidth=2;
   connections.forEach(c=>{
     const p1 = keypoints.find(k=>k.name===c[0]);
     const p2 = keypoints.find(k=>k.name===c[1]);
@@ -98,8 +97,7 @@ async function predictExercise(keypoints){
   const input = tf.tensor([getKeypointVector(keypoints)]);
   const pred = model.predict(input);
   const classIdx = pred.argMax(-1).dataSync()[0];
-  input.dispose();
-  pred.dispose();
+  input.dispose(); pred.dispose();
   switch(classIdx){
     case 0: return "Lagartija";
     case 1: return "Sentadilla";
@@ -117,11 +115,11 @@ function calcAngle(a,b,c){
 }
 
 async function detectLoop(){
+  if(!detector) return;
   const poses = await detector.estimatePoses(video);
   if(poses.length>0){
     const keypoints = poses[0].keypoints;
     drawPose(keypoints);
-
     const predicted = await predictExercise(keypoints);
     exerciseText.textContent = "Ejercicio: "+predicted;
 
@@ -182,4 +180,28 @@ const exerciseButtons = [
   {id:'addMuscleup',label:2},
   {id:'addPullup',label:3}
 ];
-exerciseButtons.for
+exerciseButtons.forEach(b=>{
+  document.getElementById(b.id).addEventListener('click',async()=>{
+    if(!detector) { statusText.textContent="Activa la cámara primero"; return; }
+    const poses = await detector.estimatePoses(video);
+    if(poses.length>0){ trainingData.push(getKeypointVector(poses[0].keypoints)); trainingLabels.push(b.label); statusText.textContent=`Ejemplo agregado ✅ (${b.id})`; }
+  });
+});
+
+// Entrenar modelo
+document.getElementById('train').addEventListener('click',async()=>{
+  if(trainingData.length<4){ statusText.textContent="Agrega más ejemplos"; return; }
+  const xs = tf.tensor(trainingData);
+  const ys = tf.tensor(trainingLabels.map(l=>[l]));
+  model = tf.sequential();
+  model.add(tf.layers.dense({units:128,inputShape:[xs.shape[1]],activation:'relu'}));
+  model.add(tf.layers.dense({units:64,activation:'relu'}));
+  model.add(tf.layers.dense({units:4,activation:'softmax'}));
+  model.compile({optimizer:'adam',loss:'sparseCategoricalCrossentropy',metrics:['accuracy']});
+  await model.fit(xs,ys,{epochs:25});
+  xs.dispose(); ys.dispose();
+  statusText.textContent="Modelo entrenado ✅";
+});
+
+// Función para iniciar cámara
+async function startCamera(){
