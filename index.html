@@ -1,52 +1,73 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Jueceo Calistenia IA - Ejercicio automático</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jueceo Calistenia IA - UI/UX Mejorado</title>
+
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.3.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@0.0.7/dist/pose-detection.min.js"></script>
+
 <style>
-  body { background: #111; color: white; text-align: center; font-family: sans-serif; }
-  video, canvas { width: 100%; height: auto; border-radius: 12px; margin-top: 20px; }
-  #status { font-size: 1.3rem; margin-top: 10px; }
-  #exercise { font-size: 1.5rem; margin-top: 5px; color: #00ff88; }
-  #counters { font-size: 1.3rem; margin-top: 5px; color: #00ff88; }
+body { margin:0; padding:0; background:#111; font-family:sans-serif; color:white; display:flex; flex-direction:column; align-items:center; }
+video, canvas { border-radius:12px; margin-top:10px; max-width:100%; }
+#overlay { position:absolute; top:10px; left:50%; transform:translateX(-50%); text-align:center; z-index:10; }
+#status { font-size:1rem; margin-bottom:5px; }
+#exercise { font-size:1.5rem; font-weight:bold; margin-bottom:5px; color:#00ff88; }
+#counters { display:flex; gap:15px; justify-content:center; font-size:1.2rem; margin-bottom:10px; flex-wrap:wrap; }
+button { font-size:1rem; padding:10px 15px; margin:5px; border:none; border-radius:10px; cursor:pointer; background:#00ff88; color:#111; font-weight:bold; }
+#controls { display:flex; flex-wrap:wrap; justify-content:center; margin-top:10px; z-index:10; position:relative; }
+canvas { position:relative; z-index:1; }
+#videoContainer { position:relative; width:100%; max-width:600px; display:flex; justify-content:center; align-items:center; }
 </style>
 </head>
 <body>
-<h1>💪 Jueceo Calistenia IA - Ejercicio automático</h1>
+<h1>💪 Jueceo Calistenia IA</h1>
 
+<div id="videoContainer">
 <video id="video" playsinline autoplay muted></video>
-<canvas id="output"></canvas>
-<div id="status" class="red">Toca la pantalla para iniciar la cámara...</div>
-<div id="exercise">Ejercicio: ---</div>
-<div id="counters">💪 Lagartijas: 0 | 🏋️ Sentadillas: 0</div>
+<canvas id="canvas"></canvas>
+<div id="overlay">
+  <div id="status">Toca la pantalla para iniciar la cámara...</div>
+  <div id="exercise">Ejercicio: ---</div>
+  <div id="counters">
+    <span>💪 Lagartijas: 0</span>
+    <span>🏋️ Sentadillas: 0</span>
+    <span>🔝 Muscle-ups: 0</span>
+    <span>⬆️ Pull-ups: 0</span>
+  </div>
+</div>
+</div>
+
+<div id="controls">
+<button id="addPushup">Agregar ejemplo Lagartija</button>
+<button id="addSquat">Agregar ejemplo Sentadilla</button>
+<button id="addMuscleup">Agregar ejemplo Muscle-up</button>
+<button id="addPullup">Agregar ejemplo Pull-up</button>
+<button id="train">Entrenar Modelo</button>
+</div>
 
 <script>
 const video = document.getElementById('video');
-const canvas = document.getElementById('output');
+const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const statusText = document.getElementById('status');
 const exerciseText = document.getElementById('exercise');
-const countersText = document.getElementById('counters');
+const countersElements = document.querySelectorAll("#counters span");
 
 let detector;
+let model;
 
-// Contadores y flags
-let pushupsCount = 0, squatsCount = 0;
-let pushupDown = false, squatDown = false;
+let counts = { pushup:0, squat:0, muscleup:0, pullup:0 };
+let states = { pushupDown:false, squatDown:false, muscleupDown:false, pullupDown:false };
+let trainingData = [];
+let trainingLabels = [];
 
-// Función para calcular ángulo entre tres puntos
-function calcAngle(a,b,c){
-  const radians = Math.atan2(c.y-b.y, c.x-b.x) - Math.atan2(a.y-b.y,a.x-b.x);
-  let angle = Math.abs(radians*180/Math.PI);
-  if(angle>180) angle = 360-angle;
-  return angle;
+function getKeypointVector(keypoints){
+  return keypoints.map(k=>[k.x,k.y]).flat();
 }
 
-// Dibuja esqueleto y focos de color
-function drawSkeleton(keypoints){
+function drawPose(keypoints){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(video,0,0,canvas.width,canvas.height);
 
@@ -55,8 +76,7 @@ function drawSkeleton(keypoints){
     ['right_shoulder','right_elbow'], ['right_elbow','right_wrist'],
     ['left_hip','left_knee'], ['left_knee','left_ankle'],
     ['right_hip','right_knee'], ['right_knee','right_ankle'],
-    ['left_shoulder','right_shoulder'], ['left_hip','right_hip'],
-    ['left_shoulder','left_hip'], ['right_shoulder','right_hip']
+    ['left_shoulder','right_shoulder'], ['left_hip','right_hip']
   ];
 
   ctx.strokeStyle="#00FFAA";
@@ -66,139 +86,100 @@ function drawSkeleton(keypoints){
     const p2 = keypoints.find(k=>k.name===c[1]);
     if(p1 && p2 && p1.score>0.3 && p2.score>0.3){
       ctx.beginPath();
-      ctx.moveTo(p1.x,p1.y);
-      ctx.lineTo(p2.x,p2.y);
+      ctx.moveTo(p1.x*canvas.width,p1.y*canvas.height);
+      ctx.lineTo(p2.x*canvas.width,p2.y*canvas.height);
       ctx.stroke();
     }
   });
+}
 
-  // Focos en articulaciones clave (verde si correcto, rojo si no)
-  const checkPoints = [
-    ['left_shoulder','left_elbow','left_wrist'], 
-    ['right_shoulder','right_elbow','right_wrist'],
-    ['left_hip','left_knee','left_ankle'],
-    ['right_hip','right_knee','right_ankle']
-  ];
+async function predictExercise(keypoints){
+  if(!model) return "---";
+  const input = tf.tensor([getKeypointVector(keypoints)]);
+  const pred = model.predict(input);
+  const classIdx = pred.argMax(-1).dataSync()[0];
+  input.dispose();
+  pred.dispose();
+  switch(classIdx){
+    case 0: return "Lagartija";
+    case 1: return "Sentadilla";
+    case 2: return "Muscle-up";
+    case 3: return "Pull-up";
+    default: return "---";
+  }
+}
 
-  checkPoints.forEach(p=>{
-    const a = keypoints.find(k=>k.name===p[0]);
-    const b = keypoints.find(k=>k.name===p[1]);
-    const c = keypoints.find(k=>k.name===p[2]);
-    if(a && b && c){
-      const angle = calcAngle(a,b,c);
-      const color = (angle<100)?"#00FF00":"#FF0000";
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(b.x,b.y,10,0,2*Math.PI);
-      ctx.fill();
+function calcAngle(a,b,c){
+  const rad=Math.atan2(c.y-b.y,c.x-b.x)-Math.atan2(a.y-b.y,a.x-b.x);
+  let ang=Math.abs(rad*180/Math.PI);
+  if(ang>180) ang=360-ang;
+  return ang;
+}
+
+async function detectLoop(){
+  const poses = await detector.estimatePoses(video);
+  if(poses.length>0){
+    const keypoints = poses[0].keypoints;
+    drawPose(keypoints);
+
+    const predicted = await predictExercise(keypoints);
+    exerciseText.textContent = "Ejercicio: "+predicted;
+
+    // Lagartijas
+    const lS=keypoints.find(k=>k.name==='left_shoulder');
+    const lE=keypoints.find(k=>k.name==='left_elbow');
+    const lW=keypoints.find(k=>k.name==='left_wrist');
+    const rS=keypoints.find(k=>k.name==='right_shoulder');
+    const rE=keypoints.find(k=>k.name==='right_elbow');
+    const rW=keypoints.find(k=>k.name==='right_wrist');
+    if(lS && lE && lW && rS && rE && rW){
+      const angleL=calcAngle(lS,lE,lW);
+      const angleR=calcAngle(rS,rE,rW);
+      const down=angleL<100 && angleR<100;
+      if(down && !states.pushupDown) counts.pushup++;
+      states.pushupDown=down;
     }
-  });
 
-  // Puntos generales
-  keypoints.forEach(k=>{
-    if(k.score>0.3){
-      ctx.fillStyle="#FF3366";
-      ctx.beginPath();
-      ctx.arc(k.x,k.y,4,0,2*Math.PI);
-      ctx.fill();
+    // Sentadillas
+    const lH=keypoints.find(k=>k.name==='left_hip');
+    const lK=keypoints.find(k=>k.name==='left_knee');
+    const lA=keypoints.find(k=>k.name==='left_ankle');
+    const rH=keypoints.find(k=>k.name==='right_hip');
+    const rK=keypoints.find(k=>k.name==='right_knee');
+    const rA=keypoints.find(k=>k.name==='right_ankle');
+    if(lH && lK && lA && rH && rK && rA){
+      const angleL=calcAngle(lH,lK,lA);
+      const angleR=calcAngle(rH,rK,rA);
+      const down=angleL<100 && angleR<100;
+      if(down && !states.squatDown) counts.squat++;
+      states.squatDown=down;
     }
-  });
+
+    // Muscle-ups y Pull-ups
+    const yShoulder=(keypoints.find(k=>k.name==='left_shoulder')?.y + keypoints.find(k=>k.name==='right_shoulder')?.y)/2;
+    const yHip=(keypoints.find(k=>k.name==='left_hip')?.y + keypoints.find(k=>k.name==='right_hip')?.y)/2;
+    const muscleDown = yHip > yShoulder*1.1;
+    const pullDown = yHip > yShoulder*1.2;
+
+    if(muscleDown && !states.muscleupDown) counts.muscleup++;
+    if(pullDown && !states.pullupDown) counts.pullup++;
+    states.muscleupDown=muscleDown;
+    states.pullupDown=pullDown;
+
+    // Actualizar contadores visibles
+    countersElements[0].textContent=`💪 Lagartijas: ${counts.pushup}`;
+    countersElements[1].textContent=`🏋️ Sentadillas: ${counts.squat}`;
+    countersElements[2].textContent=`🔝 Muscle-ups: ${counts.muscleup}`;
+    countersElements[3].textContent=`⬆️ Pull-ups: ${counts.pullup}`;
+  }
+  requestAnimationFrame(detectLoop);
 }
 
-// Chequea ejercicios y actualiza contadores
-function checkExercises(keypoints){
-  let messages = [];
-  let currentExercise = "---";
-
-  // BRAZOS
-  const lShoulder = keypoints.find(k=>k.name==='left_shoulder');
-  const lElbow = keypoints.find(k=>k.name==='left_elbow');
-  const lWrist = keypoints.find(k=>k.name==='left_wrist');
-  const rShoulder = keypoints.find(k=>k.name==='right_shoulder');
-  const rElbow = keypoints.find(k=>k.name==='right_elbow');
-  const rWrist = keypoints.find(k=>k.name==='right_wrist');
-
-  let pushupDownCurrent = false;
-  if(lShoulder && lElbow && lWrist && rShoulder && rElbow && rWrist){
-    const angleL = calcAngle(lShoulder,lElbow,lWrist);
-    const angleR = calcAngle(rShoulder,rElbow,rWrist);
-    pushupDownCurrent = (angleL<100 && angleR<100);
-    messages.push(`Brazo izq: ${angleL<100?'✅':'⬇️'} (${angleL.toFixed(0)}°)`);
-    messages.push(`Brazo der: ${angleR<100?'✅':'⬇️'} (${angleR.toFixed(0)}°)`);
-
-    if(pushupDownCurrent && !pushupDown) pushupsCount++;
-    pushupDown = pushupDownCurrent;
-
-    if(angleL<150 || angleR<150) currentExercise = "Lagartija / Fondo";
-  }
-
-  // SENTADILLAS
-  const lHip = keypoints.find(k=>k.name==='left_hip');
-  const lKnee = keypoints.find(k=>k.name==='left_knee');
-  const lAnkle = keypoints.find(k=>k.name==='left_ankle');
-  const rHip = keypoints.find(k=>k.name==='right_hip');
-  const rKnee = keypoints.find(k=>k.name==='right_knee');
-  const rAnkle = keypoints.find(k=>k.name==='right_ankle');
-
-  let squatDownCurrent = false;
-  if(lHip && lKnee && lAnkle && rHip && rKnee && rAnkle){
-    const angleL = calcAngle(lHip,lKnee,lAnkle);
-    const angleR = calcAngle(rHip,rKnee,rAnkle);
-    squatDownCurrent = (angleL<100 && angleR<100);
-    messages.push(`Sentadilla izq: ${angleL<100?'✅':'⬇️'} (${angleL.toFixed(0)}°)`);
-    messages.push(`Sentadilla der: ${angleR<100?'✅':'⬇️'} (${angleR.toFixed(0)}°)`);
-
-    if(squatDownCurrent && !squatDown) squatsCount++;
-    squatDown = squatDownCurrent;
-
-    if(angleL<150 || angleR<150) currentExercise = "Sentadilla";
-  }
-
-  statusText.innerHTML = messages.join('<br>');
-  exerciseText.textContent = `Ejercicio: ${currentExercise}`;
-  countersText.textContent = `💪 Lagartijas: ${pushupsCount} | 🏋️ Sentadillas: ${squatsCount}`;
-}
-
-// Dibuja pose y actualiza
-function drawPose(pose){
-  if(pose.keypoints){
-    drawSkeleton(pose.keypoints);
-    checkExercises(pose.keypoints);
-  }
-}
-
-// Inicia cámara y detector MoveNet
-async function startCamera(){
-  try{
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } }
-    });
-    video.srcObject = stream;
-    await video.play();
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet);
-
-    statusText.textContent="Cámara activada ✅";
-
-    async function detectLoop(){
-      const poses = await detector.estimatePoses(video);
-      if(poses.length>0) drawPose(poses[0]);
-      else ctx.drawImage(video,0,0,canvas.width,canvas.height);
-      requestAnimationFrame(detectLoop);
-    }
-    detectLoop();
-
-  }catch(err){
-    statusText.textContent="❌ No se pudo acceder a la cámara";
-    console.error(err);
-  }
-}
-
-// Inicia al tocar la pantalla
-document.body.addEventListener('click', startCamera, {once:true});
-</script>
-</body>
-</html>
+// Botones de entrenamiento
+const exerciseButtons = [
+  {id:'addPushup',label:0},
+  {id:'addSquat',label:1},
+  {id:'addMuscleup',label:2},
+  {id:'addPullup',label:3}
+];
+exerciseButtons.for
