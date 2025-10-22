@@ -8,7 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@0.0.7/dist/pose-detection.min.js"></script>
 <style>
   body { background: #111; color: white; text-align: center; font-family: sans-serif; }
-  video, canvas { border-radius: 12px; margin-top: 20px; }
+  video, canvas { width: 100%; height: auto; border-radius: 12px; margin-top: 20px; }
   #status { font-size: 1.5rem; margin-top: 20px; }
   .green { color: #00ff88; }
   .red { color: #ff4444; }
@@ -17,7 +17,7 @@
 <body>
 <h1>💪 Jueceo Calistenia IA - MoveNet</h1>
 
-<video id="video" playsinline autoplay muted width="640" height="480"></video>
+<video id="video" playsinline autoplay muted></video>
 <canvas id="output"></canvas>
 <div id="status" class="red">Toca la pantalla para iniciar la cámara...</div>
 
@@ -29,7 +29,6 @@ const statusText = document.getElementById('status');
 
 let detector;
 
-// Función para calcular ángulo entre 3 puntos
 function calcAngle(a,b,c){
   const radians = Math.atan2(c.y-b.y, c.x-b.x) - Math.atan2(a.y-b.y, a.x-b.x);
   let angle = Math.abs(radians*180/Math.PI);
@@ -37,15 +36,15 @@ function calcAngle(a,b,c){
   return angle;
 }
 
-// Dibuja puntos y conexiones
 function drawPose(pose){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(video,0,0,canvas.width,canvas.height);
+
   if(pose.keypoints){
     ctx.fillStyle = "#FF3366";
     ctx.strokeStyle = "#00FFAA";
     ctx.lineWidth = 2;
-    // Dibuja keypoints
+
     pose.keypoints.forEach(kp=>{
       if(kp.score>0.3){
         ctx.beginPath();
@@ -53,15 +52,16 @@ function drawPose(pose){
         ctx.fill();
       }
     });
-    // Dibuja conexiones simples (brazo izquierdo)
+
     const leftShoulder = pose.keypoints.find(k=>k.name==='left_shoulder');
     const leftElbow = pose.keypoints.find(k=>k.name==='left_elbow');
     const leftWrist = pose.keypoints.find(k=>k.name==='left_wrist');
+
     if(leftShoulder && leftElbow && leftWrist){
       ctx.beginPath();
-      ctx.moveTo(leftShoulder.x, leftShoulder.y);
-      ctx.lineTo(leftElbow.x, leftElbow.y);
-      ctx.lineTo(leftWrist.x, leftWrist.y);
+      ctx.moveTo(leftShoulder.x,leftShoulder.y);
+      ctx.lineTo(leftElbow.x,leftElbow.y);
+      ctx.lineTo(leftWrist.x,leftWrist.y);
       ctx.stroke();
 
       const angle = calcAngle(leftShoulder, leftElbow, leftWrist);
@@ -76,32 +76,25 @@ function drawPose(pose){
   }
 }
 
-// Inicia la cámara y el detector MoveNet
 async function startCamera(){
   try{
-    // Inicia video
-    const stream = await navigator.mediaDevices.getUserMedia({video:true});
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } } // cámara trasera
+    });
     video.srcObject = stream;
     await video.play();
 
-    // Ajusta canvas
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    // Crea detector MoveNet
     detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet);
 
     statusText.textContent="Cámara activada ✅";
 
-    // Loop para detectar poses
     async function detectPose(){
       const poses = await detector.estimatePoses(video);
-      if(poses.length>0){
-        drawPose(poses[0]);
-      } else {
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        ctx.drawImage(video,0,0,canvas.width,canvas.height);
-      }
+      if(poses.length>0) drawPose(poses[0]);
+      else ctx.drawImage(video,0,0,canvas.width,canvas.height);
       requestAnimationFrame(detectPose);
     }
     detectPose();
@@ -112,7 +105,6 @@ async function startCamera(){
   }
 }
 
-// Evento tap para iniciar
 document.body.addEventListener('click', startCamera, {once:true});
 </script>
 </body>
