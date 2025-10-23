@@ -159,9 +159,12 @@ function detectReps(kp){
     if(angle < 80 && !up) up=true;
     if(angle > 160 && up){ reps++; up=false; }
   } else if(currentExercise==="squat"){
-    angle = getAngle(kp[23], kp[25], kp[27]);
-    if(angle < 90 && !up) up=true;
-    if(angle > 160 && up){ reps++; up=false; }
+    const hip = kp[23], knee = kp[25], ankle = kp[27];
+    if(hip && knee && ankle && hip.score>0.4 && knee.score>0.4 && ankle.score>0.4){
+        angle = getAngle(hip, knee, ankle);
+        if(angle < 90 && !up) up=true;
+        if(angle > 160 && up){ reps++; up=false; }
+    }
   } else if(currentExercise==="pullup"){
     const yNose = kp[0].y;
     const yHands = (kp[9].y + kp[10].y)/2;
