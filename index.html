@@ -1,133 +1,129 @@
 <script>
-  const video = document.getElementById("video");
-  const canvas = document.getElementById("canvas");
-  const ctx = canvas.getContext("2d");
-  const counterEl = document.getElementById("counter");
-  const statusEl = document.getElementById("status");
-  const angleEl = document.getElementById("angleDisplay");
-  const exerciseSelect = document.getElementById("exercise");
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const counterEl = document.getElementById("counter");
+const statusEl = document.getElementById("status");
+const angleEl = document.getElementById("angleDisplay");
+const exerciseSelect = document.getElementById("exercise");
 
-  let detector, modelLoaded = false;
-  let reps = 0, up = false;
-  let currentExercise = "pushup";
+let detector, modelLoaded = false;
+let reps = 0, up = false;
+let currentExercise = "pushup";
 
-  exerciseSelect.addEventListener("change", e => {
-    currentExercise = e.target.value;
-    reps = 0;
-    counterEl.textContent = "Reps: 0";
+exerciseSelect.addEventListener("change", e => {
+  currentExercise = e.target.value;
+  reps = 0;
+  counterEl.textContent = "Reps: 0";
+});
+
+document.getElementById("startBtn").addEventListener("click", initCamera);
+
+async function initCamera() {
+  try {
+    statusEl.textContent = "🔄 Iniciando cámara...";
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    video.srcObject = stream;
+
+    // Esperamos a que el video esté listo
+    await video.play();
+    await new Promise(res => {
+      if(video.readyState >= 2) res();
+      else video.onloadeddata = res;
+    });
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    statusEl.textContent = "✅ Cámara trasera activa";
+
+    await loadDetector();
+    detectPose();
+  } catch(err) {
+    console.error(err);
+    statusEl.textContent = "❌ No se pudo activar la cámara";
+  }
+}
+
+async function loadDetector() {
+  const model = poseDetection.SupportedModels.MoveNet;
+  detector = await poseDetection.createDetector(model, {
+    modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+  });
+  modelLoaded = true;
+  statusEl.textContent = "✅ Detector activo";
+}
+
+async function detectPose() {
+  if(!modelLoaded) return;
+  const poses = await detector.estimatePoses(video);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if(poses.length > 0){
+    const keypoints = poses[0].keypoints;
+    drawSkeleton(keypoints);
+    detectReps(keypoints);
+  }
+
+  requestAnimationFrame(detectPose);
+}
+
+function drawSkeleton(keypoints) {
+  const pairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#00ff9f";
+
+  pairs.forEach(([a,b])=>{
+    const p1=keypoints[a], p2=keypoints[b];
+    if(p1.score>0.4 && p2.score>0.4){
+      ctx.beginPath();
+      ctx.moveTo(p1.x,p1.y);
+      ctx.lineTo(p2.x,p2.y);
+      ctx.stroke();
+    }
   });
 
-  document.getElementById("startBtn").addEventListener("click", initCamera);
-
-  async function initCamera() {
-    try {
-      statusEl.textContent = "🔄 Iniciando cámara...";
-
-      // ✅ Usa la cámara trasera (no espejo)
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
-      });
-
-      video.srcObject = stream;
-      await new Promise(res => video.onloadedmetadata = res);
-      video.play();
-
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      statusEl.textContent = "✅ Cámara activa (trasera)";
-      await loadDetector();
-      detectPose();
-    } catch (err) {
-      console.error(err);
-      statusEl.textContent = "❌ No se pudo activar la cámara";
+  keypoints.forEach(kp=>{
+    if(kp.score>0.5){
+      ctx.beginPath();
+      ctx.arc(kp.x,kp.y,5,0,2*Math.PI);
+      ctx.fillStyle="#00ff9f";
+      ctx.fill();
     }
+  });
+}
+
+function getAngle(a,b,c){
+  const AB = {x:b.x-a.x, y:b.y-a.y};
+  const CB = {x:b.x-c.x, y:b.y-c.y};
+  const dot = AB.x*CB.x + AB.y*CB.y;
+  const magAB = Math.sqrt(AB.x**2 + AB.y**2);
+  const magCB = Math.sqrt(CB.x**2 + CB.y**2);
+  return Math.round((Math.acos(dot/(magAB*magCB))*180)/Math.PI);
+}
+
+function detectReps(kp){
+  let angle=0;
+  if(currentExercise==="pushup" || currentExercise==="dip"){
+    angle=getAngle(kp[11],kp[13],kp[15]);
+    angleEl.textContent=`Ángulo (Codo): ${angle}°`;
+    if(angle<80 && !up) up=true;
+    if(angle>160 && up){ reps++; up=false; }
+  } else if(currentExercise==="squat"){
+    angle=getAngle(kp[23],kp[25],kp[27]);
+    angleEl.textContent=`Ángulo (Rodilla): ${angle}°`;
+    if(angle<90 && !up) up=true;
+    if(angle>160 && up){ reps++; up=false; }
+  } else if(currentExercise==="pullup"){
+    const yNose=kp[0].y;
+    const yHands=(kp[9].y+kp[10].y)/2;
+    angleEl.textContent=`Altura nariz/manos: ${(yHands-yNose).toFixed(0)} px`;
+    if(yNose<yHands && !up) up=true;
+    if(yNose>yHands+80 && up){ reps++; up=false; }
   }
-
-  async function loadDetector() {
-    const model = poseDetection.SupportedModels.MoveNet;
-    detector = await poseDetection.createDetector(model, {
-      modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-    });
-    modelLoaded = true;
-    statusEl.textContent = "✅ Detector activo";
-  }
-
-  async function detectPose() {
-    if (!modelLoaded) return;
-    const poses = await detector.estimatePoses(video);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // 🟩 No reflejamos el contexto (porque queremos movimiento real)
-    if (poses.length > 0) {
-      const keypoints = poses[0].keypoints;
-      drawSkeleton(keypoints);
-      detectReps(keypoints);
-    }
-
-    requestAnimationFrame(detectPose);
-  }
-
-  // 🔹 Dibuja las articulaciones y líneas verdes
-  function drawSkeleton(keypoints) {
-    const pairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "#00ff9f";
-
-    pairs.forEach(([a, b]) => {
-      const p1 = keypoints[a], p2 = keypoints[b];
-      if (p1.score > 0.4 && p2.score > 0.4) {
-        ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
-        ctx.stroke();
-      }
-    });
-
-    keypoints.forEach(kp => {
-      if (kp.score > 0.5) {
-        ctx.beginPath();
-        ctx.arc(kp.x, kp.y, 5, 0, 2 * Math.PI);
-        ctx.fillStyle = "#00ff9f";
-        ctx.fill();
-      }
-    });
-  }
-
-  // 🔹 Calcula el ángulo entre 3 puntos (por ejemplo codo o rodilla)
-  function getAngle(a, b, c) {
-    const AB = { x: b.x - a.x, y: b.y - a.y };
-    const CB = { x: b.x - c.x, y: b.y - c.y };
-    const dot = AB.x * CB.x + AB.y * CB.y;
-    const magAB = Math.sqrt(AB.x ** 2 + AB.y ** 2);
-    const magCB = Math.sqrt(CB.x ** 2 + CB.y ** 2);
-    return Math.round((Math.acos(dot / (magAB * magCB)) * 180) / Math.PI);
-  }
-
-  // 🔹 Lógica de conteo de repeticiones
-  function detectReps(kp) {
-    let angle = 0;
-
-    if (currentExercise === "pushup" || currentExercise === "dip") {
-      angle = getAngle(kp[11], kp[13], kp[15]); // hombro - codo - muñeca
-      angleEl.textContent = `Ángulo (Codo): ${angle}°`;
-      if (angle < 80 && !up) up = true;
-      if (angle > 160 && up) { reps++; up = false; }
-
-    } else if (currentExercise === "squat") {
-      angle = getAngle(kp[23], kp[25], kp[27]); // cadera - rodilla - tobillo
-      angleEl.textContent = `Ángulo (Rodilla): ${angle}°`;
-      if (angle < 90 && !up) up = true;
-      if (angle > 160 && up) { reps++; up = false; }
-
-    } else if (currentExercise === "pullup") {
-      const yNose = kp[0].y;
-      const yHands = (kp[9].y + kp[10].y) / 2;
-      angleEl.textContent = `Altura nariz/manos: ${(yHands - yNose).toFixed(0)} px`;
-      if (yNose < yHands && !up) up = true;
-      if (yNose > yHands + 80 && up) { reps++; up = false; }
-    }
-
-    counterEl.textContent = `Reps: ${reps}`;
-  }
+  counterEl.textContent=`Reps: ${reps}`;
+}
 </script>
