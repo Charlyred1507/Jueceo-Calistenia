@@ -1,204 +1,179 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Jueceo Calistenia IA</title>
 
-<!-- TensorFlow.js -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.3.0/dist/tf.js"></script>
-<!-- Pose Detection -->
+<!-- TensorFlow y Pose Detection -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.12.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
 <style>
-body { margin:0; padding:0; background:#111; font-family:sans-serif; color:white; display:flex; flex-direction:column; align-items:center; }
-h1 { margin-top:15px; font-size:1.8rem; text-align:center; }
-#videoContainer {
+body {
+  margin: 0;
+  padding: 0;
+  background: #111;
+  font-family: sans-serif;
+  color: white;
+  text-align: center;
+}
+h1 { margin: 10px 0; font-size: 1.8rem; color: #00ff88; }
+#container {
   position: relative;
   width: 100%;
   max-width: 640px;
-  padding-top: 75%; /* relación 4:3 */
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow: hidden;
-  margin-top:10px;
+  margin: auto;
 }
 video, canvas {
   position: absolute;
-  top:50%;
-  left:50%;
-  width:100%;
-  height:auto;
-  transform:translate(-50%,-50%);
-  border-radius:12px;
-  object-fit:cover;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
 }
-#overlay { position:absolute; top:10px; left:50%; transform:translateX(-50%); text-align:center; z-index:10; width:95%; pointer-events:none; }
-#exercise { font-size:2rem; font-weight:bold; color:#00ff88; margin-bottom:5px; text-shadow:1px 1px 4px black; }
-#repCounter { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:4rem; font-weight:bold; color:#ffdd00; text-shadow:2px 2px 8px black; pointer-events:none; }
-#status { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); font-size:1.2rem; font-weight:bold; text-shadow:1px 1px 4px black; z-index:15; }
-#startCamera { font-size:1rem; padding:10px 15px; margin-top:15px; border:none; border-radius:10px; cursor:pointer; background:#00ff88; color:#111; font-weight:bold; transition:all 0.2s ease; }
-#startCamera:active { transform:scale(0.95); background:#ffaa00; }
-.green { color:#00ff88; }
-.red { color:#ff4444; }
-.yellow { color:#ffaa00; }
+#startCamera {
+  background: #00ff88;
+  color: #111;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 20px;
+  font-size: 1rem;
+  font-weight: bold;
+  margin-top: 15px;
+  cursor: pointer;
+}
+#status {
+  margin-top: 10px;
+  font-size: 1.2rem;
+}
+.green { color: #00ff88; }
+.red { color: #ff4444; }
+.yellow { color: #ffaa00; }
 </style>
 </head>
 <body>
+
 <h1>💪 Jueceo Calistenia IA</h1>
 
-<div id="videoContainer">
-  <video id="video" playsinline autoplay muted></video>
+<div id="container">
+  <video id="video" autoplay playsinline muted></video>
   <canvas id="canvas"></canvas>
-  <div id="overlay">
-    <div id="exercise">Ejercicio: ---</div>
-  </div>
-  <div id="repCounter">0</div>
-  <div id="status"><span id="detectorIndicator" class="red">Detector Inactivo</span></div>
 </div>
 
 <button id="startCamera">Activar Cámara</button>
+<div id="status" class="yellow">Esperando cámara...</div>
 
 <script>
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-const exerciseText = document.getElementById('exercise');
-const repCounterEl = document.getElementById('repCounter');
-const status = document.getElementById('detectorIndicator');
-const startCameraBtn = document.getElementById('startCamera');
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const startBtn = document.getElementById("startCamera");
+const statusEl = document.getElementById("status");
 
 let detector;
-let counts = { pushup:0, squat:0 };
-let states = { pushupDown:false, squatDown:false };
+let modelLoaded = false;
 
-function resizeCanvas(){ 
-  canvas.width = video.videoWidth; 
-  canvas.height = video.videoHeight; 
-}
-
-function drawSkeleton(keypoints){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.drawImage(video,0,0,canvas.width,canvas.height);
-
-  const connections = [
-    ['left_shoulder','left_elbow'], ['left_elbow','left_wrist'],
-    ['right_shoulder','right_elbow'], ['right_elbow','right_wrist'],
-    ['left_hip','left_knee'], ['left_knee','left_ankle'],
-    ['right_hip','right_knee'], ['right_knee','right_ankle'],
-    ['left_shoulder','right_shoulder'], ['left_hip','right_hip']
-  ];
-
-  connections.forEach(c=>{
-    const p1=keypoints.find(k=>k.name===c[0]);
-    const p2=keypoints.find(k=>k.name===c[1]);
-    if(p1 && p2 && p1.score>0.3 && p2.score>0.3){
-      ctx.strokeStyle=`rgba(${Math.floor(p1.score*255)},${Math.floor(p2.score*255)},255,0.8)`;
-      ctx.lineWidth=3;
-      ctx.beginPath();
-      ctx.moveTo(p1.x*canvas.width,p1.y*canvas.height);
-      ctx.lineTo(p2.x*canvas.width,p2.y*canvas.height);
-      ctx.stroke();
-    }
-  });
-
-  keypoints.forEach(k=>{
-    if(k.score>0.3){
-      ctx.fillStyle = `rgba(255,${Math.floor(k.score*255)},0,0.8)`;
-      ctx.beginPath();
-      ctx.arc(k.x*canvas.width,k.y*canvas.height,6,0,2*Math.PI);
-      ctx.fill();
-    }
-  });
-}
-
-function calcAngle(a,b,c){
-  const rad=Math.atan2(c.y-b.y,c.x-b.x)-Math.atan2(a.y-b.y,a.x-b.x);
-  let ang=Math.abs(rad*180/Math.PI);
-  if(ang>180) ang=360-ang;
-  return ang;
-}
-
-async function detectLoop(){
-  if(!detector) return;
-  const poses = await detector.estimatePoses(video);
-  if(poses.length>0){
-    const keypoints = poses[0].keypoints;
-    drawSkeleton(keypoints);
-
-    // Lagartijas (brazo derecho e izquierdo)
-    const lS=keypoints.find(k=>k.name==='left_shoulder');
-    const lE=keypoints.find(k=>k.name==='left_elbow');
-    const lW=keypoints.find(k=>k.name==='left_wrist');
-    const rS=keypoints.find(k=>k.name==='right_shoulder');
-    const rE=keypoints.find(k=>k.name==='right_elbow');
-    const rW=keypoints.find(k=>k.name==='right_wrist');
-    if(lS&&lE&&lW&&rS&&rE&&rW){
-      const angleL=calcAngle(lS,lE,lW);
-      const angleR=calcAngle(rS,rE,rW);
-      const down=angleL<100 && angleR<100;
-      if(down && !states.pushupDown) counts.pushup++;
-      states.pushupDown=down;
-    }
-
-    // Sentadillas (cadera-rodilla)
-    const lH=keypoints.find(k=>k.name==='left_hip');
-    const lK=keypoints.find(k=>k.name==='left_knee');
-    const lA=keypoints.find(k=>k.name==='left_ankle');
-    const rH=keypoints.find(k=>k.name==='right_hip');
-    const rK=keypoints.find(k=>k.name==='right_knee');
-    const rA=keypoints.find(k=>k.name==='right_ankle');
-    if(lH&&lK&&lA&&rH&&rK&&rA){
-      const angleL=calcAngle(lH,lK,lA);
-      const angleR=calcAngle(rH,rK,rA);
-      const down=angleL<100 && angleR<100;
-      if(down && !states.squatDown) counts.squat++;
-      states.squatDown=down;
-    }
-
-    const maxCount = Math.max(counts.pushup,counts.squat);
-    repCounterEl.textContent=maxCount;
-    if(maxCount===counts.pushup) exerciseText.textContent="Ejercicio: Lagartija";
-    else if(maxCount===counts.squat) exerciseText.textContent="Ejercicio: Sentadilla";
-  }
-  requestAnimationFrame(detectLoop);
-}
-
-async function initDetector(){
-  try{
-    await tf.ready(); // Espera TF.js
-    detector = await poseDetection.createDetector(
-      poseDetection.SupportedModels.MoveNet,
-      {modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER} // más preciso
-    );
-    status.textContent="🟢 Detector activo";
-    status.className="green";
-    detectLoop();
-  }catch(err){
-    console.error("Error detector:", err);
-    status.textContent="⚠️ Detector no disponible";
-    status.className="yellow";
+// Inicializa el detector de poses
+async function loadModel() {
+  try {
+    await tf.ready();
+    detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+      modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER
+    });
+    modelLoaded = true;
+    statusEl.textContent = "🟢 Detector activo";
+    statusEl.className = "green";
+  } catch (err) {
+    console.error("Error cargando el modelo:", err);
+    statusEl.textContent = "⚠️ Error al cargar el detector";
+    statusEl.className = "red";
   }
 }
 
-async function startCamera(){
-  try{
-    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+// Inicia la cámara tras presionar el botón
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment", width: 640, height: 480 }
+    });
     video.srcObject = stream;
     await video.play();
-    video.addEventListener('loadedmetadata', resizeCanvas);
-    status.textContent="🟢 Cámara activada";
-    status.className="green";
-    await initDetector();
-  }catch(err){
-    console.error("Error cámara:", err);
-    status.textContent="❌ No se pudo acceder a la cámara";
-    status.className="red";
+
+    // Ajusta el tamaño real del canvas
+    video.addEventListener("loadedmetadata", () => {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      statusEl.textContent = "🟢 Cámara activa, cargando detector...";
+      statusEl.className = "green";
+      loadModel().then(startDetection);
+    });
+  } catch (err) {
+    console.error("Error accediendo a la cámara:", err);
+    statusEl.textContent = "❌ No se pudo acceder a la cámara";
+    statusEl.className = "red";
   }
 }
 
-startCameraBtn.addEventListener('click', startCamera);
+// Bucle principal de detección
+async function startDetection() {
+  if (!modelLoaded) return;
+
+  async function detect() {
+    if (video.readyState === 4 && modelLoaded) {
+      const poses = await detector.estimatePoses(video);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      if (poses.length > 0) {
+        const keypoints = poses[0].keypoints;
+
+        // Dibuja puntos
+        keypoints.forEach((kp) => {
+          if (kp.score > 0.4) {
+            ctx.beginPath();
+            ctx.arc(kp.x, kp.y, 6, 0, 2 * Math.PI);
+            ctx.fillStyle = "#00ff88";
+            ctx.fill();
+          }
+        });
+
+        // Dibuja conexiones básicas
+        const pairs = [
+          ["left_shoulder", "left_elbow"],
+          ["left_elbow", "left_wrist"],
+          ["right_shoulder", "right_elbow"],
+          ["right_elbow", "right_wrist"],
+          ["left_hip", "left_knee"],
+          ["left_knee", "left_ankle"],
+          ["right_hip", "right_knee"],
+          ["right_knee", "right_ankle"],
+          ["left_shoulder", "right_shoulder"],
+          ["left_hip", "right_hip"]
+        ];
+
+        pairs.forEach(([a, b]) => {
+          const p1 = keypoints.find((k) => k.name === a);
+          const p2 = keypoints.find((k) => k.name === b);
+          if (p1 && p2 && p1.score > 0.4 && p2.score > 0.4) {
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.strokeStyle = "#ffaa00";
+            ctx.lineWidth = 3;
+            ctx.stroke();
+          }
+        });
+      }
+    }
+    requestAnimationFrame(detect);
+  }
+
+  detect();
+}
+
+startBtn.addEventListener("click", startCamera);
 </script>
 </body>
 </html>
