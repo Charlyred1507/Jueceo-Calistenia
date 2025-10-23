@@ -5,52 +5,59 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Jueceo Calistenia IA</title>
 
-<!-- TensorFlow y Pose Detection -->
+<!-- TensorFlow + Pose Detection -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.12.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
 <style>
-body {
-  margin: 0;
-  padding: 0;
-  background: #111;
-  font-family: sans-serif;
-  color: white;
-  text-align: center;
-}
-h1 { margin: 10px 0; font-size: 1.8rem; color: #00ff88; }
-#container {
-  position: relative;
-  width: 100%;
-  max-width: 640px;
-  margin: auto;
-}
-video, canvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: auto;
-  border-radius: 12px;
-}
-#startCamera {
-  background: #00ff88;
-  color: #111;
-  border: none;
-  border-radius: 8px;
-  padding: 12px 20px;
-  font-size: 1rem;
-  font-weight: bold;
-  margin-top: 15px;
-  cursor: pointer;
-}
-#status {
-  margin-top: 10px;
-  font-size: 1.2rem;
-}
-.green { color: #00ff88; }
-.red { color: #ff4444; }
-.yellow { color: #ffaa00; }
+  body {
+    margin: 0;
+    padding: 0;
+    background: #111;
+    color: white;
+    font-family: 'Inter', sans-serif;
+    text-align: center;
+  }
+  h1 {
+    color: #00ff88;
+    margin-top: 15px;
+  }
+  #container {
+    position: relative;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+    aspect-ratio: 3/4;
+    overflow: hidden;
+    border-radius: 12px;
+  }
+  video, canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 12px;
+  }
+  #startCamera {
+    background: #00ff88;
+    color: #111;
+    border: none;
+    border-radius: 8px;
+    padding: 14px 24px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-top: 20px;
+    cursor: pointer;
+  }
+  #status {
+    margin-top: 15px;
+    font-size: 1.2rem;
+  }
+  .green { color: #00ff88; }
+  .red { color: #ff4444; }
+  .yellow { color: #ffaa00; }
 </style>
 </head>
 <body>
@@ -58,11 +65,11 @@ video, canvas {
 <h1>💪 Jueceo Calistenia IA</h1>
 
 <div id="container">
-  <video id="video" autoplay playsinline muted></video>
+  <video id="video" playsinline autoplay muted></video>
   <canvas id="canvas"></canvas>
 </div>
 
-<button id="startCamera">Activar Cámara</button>
+<button id="startCamera">🎥 Activar Cámara</button>
 <div id="status" class="yellow">Esperando cámara...</div>
 
 <script>
@@ -74,63 +81,75 @@ const statusEl = document.getElementById("status");
 
 let detector;
 let modelLoaded = false;
+let cameraStarted = false;
 
-// Inicializa el detector de poses
+// --- 1️⃣ Cargar el modelo ---
 async function loadModel() {
   try {
     await tf.ready();
     detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
-      modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER
+      modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
     });
     modelLoaded = true;
-    statusEl.textContent = "🟢 Detector activo";
-    statusEl.className = "green";
+    console.log("✅ Modelo MoveNet cargado");
   } catch (err) {
-    console.error("Error cargando el modelo:", err);
+    console.error("Error al cargar el modelo:", err);
     statusEl.textContent = "⚠️ Error al cargar el detector";
     statusEl.className = "red";
   }
 }
 
-// Inicia la cámara tras presionar el botón
+// --- 2️⃣ Iniciar cámara ---
 async function startCamera() {
+  if (cameraStarted) return;
+  cameraStarted = true;
+
+  statusEl.textContent = "🔄 Iniciando cámara...";
+  statusEl.className = "yellow";
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment", width: 640, height: 480 }
+      video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } }
     });
     video.srcObject = stream;
     await video.play();
 
-    // Ajusta el tamaño real del canvas
-    video.addEventListener("loadedmetadata", () => {
+    video.onloadedmetadata = async () => {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      statusEl.textContent = "🟢 Cámara activa, cargando detector...";
+
+      statusEl.textContent = "🟢 Cámara activa, cargando modelo...";
       statusEl.className = "green";
-      loadModel().then(startDetection);
-    });
+
+      await loadModel();
+      if (modelLoaded) {
+        statusEl.textContent = "✅ Detector activo y cámara funcionando";
+        startDetection();
+      }
+    };
   } catch (err) {
-    console.error("Error accediendo a la cámara:", err);
-    statusEl.textContent = "❌ No se pudo acceder a la cámara";
+    console.error("Error al acceder a la cámara:", err);
+    statusEl.textContent = "❌ No se pudo acceder a la cámara (permiso denegado)";
     statusEl.className = "red";
   }
 }
 
-// Bucle principal de detección
+// --- 3️⃣ Detección de pose ---
 async function startDetection() {
   if (!modelLoaded) return;
 
   async function detect() {
-    if (video.readyState === 4 && modelLoaded) {
+    if (video.readyState === 4) {
       const poses = await detector.estimatePoses(video);
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       if (poses.length > 0) {
         const keypoints = poses[0].keypoints;
 
-        // Dibuja puntos
-        keypoints.forEach((kp) => {
+        // Dibuja los puntos
+        keypoints.forEach(kp => {
           if (kp.score > 0.4) {
             ctx.beginPath();
             ctx.arc(kp.x, kp.y, 6, 0, 2 * Math.PI);
@@ -139,7 +158,7 @@ async function startDetection() {
           }
         });
 
-        // Dibuja conexiones básicas
+        // Dibuja líneas
         const pairs = [
           ["left_shoulder", "left_elbow"],
           ["left_elbow", "left_wrist"],
@@ -154,8 +173,8 @@ async function startDetection() {
         ];
 
         pairs.forEach(([a, b]) => {
-          const p1 = keypoints.find((k) => k.name === a);
-          const p2 = keypoints.find((k) => k.name === b);
+          const p1 = keypoints.find(k => k.name === a);
+          const p2 = keypoints.find(k => k.name === b);
           if (p1 && p2 && p1.score > 0.4 && p2.score > 0.4) {
             ctx.beginPath();
             ctx.moveTo(p1.x, p1.y);
@@ -173,7 +192,11 @@ async function startDetection() {
   detect();
 }
 
-startBtn.addEventListener("click", startCamera);
+// --- Evento del botón ---
+startBtn.addEventListener("click", () => {
+  startCamera();
+});
 </script>
+
 </body>
 </html>
