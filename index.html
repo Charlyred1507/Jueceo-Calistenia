@@ -22,20 +22,12 @@
       overflow: hidden;
       position: relative;
     }
-    video {
+    video, canvas {
       position: absolute;
       top: 0; left: 0;
       width: 100%;
       height: 100%;
       object-fit: cover;
-      transform: scaleX(-1);
-    }
-    canvas {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%;
-      height: 100%;
-      transform: scaleX(-1);
     }
     .overlay {
       position: absolute;
@@ -129,7 +121,7 @@
       try {
         statusEl.textContent = "🔄 Iniciando cámara...";
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" }
+          video: { facingMode: "environment", width: {ideal: 1280}, height: {ideal: 720} }
         });
         video.srcObject = stream;
         await new Promise(res => video.onloadedmetadata = res);
@@ -181,11 +173,9 @@
       keypoints.forEach(kp => {
         if (kp.score > 0.5) {
           ctx.beginPath();
-          ctx.arc(kp.x, kp.y, 4, 0, 2 * Math.PI);
+          ctx.arc(kp.x, kp.y, 5, 0, 2 * Math.PI);
           ctx.fillStyle = "#00ff9f";
           ctx.fill();
-          ctx.font = "10px Poppins";
-          ctx.fillText(kp.name || "", kp.x + 5, kp.y - 5);
         }
       });
     }
@@ -202,12 +192,12 @@
     function detectReps(kp) {
       let angle = 0;
       if (currentExercise === "pushup" || currentExercise === "dip") {
-        angle = getAngle(kp[11], kp[13], kp[15]); // hombro-codo-muñeca
+        angle = getAngle(kp[11], kp[13], kp[15]);
         angleEl.textContent = `Ángulo (Codo): ${angle}°`;
         if (angle < 80 && !up) up = true;
         if (angle > 160 && up) { reps++; up = false; }
       } else if (currentExercise === "squat") {
-        angle = getAngle(kp[23], kp[25], kp[27]); // cadera-rodilla-tobillo
+        angle = getAngle(kp[23], kp[25], kp[27]);
         angleEl.textContent = `Ángulo (Rodilla): ${angle}°`;
         if (angle < 90 && !up) up = true;
         if (angle > 160 && up) { reps++; up = false; }
