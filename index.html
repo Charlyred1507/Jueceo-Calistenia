@@ -1,215 +1,133 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Detector de Ejercicios Calisténicos</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.16.0"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "Poppins", sans-serif;
-      background: #0d1117;
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      overflow: hidden;
-      position: relative;
-    }
-    video, canvas {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .overlay {
-      position: absolute;
-      top: 10px;
-      width: 90%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      z-index: 10;
-    }
-    select, button {
-      margin: 5px;
-      padding: 10px 15px;
-      font-size: 16px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-    select {
-      background-color: #161b22;
-      color: #fff;
-    }
-    button {
-      background-color: #238636;
-      color: #fff;
-    }
-    #counter {
-      font-size: 32px;
-      margin-top: 10px;
-      font-weight: bold;
-      text-shadow: 0 0 5px #00ff9f;
-    }
-    #status {
-      position: absolute;
-      bottom: 20px;
-      background: rgba(0, 0, 0, 0.5);
-      padding: 10px 20px;
-      border-radius: 8px;
-      font-size: 14px;
-    }
-    #angleDisplay {
-      position: absolute;
-      top: 70px;
-      background: rgba(0,0,0,0.5);
-      padding: 8px 12px;
-      border-radius: 8px;
-      font-size: 18px;
-      font-weight: 500;
-      color: #00ff9f;
-    }
-  </style>
-</head>
-<body>
-  <div class="overlay">
-    <select id="exercise">
-      <option value="pushup">Push Ups</option>
-      <option value="squat">Squats</option>
-      <option value="pullup">Pull Ups</option>
-      <option value="dip">Fondos</option>
-    </select>
-    <button id="startBtn">Activar Cámara</button>
-    <div id="counter">Reps: 0</div>
-  </div>
-  <video id="video" autoplay playsinline muted></video>
-  <canvas id="canvas"></canvas>
-  <div id="status">Esperando cámara...</div>
-  <div id="angleDisplay">Ángulo: -</div>
+<script>
+  const video = document.getElementById("video");
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const counterEl = document.getElementById("counter");
+  const statusEl = document.getElementById("status");
+  const angleEl = document.getElementById("angleDisplay");
+  const exerciseSelect = document.getElementById("exercise");
 
-  <script>
-    const video = document.getElementById("video");
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
-    const counterEl = document.getElementById("counter");
-    const statusEl = document.getElementById("status");
-    const angleEl = document.getElementById("angleDisplay");
-    const exerciseSelect = document.getElementById("exercise");
+  let detector, modelLoaded = false;
+  let reps = 0, up = false;
+  let currentExercise = "pushup";
 
-    let detector, modelLoaded = false;
-    let reps = 0, up = false;
-    let currentExercise = "pushup";
+  exerciseSelect.addEventListener("change", e => {
+    currentExercise = e.target.value;
+    reps = 0;
+    counterEl.textContent = "Reps: 0";
+  });
 
-    exerciseSelect.addEventListener("change", e => {
-      currentExercise = e.target.value;
-      reps = 0;
-      counterEl.textContent = "Reps: 0";
+  document.getElementById("startBtn").addEventListener("click", initCamera);
+
+  async function initCamera() {
+    try {
+      statusEl.textContent = "🔄 Iniciando cámara...";
+
+      // ✅ Usa la cámara trasera (no espejo)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+
+      video.srcObject = stream;
+      await new Promise(res => video.onloadedmetadata = res);
+      video.play();
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      statusEl.textContent = "✅ Cámara activa (trasera)";
+      await loadDetector();
+      detectPose();
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = "❌ No se pudo activar la cámara";
+    }
+  }
+
+  async function loadDetector() {
+    const model = poseDetection.SupportedModels.MoveNet;
+    detector = await poseDetection.createDetector(model, {
+      modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+    });
+    modelLoaded = true;
+    statusEl.textContent = "✅ Detector activo";
+  }
+
+  async function detectPose() {
+    if (!modelLoaded) return;
+    const poses = await detector.estimatePoses(video);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 🟩 No reflejamos el contexto (porque queremos movimiento real)
+    if (poses.length > 0) {
+      const keypoints = poses[0].keypoints;
+      drawSkeleton(keypoints);
+      detectReps(keypoints);
+    }
+
+    requestAnimationFrame(detectPose);
+  }
+
+  // 🔹 Dibuja las articulaciones y líneas verdes
+  function drawSkeleton(keypoints) {
+    const pairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#00ff9f";
+
+    pairs.forEach(([a, b]) => {
+      const p1 = keypoints[a], p2 = keypoints[b];
+      if (p1.score > 0.4 && p2.score > 0.4) {
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+      }
     });
 
-    document.getElementById("startBtn").addEventListener("click", initCamera);
-
-    async function initCamera() {
-      try {
-        statusEl.textContent = "🔄 Iniciando cámara...";
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment", width: {ideal: 1280}, height: {ideal: 720} }
-        });
-        video.srcObject = stream;
-        await new Promise(res => video.onloadedmetadata = res);
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        statusEl.textContent = "✅ Cámara activa";
-        await loadDetector();
-        detectPose();
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = "❌ No se pudo activar cámara";
+    keypoints.forEach(kp => {
+      if (kp.score > 0.5) {
+        ctx.beginPath();
+        ctx.arc(kp.x, kp.y, 5, 0, 2 * Math.PI);
+        ctx.fillStyle = "#00ff9f";
+        ctx.fill();
       }
+    });
+  }
+
+  // 🔹 Calcula el ángulo entre 3 puntos (por ejemplo codo o rodilla)
+  function getAngle(a, b, c) {
+    const AB = { x: b.x - a.x, y: b.y - a.y };
+    const CB = { x: b.x - c.x, y: b.y - c.y };
+    const dot = AB.x * CB.x + AB.y * CB.y;
+    const magAB = Math.sqrt(AB.x ** 2 + AB.y ** 2);
+    const magCB = Math.sqrt(CB.x ** 2 + CB.y ** 2);
+    return Math.round((Math.acos(dot / (magAB * magCB)) * 180) / Math.PI);
+  }
+
+  // 🔹 Lógica de conteo de repeticiones
+  function detectReps(kp) {
+    let angle = 0;
+
+    if (currentExercise === "pushup" || currentExercise === "dip") {
+      angle = getAngle(kp[11], kp[13], kp[15]); // hombro - codo - muñeca
+      angleEl.textContent = `Ángulo (Codo): ${angle}°`;
+      if (angle < 80 && !up) up = true;
+      if (angle > 160 && up) { reps++; up = false; }
+
+    } else if (currentExercise === "squat") {
+      angle = getAngle(kp[23], kp[25], kp[27]); // cadera - rodilla - tobillo
+      angleEl.textContent = `Ángulo (Rodilla): ${angle}°`;
+      if (angle < 90 && !up) up = true;
+      if (angle > 160 && up) { reps++; up = false; }
+
+    } else if (currentExercise === "pullup") {
+      const yNose = kp[0].y;
+      const yHands = (kp[9].y + kp[10].y) / 2;
+      angleEl.textContent = `Altura nariz/manos: ${(yHands - yNose).toFixed(0)} px`;
+      if (yNose < yHands && !up) up = true;
+      if (yNose > yHands + 80 && up) { reps++; up = false; }
     }
 
-    async function loadDetector() {
-      const model = poseDetection.SupportedModels.MoveNet;
-      detector = await poseDetection.createDetector(model, {
-        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-      });
-      modelLoaded = true;
-      statusEl.textContent = "✅ Detector activo";
-    }
-
-    async function detectPose() {
-      if (!modelLoaded) return;
-      const poses = await detector.estimatePoses(video);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (poses.length > 0) {
-        const keypoints = poses[0].keypoints;
-        drawSkeleton(keypoints);
-        detectReps(keypoints);
-      }
-      requestAnimationFrame(detectPose);
-    }
-
-    function drawSkeleton(keypoints) {
-      const pairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = "#00ff9f";
-      pairs.forEach(([a, b]) => {
-        const p1 = keypoints[a], p2 = keypoints[b];
-        if (p1.score > 0.4 && p2.score > 0.4) {
-          ctx.beginPath();
-          ctx.moveTo(p1.x, p1.y);
-          ctx.lineTo(p2.x, p2.y);
-          ctx.stroke();
-        }
-      });
-      keypoints.forEach(kp => {
-        if (kp.score > 0.5) {
-          ctx.beginPath();
-          ctx.arc(kp.x, kp.y, 5, 0, 2 * Math.PI);
-          ctx.fillStyle = "#00ff9f";
-          ctx.fill();
-        }
-      });
-    }
-
-    function getAngle(a, b, c) {
-      const AB = { x: b.x - a.x, y: b.y - a.y };
-      const CB = { x: b.x - c.x, y: b.y - c.y };
-      const dot = AB.x * CB.x + AB.y * CB.y;
-      const magAB = Math.sqrt(AB.x**2 + AB.y**2);
-      const magCB = Math.sqrt(CB.x**2 + CB.y**2);
-      return Math.round((Math.acos(dot / (magAB * magCB)) * 180) / Math.PI);
-    }
-
-    function detectReps(kp) {
-      let angle = 0;
-      if (currentExercise === "pushup" || currentExercise === "dip") {
-        angle = getAngle(kp[11], kp[13], kp[15]);
-        angleEl.textContent = `Ángulo (Codo): ${angle}°`;
-        if (angle < 80 && !up) up = true;
-        if (angle > 160 && up) { reps++; up = false; }
-      } else if (currentExercise === "squat") {
-        angle = getAngle(kp[23], kp[25], kp[27]);
-        angleEl.textContent = `Ángulo (Rodilla): ${angle}°`;
-        if (angle < 90 && !up) up = true;
-        if (angle > 160 && up) { reps++; up = false; }
-      } else if (currentExercise === "pullup") {
-        const yNose = kp[0].y;
-        const yHands = (kp[9].y + kp[10].y) / 2;
-        angleEl.textContent = `Altura nariz/manos: ${(yHands - yNose).toFixed(0)} px`;
-        if (yNose < yHands && !up) up = true;
-        if (yNose > yHands + 80 && up) { reps++; up = false; }
-      }
-      counterEl.textContent = `Reps: ${reps}`;
-    }
-  </script>
-</body>
-</html>
+    counterEl.textContent = `Reps: ${reps}`;
+  }
+</script>
