@@ -1,202 +1,139 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Jueceo Calistenia IA</title>
-
-<!-- TensorFlow + Pose Detection -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.12.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
-
-<style>
-  body {
-    margin: 0;
-    padding: 0;
-    background: #111;
-    color: white;
-    font-family: 'Inter', sans-serif;
-    text-align: center;
-  }
-  h1 {
-    color: #00ff88;
-    margin-top: 15px;
-  }
-  #container {
-    position: relative;
-    width: 100%;
-    max-width: 640px;
-    margin: 0 auto;
-    aspect-ratio: 3/4;
-    overflow: hidden;
-    border-radius: 12px;
-  }
-  video, canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 12px;
-  }
-  #startCamera {
-    background: #00ff88;
-    color: #111;
-    border: none;
-    border-radius: 8px;
-    padding: 14px 24px;
-    font-size: 1.1rem;
-    font-weight: 600;
-    margin-top: 20px;
-    cursor: pointer;
-  }
-  #status {
-    margin-top: 15px;
-    font-size: 1.2rem;
-  }
-  .green { color: #00ff88; }
-  .red { color: #ff4444; }
-  .yellow { color: #ffaa00; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detector de Movimiento Calistenia</title>
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      color: #fff;
+      font-family: 'Poppins', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    video, canvas {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 100%;
+      height: auto;
+      max-height: 100vh;
+      border-radius: 12px;
+      object-fit: cover;
+    }
+    #status {
+      position: absolute;
+      bottom: 20px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 1rem;
+      z-index: 10;
+    }
+    #startBtn {
+      position: absolute;
+      top: 20px;
+      background: #28a745;
+      border: none;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      z-index: 10;
+    }
+  </style>
 </head>
 <body>
-
-<h1>💪 Jueceo Calistenia IA</h1>
-
-<div id="container">
+  <button id="startBtn">Activar Cámara</button>
   <video id="video" playsinline autoplay muted></video>
-  <canvas id="canvas"></canvas>
-</div>
+  <canvas id="output"></canvas>
+  <div id="status">Esperando cámara...</div>
 
-<button id="startCamera">🎥 Activar Cámara</button>
-<div id="status" class="yellow">Esperando cámara...</div>
+  <!-- TensorFlow.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0"></script>
+  <!-- Pose Detection -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
-<script>
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-const startBtn = document.getElementById("startCamera");
-const statusEl = document.getElementById("status");
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('output');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const startBtn = document.getElementById('startBtn');
+    let detector;
 
-let detector;
-let modelLoaded = false;
-let cameraStarted = false;
-
-// --- 1️⃣ Cargar el modelo ---
-async function loadModel() {
-  try {
-    await tf.ready();
-    detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
-      modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-    });
-    modelLoaded = true;
-    console.log("✅ Modelo MoveNet cargado");
-  } catch (err) {
-    console.error("Error al cargar el modelo:", err);
-    statusEl.textContent = "⚠️ Error al cargar el detector";
-    statusEl.className = "red";
-  }
-}
-
-// --- 2️⃣ Iniciar cámara ---
-async function startCamera() {
-  if (cameraStarted) return;
-  cameraStarted = true;
-
-  statusEl.textContent = "🔄 Iniciando cámara...";
-  statusEl.className = "yellow";
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } }
-    });
-    video.srcObject = stream;
-    await video.play();
-
-    video.onloadedmetadata = async () => {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      statusEl.textContent = "🟢 Cámara activa, cargando modelo...";
-      statusEl.className = "green";
-
-      await loadModel();
-      if (modelLoaded) {
-        statusEl.textContent = "✅ Detector activo y cámara funcionando";
-        startDetection();
-      }
-    };
-  } catch (err) {
-    console.error("Error al acceder a la cámara:", err);
-    statusEl.textContent = "❌ No se pudo acceder a la cámara (permiso denegado)";
-    statusEl.className = "red";
-  }
-}
-
-// --- 3️⃣ Detección de pose ---
-async function startDetection() {
-  if (!modelLoaded) return;
-
-  async function detect() {
-    if (video.readyState === 4) {
-      const poses = await detector.estimatePoses(video);
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      if (poses.length > 0) {
-        const keypoints = poses[0].keypoints;
-
-        // Dibuja los puntos
-        keypoints.forEach(kp => {
-          if (kp.score > 0.4) {
-            ctx.beginPath();
-            ctx.arc(kp.x, kp.y, 6, 0, 2 * Math.PI);
-            ctx.fillStyle = "#00ff88";
-            ctx.fill();
-          }
+    async function initCamera() {
+      statusEl.textContent = "Iniciando cámara...";
+      startBtn.disabled = true;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" }
         });
-
-        // Dibuja líneas
-        const pairs = [
-          ["left_shoulder", "left_elbow"],
-          ["left_elbow", "left_wrist"],
-          ["right_shoulder", "right_elbow"],
-          ["right_elbow", "right_wrist"],
-          ["left_hip", "left_knee"],
-          ["left_knee", "left_ankle"],
-          ["right_hip", "right_knee"],
-          ["right_knee", "right_ankle"],
-          ["left_shoulder", "right_shoulder"],
-          ["left_hip", "right_hip"]
-        ];
-
-        pairs.forEach(([a, b]) => {
-          const p1 = keypoints.find(k => k.name === a);
-          const p2 = keypoints.find(k => k.name === b);
-          if (p1 && p2 && p1.score > 0.4 && p2.score > 0.4) {
-            ctx.beginPath();
-            ctx.moveTo(p1.x, p1.y);
-            ctx.lineTo(p2.x, p2.y);
-            ctx.strokeStyle = "#ffaa00";
-            ctx.lineWidth = 3;
-            ctx.stroke();
-          }
-        });
+        video.srcObject = stream;
+        await new Promise((res) => video.onloadedmetadata = res);
+        statusEl.textContent = "Cámara activa ✅";
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        detectPose();
+      } catch (err) {
+        console.error("Error cámara:", err);
+        statusEl.textContent = "❌ No se pudo acceder a la cámara";
+        startBtn.disabled = false;
       }
     }
-    requestAnimationFrame(detect);
-  }
 
-  detect();
-}
+    async function initDetector() {
+      try {
+        statusEl.textContent = "Cargando detector...";
+        detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+          modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+        });
+        statusEl.textContent = "Detector activo ✅";
+      } catch (err) {
+        console.error("Error al cargar el detector:", err);
+        statusEl.textContent = "⚠️ Detector no disponible";
+      }
+    }
 
-// --- Evento del botón ---
-startBtn.addEventListener("click", () => {
-  startCamera();
-});
-</script>
+    async function detectPose() {
+      if (!detector) {
+        await initDetector();
+      }
+      const detect = async () => {
+        if (video.readyState >= 2) {
+          const poses = await detector.estimatePoses(video);
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          if (poses.length > 0) {
+            drawSkeleton(poses[0]);
+          }
+        }
+        requestAnimationFrame(detect);
+      };
+      detect();
+    }
 
+    function drawSkeleton(pose) {
+      const keypoints = pose.keypoints;
+      ctx.fillStyle = "#00FF00";
+      ctx.lineWidth = 2;
+      keypoints.forEach(pt => {
+        if (pt.score > 0.4) {
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, 5, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+      });
+    }
+
+    startBtn.addEventListener('click', initCamera);
+  </script>
 </body>
 </html>
