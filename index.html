@@ -103,11 +103,13 @@ let detector;
 let reps = 0, up = false;
 let currentExercise = exerciseSelect.value;
 
+// Cambiar ejercicio sin reiniciar cámara ni detector
 exerciseSelect.addEventListener('change', ()=>{
   currentExercise = exerciseSelect.value;
   reps = 0;
   up = false;
   counterEl.textContent = "Reps: 0";
+  statusEl.textContent = `Ejercicio seleccionado: ${currentExercise}`;
 });
 
 startBtn.addEventListener('click', initCamera);
@@ -153,11 +155,11 @@ function getAngle(a,b,c){
 function detectReps(kp){
   let angle=0;
   if(currentExercise==="pushup" || currentExercise==="dip"){
-    angle = getAngle(kp[11], kp[13], kp[15]); // hombro-codo-muñeca
+    angle = getAngle(kp[11], kp[13], kp[15]);
     if(angle < 80 && !up) up=true;
     if(angle > 160 && up){ reps++; up=false; }
   } else if(currentExercise==="squat"){
-    angle = getAngle(kp[23], kp[25], kp[27]); // cadera-rodilla-tobillo
+    angle = getAngle(kp[23], kp[25], kp[27]);
     if(angle < 90 && !up) up=true;
     if(angle > 160 && up){ reps++; up=false; }
   } else if(currentExercise==="pullup"){
@@ -174,7 +176,6 @@ function drawSkeleton(pose){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(video,0,0,canvas.width,canvas.height);
 
-  // Dibujar líneas entre articulaciones
   const adjacentPairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
   ctx.lineWidth = 2;
   ctx.strokeStyle = "#00FF00";
@@ -188,7 +189,6 @@ function drawSkeleton(pose){
     }
   });
 
-  // Dibujar puntos
   keypoints.forEach(kp=>{
     if(kp.score>0.4){
       ctx.beginPath();
