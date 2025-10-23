@@ -1,129 +1,139 @@
-<script>
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-const counterEl = document.getElementById("counter");
-const statusEl = document.getElementById("status");
-const angleEl = document.getElementById("angleDisplay");
-const exerciseSelect = document.getElementById("exercise");
-
-let detector, modelLoaded = false;
-let reps = 0, up = false;
-let currentExercise = "pushup";
-
-exerciseSelect.addEventListener("change", e => {
-  currentExercise = e.target.value;
-  reps = 0;
-  counterEl.textContent = "Reps: 0";
-});
-
-document.getElementById("startBtn").addEventListener("click", initCamera);
-
-async function initCamera() {
-  try {
-    statusEl.textContent = "🔄 Iniciando cámara...";
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    video.srcObject = stream;
-
-    // Esperamos a que el video esté listo
-    await video.play();
-    await new Promise(res => {
-      if(video.readyState >= 2) res();
-      else video.onloadeddata = res;
-    });
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    statusEl.textContent = "✅ Cámara trasera activa";
-
-    await loadDetector();
-    detectPose();
-  } catch(err) {
-    console.error(err);
-    statusEl.textContent = "❌ No se pudo activar la cámara";
-  }
-}
-
-async function loadDetector() {
-  const model = poseDetection.SupportedModels.MoveNet;
-  detector = await poseDetection.createDetector(model, {
-    modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-  });
-  modelLoaded = true;
-  statusEl.textContent = "✅ Detector activo";
-}
-
-async function detectPose() {
-  if(!modelLoaded) return;
-  const poses = await detector.estimatePoses(video);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  if(poses.length > 0){
-    const keypoints = poses[0].keypoints;
-    drawSkeleton(keypoints);
-    detectReps(keypoints);
-  }
-
-  requestAnimationFrame(detectPose);
-}
-
-function drawSkeleton(keypoints) {
-  const pairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = "#00ff9f";
-
-  pairs.forEach(([a,b])=>{
-    const p1=keypoints[a], p2=keypoints[b];
-    if(p1.score>0.4 && p2.score>0.4){
-      ctx.beginPath();
-      ctx.moveTo(p1.x,p1.y);
-      ctx.lineTo(p2.x,p2.y);
-      ctx.stroke();
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detector de Movimiento Calistenia</title>
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      color: #fff;
+      font-family: 'Poppins', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
     }
-  });
-
-  keypoints.forEach(kp=>{
-    if(kp.score>0.5){
-      ctx.beginPath();
-      ctx.arc(kp.x,kp.y,5,0,2*Math.PI);
-      ctx.fillStyle="#00ff9f";
-      ctx.fill();
+    video, canvas {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 100%;
+      height: auto;
+      max-height: 100vh;
+      border-radius: 12px;
+      object-fit: cover;
     }
-  });
-}
+    #status {
+      position: absolute;
+      bottom: 20px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 1rem;
+      z-index: 10;
+    }
+    #startBtn {
+      position: absolute;
+      top: 20px;
+      background: #28a745;
+      border: none;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <button id="startBtn">Activar Cámara</button>
+  <video id="video" playsinline autoplay muted></video>
+  <canvas id="output"></canvas>
+  <div id="status">Esperando cámara...</div>
 
-function getAngle(a,b,c){
-  const AB = {x:b.x-a.x, y:b.y-a.y};
-  const CB = {x:b.x-c.x, y:b.y-c.y};
-  const dot = AB.x*CB.x + AB.y*CB.y;
-  const magAB = Math.sqrt(AB.x**2 + AB.y**2);
-  const magCB = Math.sqrt(CB.x**2 + CB.y**2);
-  return Math.round((Math.acos(dot/(magAB*magCB))*180)/Math.PI);
-}
+  <!-- TensorFlow.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0"></script>
+  <!-- Pose Detection -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
-function detectReps(kp){
-  let angle=0;
-  if(currentExercise==="pushup" || currentExercise==="dip"){
-    angle=getAngle(kp[11],kp[13],kp[15]);
-    angleEl.textContent=`Ángulo (Codo): ${angle}°`;
-    if(angle<80 && !up) up=true;
-    if(angle>160 && up){ reps++; up=false; }
-  } else if(currentExercise==="squat"){
-    angle=getAngle(kp[23],kp[25],kp[27]);
-    angleEl.textContent=`Ángulo (Rodilla): ${angle}°`;
-    if(angle<90 && !up) up=true;
-    if(angle>160 && up){ reps++; up=false; }
-  } else if(currentExercise==="pullup"){
-    const yNose=kp[0].y;
-    const yHands=(kp[9].y+kp[10].y)/2;
-    angleEl.textContent=`Altura nariz/manos: ${(yHands-yNose).toFixed(0)} px`;
-    if(yNose<yHands && !up) up=true;
-    if(yNose>yHands+80 && up){ reps++; up=false; }
-  }
-  counterEl.textContent=`Reps: ${reps}`;
-}
-</script>
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('output');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const startBtn = document.getElementById('startBtn');
+    let detector;
+
+    async function initCamera() {
+      statusEl.textContent = "Iniciando cámara...";
+      startBtn.disabled = true;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" }
+        });
+        video.srcObject = stream;
+        await new Promise((res) => video.onloadedmetadata = res);
+        statusEl.textContent = "Cámara activa ✅";
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        detectPose();
+      } catch (err) {
+        console.error("Error cámara:", err);
+        statusEl.textContent = "❌ No se pudo acceder a la cámara";
+        startBtn.disabled = false;
+      }
+    }
+
+    async function initDetector() {
+      try {
+        statusEl.textContent = "Cargando detector...";
+        detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+          modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+        });
+        statusEl.textContent = "Detector activo ✅";
+      } catch (err) {
+        console.error("Error al cargar el detector:", err);
+        statusEl.textContent = "⚠️ Detector no disponible";
+      }
+    }
+
+    async function detectPose() {
+      if (!detector) {
+        await initDetector();
+      }
+      const detect = async () => {
+        if (video.readyState >= 2) {
+          const poses = await detector.estimatePoses(video);
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          if (poses.length > 0) {
+            drawSkeleton(poses[0]);
+          }
+        }
+        requestAnimationFrame(detect);
+      };
+      detect();
+    }
+
+    function drawSkeleton(pose) {
+      const keypoints = pose.keypoints;
+      ctx.fillStyle = "#00FF00";
+      ctx.lineWidth = 2;
+      keypoints.forEach(pt => {
+        if (pt.score > 0.4) {
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, 5, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+      });
+    }
+
+    startBtn.addEventListener('click', initCamera);
+  </script>
+</body>
+</html>
