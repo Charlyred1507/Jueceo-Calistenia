@@ -103,11 +103,9 @@ let currentExercise = exerciseSelect.value;
 let inPosition = false;
 let feedbackMessage = "";
 let feedbackTimer = null;
-
-// Buffer simple para detectar quietud
 let movementBufferY = [];
 
-// Mostrar feedback
+// Feedback simple
 function showFeedback(msg, duration=1500){
   if(feedbackMessage !== msg){
     feedbackMessage = msg;
@@ -177,7 +175,7 @@ function isStable(y, threshold=12, frames=15){
   return (Math.max(...movementBufferY)-Math.min(...movementBufferY))<threshold;
 }
 
-// Detecta reps y No reps con feedback
+// Detecta reps y No reps
 function detectReps(kp){
   let angle=0;
   let reason = "";
@@ -198,14 +196,8 @@ function detectReps(kp){
           }
         } else {
           if(angle<80 && !up) up=true;
-          if(angle>160 && up){
-            reps++;
-            up=false;
-            showFeedback("✅ Repetición válida");
-          } else if(angle>160 && !up){
-            reason = "Cuerpo no bajó lo suficiente";
-            showFeedback(`❌ No rep: ${reason}`);
-          }
+          if(angle>160 && up){ reps++; up=false; showFeedback("✅ Repetición válida"); }
+          else if(angle>160 && !up){ reason="Cuerpo no bajó lo suficiente"; showFeedback(`❌ No rep: ${reason}`); }
         }
       }
       break;
@@ -221,14 +213,8 @@ function detectReps(kp){
           }
         } else {
           if(angle<90 && !up) up=true;
-          if(angle>160 && up){
-            reps++;
-            up=false;
-            showFeedback("✅ Repetición válida");
-          } else if(angle>160 && !up){
-            reason = "Cuerpo no bajó lo suficiente";
-            showFeedback(`❌ No rep: ${reason}`);
-          }
+          if(angle>160 && up){ reps++; up=false; showFeedback("✅ Repetición válida"); }
+          else if(angle>160 && !up){ reason="Cuerpo no bajó lo suficiente"; showFeedback(`❌ No rep: ${reason}`); }
         }
       }
       break;
@@ -244,14 +230,8 @@ function detectReps(kp){
           }
         } else {
           if(angle<90 && !up) up=true;
-          if(angle>160 && up){
-            reps++;
-            up=false;
-            showFeedback("✅ Repetición válida");
-          } else if(angle>160 && !up){
-            reason = "Cadera no bajó lo suficiente";
-            showFeedback(`❌ No rep: ${reason}`);
-          }
+          if(angle>160 && up){ reps++; up=false; showFeedback("✅ Repetición válida"); }
+          else if(angle>160 && !up){ reason="Cadera no bajó lo suficiente"; showFeedback(`❌ No rep: ${reason}`); }
         }
       }
       break;
@@ -267,107 +247,16 @@ function detectReps(kp){
           }
         } else {
           if(nose.y<yHands && !up) up=true;
-          if(nose.y>yHands+80 && up){
-            reps++;
-            up=false;
-            showFeedback("✅ Repetición válida");
-          } else if(nose.y>yHands+80 && !up){
-            reason = "No subió lo suficiente";
-            showFeedback(`❌ No rep: ${reason}`);
-          }
+          if(nose.y>yHands+80 && up){ reps++; up=false; showFeedback("✅ Repetición válida"); }
+          else if(nose.y>yHands+80 && !up){ reason="No subió lo suficiente"; showFeedback(`❌ No rep: ${reason}`); }
         }
       }
       break;
   }
 
   counterEl.textContent = `Reps: ${reps}`;
-  drawMeter(angle, currentExercise, nose, yHands);
+  drawMeter(angle, currentExercise, nose, leftHand, rightHand);
 }
 
 // Dibuja skeleton y overlay
-function drawSkeleton(pose){
-  const keypoints = pose.keypoints;
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.drawImage(video,0,0,canvas.width,canvas.height);
-
-  const adjacentPairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
-  ctx.lineWidth=2;
-  ctx.strokeStyle="#00FF00";
-  adjacentPairs.forEach(([i,j])=>{
-    const kp1=keypoints[i], kp2=keypoints[j];
-    if(kp1.score>0.4 && kp2.score>0.4){
-      ctx.beginPath();
-      ctx.moveTo(kp1.x,kp1.y);
-      ctx.lineTo(kp2.x,kp2.y);
-      ctx.stroke();
-    }
-  });
-
-  keypoints.forEach(kp=>{
-    if(kp.score>0.4){
-      ctx.beginPath();
-      ctx.arc(kp.x,kp.y,5,0,2*Math.PI);
-      ctx.fillStyle="#00FF00";
-      ctx.fill();
-    }
-  });
-
-  detectReps(keypoints);
-}
-
-// Dibuja velocímetro semicircular o barra para pullups
-function drawMeter(angle, exercise, nose, yHands){
-  const x=80, y=canvas.height-80, radius=60;
-  ctx.save();
-  ctx.globalAlpha=0.7;
-  ctx.fillStyle="rgba(0,0,0,0.5)";
-  ctx.fillRect(20,canvas.height-160,120,140);
-  ctx.globalAlpha=1;
-
-  if(exercise==="pullup" && nose && yHands){
-    // Barra de progreso vertical
-    const h = 100;
-    let progress = (yHands+80 - nose.y)/100;
-    progress = Math.max(0, Math.min(1, progress));
-    ctx.fillStyle="#444";
-    ctx.fillRect(x-20,y-100,40,h);
-    ctx.fillStyle=progress>0.9?"#0f0":progress>0.5?"#ff0":"#f00";
-    ctx.fillRect(x-20,y-100+h*(1-progress),40,h*progress);
-  } else {
-    // Velocímetro semicircular
-    const minAngle=60, maxAngle=180;
-    const percent = (angle - minAngle)/(maxAngle-minAngle);
-    const clamped=Math.max(0,Math.min(1,percent));
-
-    // fondo
-    ctx.beginPath();
-    ctx.arc(x,y,radius,Math.PI,0);
-    ctx.strokeStyle="#444";
-    ctx.lineWidth=10;
-    ctx.stroke();
-
-    // valor actual
-    ctx.beginPath();
-    ctx.arc(x,y,radius,Math.PI,Math.PI+Math.PI*clamped,false);
-    ctx.strokeStyle=angle<100?"#f00":angle<140?"#ff0":"#0f0";
-    ctx.lineWidth=10;
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-// Loop principal
-async function detectPose(){
-  const detect = async ()=>{
-    if(video.readyState>=2){
-      const poses = await detector.estimatePoses(video);
-      if(poses.length>0) drawSkeleton(poses[0]);
-      else ctx.drawImage(video,0,0,canvas.width,canvas.height);
-    }
-    requestAnimationFrame(detect);
-  };
-  detect();
-}
-</script>
-</body>
-</html>
+function draw
