@@ -1,279 +1,217 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Detector de Movimiento Calistenia</title>
-<style>
-  body {
-    margin: 0;
-    background: #111;
-    color: #fff;
-    font-family: 'Poppins', sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    overflow: hidden;
-  }
-  video, canvas {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 100%;
-    height: auto;
-    max-height: 100vh;
-    border-radius: 12px;
-    object-fit: cover;
-  }
-  #status {
-    position: absolute;
-    bottom: 20px;
-    background: rgba(0,0,0,0.7);
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-size: 1rem;
-    z-index: 10;
-    max-width: 90%;
-    text-align: center;
-  }
-  #startBtn {
-    position: absolute;
-    top: 20px;
-    background: #28a745;
-    border: none;
-    color: white;
-    padding: 12px 24px;
-    border-radius: 8px;
-    font-size: 1rem;
-    cursor: pointer;
-    z-index: 10;
-  }
-  #exerciseSelect {
-    position: absolute;
-    top: 70px;
-    background: #222;
-    border: none;
-    color: white;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 1rem;
-    z-index: 10;
-  }
-  #counter {
-    position: absolute;
-    top: 120px;
-    font-size: 1.5rem;
-    background: rgba(0,0,0,0.7);
-    padding: 8px 16px;
-    border-radius: 8px;
-    z-index: 10;
-  }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CalisJudge AI Visual</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: #0e0e0e;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    video, canvas {
+      position: absolute;
+      transform: scaleX(-1);
+      border-radius: 10px;
+    }
+    select, h2, h3 {
+      z-index: 2;
+      margin-top: 10px;
+    }
+    #status {
+      font-weight: bold;
+      color: #ffcc00;
+      font-size: 1.2em;
+    }
+  </style>
 </head>
 <body>
+  <h2>🏋️‍♂️ CalisJudge AI Visual</h2>
+  <select id="exercise">
+    <option value="pushup">Push Ups</option>
+    <option value="dip">Fondos</option>
+    <option value="pullup">Pull Ups</option>
+    <option value="squat">Squats</option>
+  </select>
+  <h3 id="counter">Reps: 0</h3>
+  <h3 id="status">Esperando...</h3>
 
-<button id="startBtn">Activar Cámara</button>
-<select id="exerciseSelect">
-  <option value="pushup">Push-ups</option>
-  <option value="dip">Fondos</option>
-  <option value="squat">Squats</option>
-  <option value="pullup">Pull-ups</option>
-</select>
-<div id="counter">Reps: 0</div>
+  <video id="video" width="640" height="480" autoplay muted playsinline></video>
+  <canvas id="output" width="640" height="480"></canvas>
 
-<video id="video" playsinline autoplay muted></video>
-<canvas id="output"></canvas>
-<div id="status">Esperando cámara...</div>
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('output');
+    const ctx = canvas.getContext('2d');
+    const counterEl = document.getElementById('counter');
+    const statusEl = document.getElementById('status');
+    const exerciseSelect = document.getElementById('exercise');
 
-<!-- TensorFlow.js -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+    let detector, model, currentExercise = exerciseSelect.value;
+    let reps = 0, phase = "ready";
+    let angleBuffer = [];
+    let lastNoRep = "", inMovement = false;
+    let overlayColor = "#00ff88"; // verde por defecto
 
-<script>
-const video = document.getElementById('video');
-const canvas = document.getElementById('output');
-const ctx = canvas.getContext('2d');
-const statusEl = document.getElementById('status');
-const startBtn = document.getElementById('startBtn');
-const exerciseSelect = document.getElementById('exerciseSelect');
-const counterEl = document.getElementById('counter');
+    async function initCamera() {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480 }
+      });
+      video.srcObject = stream;
+      await new Promise(r => video.onloadedmetadata = r);
+    }
 
-let detector;
-let reps = 0, up = false;
-let currentExercise = exerciseSelect.value;
-let lastNoRep = ""; // 👈 para no repetir mensajes "no rep" idénticos
+    async function initDetector() {
+      model = poseDetection.SupportedModels.MoveNet;
+      detector = await poseDetection.createDetector(model, { modelType: 'SinglePose.Lightning' });
+    }
 
-exerciseSelect.addEventListener('change', ()=>{
-  currentExercise = exerciseSelect.value;
-  reps = 0;
-  up = false;
-  counterEl.textContent = "Reps: 0";
-  statusEl.textContent = `Ejercicio seleccionado: ${currentExercise}`;
-});
+    function getAngle(a, b, c) {
+      const ab = [a.x - b.x, a.y - b.y];
+      const cb = [c.x - b.x, c.y - b.y];
+      const dot = ab[0]*cb[0] + ab[1]*cb[1];
+      const magA = Math.sqrt(ab[0]**2 + ab[1]**2);
+      const magC = Math.sqrt(cb[0]**2 + cb[1]**2);
+      const angle = Math.acos(dot / (magA * magC));
+      return (angle * 180) / Math.PI;
+    }
 
-startBtn.addEventListener('click', initCamera);
-
-async function initCamera() {
-  statusEl.textContent = "Iniciando cámara...";
-  startBtn.disabled = true;
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-    video.srcObject = stream;
-    await new Promise(res => video.onloadedmetadata = res);
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    statusEl.textContent = "Cámara activa ✅";
-    await initDetector();
-    detectPose();
-  } catch(err) {
-    console.error(err);
-    statusEl.textContent = "❌ No se pudo acceder a la cámara";
-    startBtn.disabled = false;
-  }
-}
-
-async function initDetector() {
-  statusEl.textContent = "Cargando detector...";
-  detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
-    modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-  });
-  statusEl.textContent = "Detector activo ✅";
-}
-
-function getAngle(a,b,c){
-  const AB = {x:b.x-a.x, y:b.y-a.y};
-  const CB = {x:b.x-c.x, y:b.y-c.y};
-  const dot = AB.x*CB.x + AB.y*CB.y;
-  const magAB = Math.sqrt(AB.x**2 + AB.y**2);
-  const magCB = Math.sqrt(CB.x**2 + CB.y**2);
-  return Math.round(Math.acos(dot/(magAB*magCB))*180/Math.PI);
-}
-
-function setNoRep(message){
-  if(message !== lastNoRep){
-    statusEl.textContent = `❌ No rep – ${message}`;
-    lastNoRep = message;
-  }
-}
-
-// ----------------------
-// 🔍 DETECCIÓN DE REPS
-// ----------------------
-function detectReps(kp){
-  let angle=0;
-  let valid = false;
-
-  // ---------- PUSHUPS ----------
-  if(currentExercise==="pushup"){
-    const shoulder = kp[11], elbow = kp[13], wrist = kp[15];
-    const hip = kp[23], knee = kp[25];
-    if(shoulder && elbow && wrist && hip && knee){
-      angle = getAngle(shoulder, elbow, wrist);
-      const bodyLine = getAngle(shoulder, hip, knee);
-
-      if(angle < 90 && !up) up = true;
-      if(angle > 165 && up){
-        if(bodyLine < 160){ setNoRep("Cuerpo no alineado (cadera baja o alta)"); }
-        else { reps++; valid = true; }
-        up = false;
+    function setNoRep(reason) {
+      if (lastNoRep !== reason) {
+        statusEl.textContent = `❌ No Rep: ${reason}`;
+        overlayColor = "#ff4444";
+        lastNoRep = reason;
       }
     }
 
-  // ---------- DIPS ----------
-  } else if(currentExercise==="dip"){
-    const shoulder = kp[11], elbow = kp[13], wrist = kp[15];
-    if(shoulder && elbow && wrist){
-      angle = getAngle(shoulder, elbow, wrist);
-      if(angle < 90 && !up) up = true;
-      if(angle > 160 && up){
-        if(angle > 180 || angle < 70){ setNoRep("Rango incompleto de codo"); }
-        else { reps++; valid = true; }
-        up = false;
+    function setGoodRep() {
+      statusEl.textContent = "✅ Rep válida";
+      overlayColor = "#00ff88";
+      lastNoRep = "";
+    }
+
+    function updateRepsDisplay() {
+      counterEl.textContent = `Reps: ${reps}`;
+    }
+
+    function smoothAngle(angle) {
+      angleBuffer.push(angle);
+      if (angleBuffer.length > 5) angleBuffer.shift();
+      return angleBuffer.reduce((a,b)=>a+b)/angleBuffer.length;
+    }
+
+    function detectExercise(pose) {
+      const kp = pose.keypoints;
+      const s = kp[11], e = kp[13], w = kp[15];
+      const h = kp[23], k = kp[25], a = kp[27];
+      if (!s || !e || !w || !h || !k || !a) return;
+
+      let angle, depthAngle;
+
+      switch(currentExercise) {
+        case "pushup":
+          angle = getAngle(s, e, w);
+          depthAngle = getAngle(s, h, k);
+          handlePhases(angle, depthAngle, 90, 160, 165, "Cuerpo no alineado");
+          drawOverlay([s,e,w], angle);
+          break;
+        case "dip":
+          angle = getAngle(s, e, w);
+          handlePhases(angle, null, 85, 155, 160, null);
+          drawOverlay([s,e,w], angle);
+          break;
+        case "pullup":
+          angle = getAngle(s, e, w);
+          handlePhases(angle, null, 70, 150, 160, null);
+          drawOverlay([s,e,w], angle);
+          break;
+        case "squat":
+          angle = getAngle(h, k, a);
+          handlePhases(angle, null, 80, 160, 165, null);
+          drawOverlay([h,k,a], angle);
+          break;
       }
     }
 
-  // ---------- SQUATS ----------
-  } else if(currentExercise==="squat"){
-    const hip = kp[23], knee = kp[25], ankle = kp[27];
-    if(hip && knee && ankle && hip.score>0.4 && knee.score>0.4 && ankle.score>0.4){
-      angle = getAngle(hip, knee, ankle);
-      if(angle < 90 && !up) up = true;
-      if(angle > 165 && up){
-        if(angle > 180 || angle < 70){ setNoRep("No bajó suficiente (cadera no al nivel de rodillas)"); }
-        else { reps++; valid = true; }
-        up = false;
+    function handlePhases(angle, bodyLine, downThresh, startThresh, endThresh, alignMsg) {
+      const smooth = smoothAngle(angle);
+
+      if (phase === "ready" && smooth < startThresh) {
+        inMovement = true;
+        phase = "down";
+      } 
+      else if (phase === "down" && smooth < downThresh) {
+        phase = "bottom";
+      } 
+      else if (phase === "bottom" && smooth > endThresh) {
+        if (bodyLine && bodyLine < 160) {
+          setNoRep(alignMsg || "Cuerpo no alineado");
+        } else {
+          reps++;
+          setGoodRep();
+        }
+        updateRepsDisplay();
+        phase = "ready";
+        inMovement = false;
+      } 
+      else if (inMovement && phase === "down" && smooth > startThresh) {
+        setNoRep("No bajó suficiente antes de subir");
+        phase = "ready";
+        inMovement = false;
       }
     }
 
-  // ---------- PULLUPS ----------
-  } else if(currentExercise==="pullup"){
-    const yNose = kp[0].y;
-    const yHands = (kp[9].y + kp[10].y)/2;
-    const shoulder = kp[11], elbow = kp[13], wrist = kp[15];
-    if(yNose < yHands && !up) up = true;
-    if(yNose > yHands + 80 && up){
-      const elbowAngle = getAngle(shoulder, elbow, wrist);
-      if(elbowAngle > 100){ setNoRep("Barbilla no superó la barra"); }
-      else { reps++; valid = true; }
-      up = false;
-    }
-  }
-
-  if(valid){
-    counterEl.textContent = `Reps: ${reps}`;
-    statusEl.textContent = `✅ Rep válida (${currentExercise})`;
-    lastNoRep = "";
-  }
-}
-
-function drawSkeleton(pose){
-  const keypoints = pose.keypoints;
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.drawImage(video,0,0,canvas.width,canvas.height);
-
-  const adjacentPairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "#00FF00";
-  adjacentPairs.forEach(([i,j])=>{
-    const kp1 = keypoints[i], kp2 = keypoints[j];
-    if(kp1.score>0.4 && kp2.score>0.4){
+    function drawOverlay(points, angle) {
+      if (points.length < 3) return;
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = overlayColor;
       ctx.beginPath();
-      ctx.moveTo(kp1.x,kp1.y);
-      ctx.lineTo(kp2.x,kp2.y);
+      ctx.moveTo(points[0].x, points[0].y);
+      ctx.lineTo(points[1].x, points[1].y);
+      ctx.lineTo(points[2].x, points[2].y);
       ctx.stroke();
+
+      ctx.fillStyle = overlayColor;
+      ctx.font = "18px Arial";
+      ctx.fillText(`${Math.round(angle)}°`, points[1].x + 10, points[1].y - 10);
     }
-  });
 
-  keypoints.forEach(kp=>{
-    if(kp.score>0.4){
-      ctx.beginPath();
-      ctx.arc(kp.x,kp.y,5,0,2*Math.PI);
-      ctx.fillStyle="#00FF00";
-      ctx.fill();
-    }
-  });
-
-  detectReps(keypoints);
-}
-
-async function detectPose(){
-  const detect = async ()=>{
-    if(video.readyState>=2){
+    async function run() {
       const poses = await detector.estimatePoses(video);
-      if(poses.length>0){
-        drawSkeleton(poses[0]);
-      } else {
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        ctx.drawImage(video,0,0,canvas.width,canvas.height);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (poses.length > 0) {
+        const pose = poses[0];
+        detectExercise(pose);
       }
+
+      requestAnimationFrame(run);
     }
-    requestAnimationFrame(detect);
-  };
-  detect();
-}
-</script>
+
+    exerciseSelect.addEventListener("change", () => {
+      currentExercise = exerciseSelect.value;
+      reps = 0;
+      phase = "ready";
+      angleBuffer = [];
+      lastNoRep = "";
+      overlayColor = "#00ff88";
+      statusEl.textContent = "Esperando...";
+      updateRepsDisplay();
+    });
+
+    (async () => {
+      await initCamera();
+      await initDetector();
+      run();
+    })();
+  </script>
 </body>
 </html>
