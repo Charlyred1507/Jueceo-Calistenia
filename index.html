@@ -281,9 +281,10 @@ function detectReps(kp){
   }
 
   counterEl.textContent = `Reps: ${reps}`;
+  drawMeter(angle, currentExercise, nose, yHands);
 }
 
-// Dibuja skeleton
+// Dibuja skeleton y overlay
 function drawSkeleton(pose){
   const keypoints = pose.keypoints;
   ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -312,6 +313,47 @@ function drawSkeleton(pose){
   });
 
   detectReps(keypoints);
+}
+
+// Dibuja velocímetro semicircular o barra para pullups
+function drawMeter(angle, exercise, nose, yHands){
+  const x=80, y=canvas.height-80, radius=60;
+  ctx.save();
+  ctx.globalAlpha=0.7;
+  ctx.fillStyle="rgba(0,0,0,0.5)";
+  ctx.fillRect(20,canvas.height-160,120,140);
+  ctx.globalAlpha=1;
+
+  if(exercise==="pullup" && nose && yHands){
+    // Barra de progreso vertical
+    const h = 100;
+    let progress = (yHands+80 - nose.y)/100;
+    progress = Math.max(0, Math.min(1, progress));
+    ctx.fillStyle="#444";
+    ctx.fillRect(x-20,y-100,40,h);
+    ctx.fillStyle=progress>0.9?"#0f0":progress>0.5?"#ff0":"#f00";
+    ctx.fillRect(x-20,y-100+h*(1-progress),40,h*progress);
+  } else {
+    // Velocímetro semicircular
+    const minAngle=60, maxAngle=180;
+    const percent = (angle - minAngle)/(maxAngle-minAngle);
+    const clamped=Math.max(0,Math.min(1,percent));
+
+    // fondo
+    ctx.beginPath();
+    ctx.arc(x,y,radius,Math.PI,0);
+    ctx.strokeStyle="#444";
+    ctx.lineWidth=10;
+    ctx.stroke();
+
+    // valor actual
+    ctx.beginPath();
+    ctx.arc(x,y,radius,Math.PI,Math.PI+Math.PI*clamped,false);
+    ctx.strokeStyle=angle<100?"#f00":angle<140?"#ff0":"#0f0";
+    ctx.lineWidth=10;
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 // Loop principal
