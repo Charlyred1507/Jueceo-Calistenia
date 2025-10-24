@@ -51,7 +51,7 @@ let feedbackMessage = "";
 let feedbackTimer = null;
 
 // Buffers para estabilidad del skeleton
-const keypointBuffers = []; // buffer de 5-10 frames
+const keypointBuffers = [];
 const BUFFER_SIZE = 5;
 
 // Buffer simple para detectar quietud
@@ -89,10 +89,13 @@ async function initCamera(){
   showFeedback("Iniciando cámara...");
   startBtn.disabled=true;
   try{
-    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{exact:"environment"}}});
-    video.srcObject=stream;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } } // cámara trasera preferida
+    });
+    video.srcObject = stream;
     await new Promise(res=>video.onloadedmetadata=res);
-    canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+    canvas.width=video.videoWidth;
+    canvas.height=video.videoHeight;
     showFeedback("Cámara activa ✅");
     await initDetector();
     detectPose();
@@ -117,7 +120,6 @@ function getAngle(a,b,c){
   return Math.round(Math.acos(dot/(magAB*magCB))*180/Math.PI);
 }
 
-// Estabilidad simple
 function isStable(y, threshold=12, frames=15){
   if(y===undefined) return false;
   movementBufferY.push(y);
@@ -125,7 +127,6 @@ function isStable(y, threshold=12, frames=15){
   return (Math.max(...movementBufferY)-Math.min(...movementBufferY))<threshold;
 }
 
-// Promediar keypoints para estabilidad visual
 function getSmoothedKeypoints(keypoints){
   if(keypointBuffers.length>=BUFFER_SIZE) keypointBuffers.shift();
   keypointBuffers.push(keypoints.map(kp=>({x:kp.x,y:kp.y,score:kp.score})));
@@ -139,7 +140,6 @@ function getSmoothedKeypoints(keypoints){
   return smoothed;
 }
 
-// Velocímetro semicircular para squats/push-ups/dips
 function drawAngleMeter(angle,x,y){
   ctx.save();
   ctx.translate(x,y);
@@ -153,15 +153,13 @@ function drawAngleMeter(angle,x,y){
   ctx.restore();
 }
 
-// Barra vertical para pull-ups
 function drawPullupBar(noseY,handY){
   const x=canvas.width-50, yTop=100, yBottom=canvas.height-100;
-  const progress=Math.min(Math.max((noseY-handY)/(yBottom-yTop),0,1),1);
+  const progress=Math.min(Math.max((noseY-handY)/(yBottom-yTop),0),1);
   ctx.fillStyle="#333"; ctx.fillRect(x,yTop,20,yBottom-yTop);
   ctx.fillStyle="#00FF00"; ctx.fillRect(x,yTop+(1-progress)*(yBottom-yTop),20,progress*(yBottom-yTop));
 }
 
-// Detecta reps y No reps con feedback
 function detectReps(kp){
   const smoothed = getSmoothedKeypoints(kp);
   let angle=0, reason="";
@@ -198,5 +196,27 @@ function detectReps(kp){
     case "pullup":
       if(n && lh && rh){
         const yHands=(lh.y+rh.y)/2;
-        if(!inPosition && n.y>yHands+80 && isStable((n.y+yHands)/2)){ inPosition=true; showFeedback("🟢 Listo para empezar"); readyBtn.style.display="none";}
-        if(n.y<
+        if(!inPosition && n.y>yHands+80 && isStable((n.y+yHands)/2)){
+          inPosition=true; showFeedback("🟢 Listo para empezar"); readyBtn.style.display="none";
+        }
+        if(n.y<yHands && !up) up=true;
+        if(n.y>yHands+80 && up){ reps++; up=false; showFeedback("✅ Repetición válida"); }
+        else if(n.y>yHands+80 && !up){ reason="No subió lo suficiente"; showFeedback(`❌ No rep: ${reason}`); }
+        drawPullupBar(n.y,yHands);
+      }
+      break;
+  }
+  counterEl.textContent=`Reps: ${reps}`;
+}
+
+function drawSkeleton(pose){
+  const keypoints = pose.keypoints;
+  const smoothed = getSmoothedKeypoints(keypoints);
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+
+  const adjacentPairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
+  ctx.lineWidth=2; ctx.strokeStyle="#00FF00";
+  adjacentPairs.forEach(([i,j])=>{
+    const kp1=smoothed[i],
