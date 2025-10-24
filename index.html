@@ -6,7 +6,7 @@
 <title>Detector de Movimiento Calistenia</title>
 <style>
   body { margin:0; background:#111; color:#fff; font-family:'Poppins',sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; overflow:hidden;}
-  video, canvas { position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:100%; height:auto; max-height:100vh; border-radius:12px; object-fit:cover;}
+  video, canvas { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:100%; height:auto; max-height:100vh; border-radius:12px; object-fit:cover;}
   #status { position:absolute; bottom:20px; background:rgba(0,0,0,0.7); padding:10px 20px; border-radius:8px; font-size:1rem; z-index:10;}
   #startBtn { position:absolute; top:20px; background:#28a745; border:none; color:white; padding:12px 24px; border-radius:8px; font-size:1rem; cursor:pointer; z-index:10;}
   #exerciseSelect { position:absolute; top:70px; background:#222; border:none; color:white; padding:8px 16px; border-radius:8px; font-size:1rem; z-index:10;}
@@ -49,15 +49,10 @@ let currentExercise = exerciseSelect.value;
 let inPosition = false;
 let feedbackMessage = "";
 let feedbackTimer = null;
-
-// Buffers para estabilidad del skeleton
 const keypointBuffers = [];
 const BUFFER_SIZE = 5;
-
-// Buffer simple para detectar quietud
 let movementBufferY = [];
 
-// Mostrar feedback
 function showFeedback(msg, duration=1500){
   if(feedbackMessage !== msg){
     feedbackMessage = msg;
@@ -67,7 +62,6 @@ function showFeedback(msg, duration=1500){
   }
 }
 
-// Cambiar ejercicio
 exerciseSelect.addEventListener('change', ()=>{
   currentExercise = exerciseSelect.value;
   reps = 0; up = false; inPosition=false;
@@ -90,7 +84,7 @@ async function initCamera(){
   startBtn.disabled=true;
   try{
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } } // cámara trasera preferida
+      video: { facingMode: "environment" } // cámara trasera preferida, confiable
     });
     video.srcObject = stream;
     await new Promise(res=>video.onloadedmetadata=res);
@@ -140,6 +134,7 @@ function getSmoothedKeypoints(keypoints){
   return smoothed;
 }
 
+// Dibujo y medición de ángulo (velocímetro semicircular)
 function drawAngleMeter(angle,x,y){
   ctx.save();
   ctx.translate(x,y);
@@ -153,6 +148,7 @@ function drawAngleMeter(angle,x,y){
   ctx.restore();
 }
 
+// Barra vertical para pull-ups
 function drawPullupBar(noseY,handY){
   const x=canvas.width-50, yTop=100, yBottom=canvas.height-100;
   const progress=Math.min(Math.max((noseY-handY)/(yBottom-yTop),0),1);
@@ -212,11 +208,40 @@ function detectReps(kp){
 function drawSkeleton(pose){
   const keypoints = pose.keypoints;
   const smoothed = getSmoothedKeypoints(keypoints);
-
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(video,0,0,canvas.width,canvas.height);
-
   const adjacentPairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
   ctx.lineWidth=2; ctx.strokeStyle="#00FF00";
   adjacentPairs.forEach(([i,j])=>{
-    const kp1=smoothed[i],
+    const kp1=smoothed[i], kp2=smoothed[j];
+    if(kp1.score>0.4 && kp2.score>0.4){
+      ctx.beginPath();
+      ctx.moveTo(kp1.x,kp1.y);
+      ctx.lineTo(kp2.x,kp2.y);
+      ctx.stroke();
+    }
+  });
+  smoothed.forEach(kp=>{
+    if(kp.score>0.4){
+      ctx.beginPath();
+      ctx.arc(kp.x,kp.y,5,0,2*Math.PI);
+      ctx.fillStyle="#00FF00"; ctx.fill();
+    }
+  });
+  detectReps(smoothed);
+}
+
+async function detectPose(){
+  const detect = async ()=>{
+    if(video.readyState>=2){
+      const poses = await detector.estimatePoses(video);
+      if(poses.length>0) drawSkeleton(poses[0]);
+      else ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    }
+    requestAnimationFrame(detect);
+  };
+  detect();
+}
+</script>
+</body>
+</html>
