@@ -101,11 +101,17 @@ let detector;
 let reps = 0, up = false;
 let currentExercise = exerciseSelect.value;
 let inPosition = false;
-let movementBuffer = [];
 let feedbackMessage = "";
 let feedbackTimer = null;
 
-// Función para mostrar feedback estable
+// Buffers separados para keypoints críticos
+let movementBuffers = {
+  pushup: [],
+  dip: [],
+  squat: [],
+  pullup: []
+};
+
 function showFeedback(msg, duration=1500){
   if(feedbackMessage !== msg){
     feedbackMessage = msg;
@@ -121,7 +127,7 @@ exerciseSelect.addEventListener('change', ()=>{
   reps = 0;
   up = false;
   inPosition = false;
-  movementBuffer = [];
+  for(let key in movementBuffers) movementBuffers[key]=[];
   counterEl.textContent = "Reps: 0";
   showFeedback(`Ejercicio seleccionado: ${currentExercise}`, 2000);
 });
@@ -157,7 +163,6 @@ async function initDetector() {
   showFeedback("Detector activo ✅", 1500);
 }
 
-// Ángulo entre tres puntos
 function getAngle(a,b,c){
   if(!a || !b || !c) return 180;
   const AB = {x:b.x-a.x, y:b.y-a.y};
@@ -168,14 +173,15 @@ function getAngle(a,b,c){
   return Math.round(Math.acos(dot/(magAB*magCB))*180/Math.PI);
 }
 
-// Ver si está estable (mínimo movimiento)
-function isStable(y, threshold=5, frames=10){
-  movementBuffer.push(y);
-  if(movementBuffer.length>frames) movementBuffer.shift();
-  return (Math.max(...movementBuffer)-Math.min(...movementBuffer))<threshold;
+// Nueva función de estabilidad usando buffer por ejercicio y keypoint promedio
+function isStable(avgY, exercise, threshold=12, frames=15){
+  const buffer = movementBuffers[exercise];
+  buffer.push(avgY);
+  if(buffer.length>frames) buffer.shift();
+  return (Math.max(...buffer)-Math.min(...buffer))<threshold;
 }
 
-// Detecta reps con triggers optimizados
+// Detecta reps con triggers optimizados y buffers por ejercicio
 function detectReps(kp){
   let angle=0;
 
@@ -187,8 +193,9 @@ function detectReps(kp){
     case "pushup":
       if(shoulder && elbow && wrist){
         angle = getAngle(shoulder, elbow, wrist);
-        if(!inPosition && angle>165 && Math.abs(shoulder.y-wrist.y)<20 && isStable((shoulder.y+elbow.y)/2)){
-          inPosition=true;
+        const yAvg = (shoulder.y+elbow.y)/2;
+        if(!inPosition && angle>165 && Math.abs(shoulder.y-wrist.y)<20 && isStable(yAvg,'pushup')){
+          inPosition = true;
           showFeedback("🟢 Listo para empezar");
         }
         if(inPosition){
@@ -205,8 +212,9 @@ function detectReps(kp){
     case "dip":
       if(shoulder && elbow && wrist && hip){
         angle = getAngle(shoulder, elbow, wrist);
-        if(!inPosition && angle>165 && hip.y>shoulder.y && isStable(hip.y)){
-          inPosition=true;
+        const yAvg = (hip.y+elbow.y)/2;
+        if(!inPosition && angle>165 && hip.y>shoulder.y && isStable(yAvg,'dip')){
+          inPosition = true;
           showFeedback("🟢 Listo para empezar");
         }
         if(inPosition){
@@ -221,10 +229,11 @@ function detectReps(kp){
       break;
 
     case "squat":
-      if(hip && knee && ankle){
+      if(hip && knee && ankle && shoulder){
         angle = getAngle(hip,knee,ankle);
-        if(!inPosition && angle>165 && Math.abs(hip.x-shoulder.x)<20 && isStable(knee.y)){
-          inPosition=true;
+        const yAvg = (hip.y+knee.y)/2;
+        if(!inPosition && angle>165 && Math.abs(hip.x-shoulder.x)<20 && isStable(yAvg,'squat')){
+          inPosition = true;
           showFeedback("🟢 Listo para empezar");
         }
         if(inPosition){
@@ -241,8 +250,9 @@ function detectReps(kp){
     case "pullup":
       if(nose && leftHand && rightHand){
         const yHands = (leftHand.y+rightHand.y)/2;
-        if(!inPosition && nose.y>yHands+80 && isStable(nose.y)){
-          inPosition=true;
+        const yAvg = (nose.y+yHands)/2;
+        if(!inPosition && nose.y>yHands+80 && isStable(yAvg,'pullup')){
+          inPosition = true;
           showFeedback("🟢 Listo para empezar");
         }
         if(inPosition){
