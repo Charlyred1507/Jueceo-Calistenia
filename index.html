@@ -102,6 +102,18 @@ let reps = 0, up = false;
 let currentExercise = exerciseSelect.value;
 let inPosition = false;
 let movementBuffer = [];
+let feedbackMessage = "";
+let feedbackTimer = null;
+
+// Función para mostrar feedback estable
+function showFeedback(msg, duration=1500){
+  if(feedbackMessage !== msg){
+    feedbackMessage = msg;
+    statusEl.textContent = msg;
+    if(feedbackTimer) clearTimeout(feedbackTimer);
+    feedbackTimer = setTimeout(()=>{ feedbackMessage=""; statusEl.textContent=""; }, duration);
+  }
+}
 
 // Cambiar ejercicio
 exerciseSelect.addEventListener('change', ()=>{
@@ -111,13 +123,13 @@ exerciseSelect.addEventListener('change', ()=>{
   inPosition = false;
   movementBuffer = [];
   counterEl.textContent = "Reps: 0";
-  statusEl.textContent = `Ejercicio seleccionado: ${currentExercise}`;
+  showFeedback(`Ejercicio seleccionado: ${currentExercise}`, 2000);
 });
 
 startBtn.addEventListener('click', initCamera);
 
 async function initCamera() {
-  statusEl.textContent = "Iniciando cámara...";
+  showFeedback("Iniciando cámara...");
   startBtn.disabled = true;
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -127,22 +139,22 @@ async function initCamera() {
     await new Promise(res => video.onloadedmetadata = res);
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    statusEl.textContent = "Cámara activa ✅";
+    showFeedback("Cámara activa ✅");
     await initDetector();
     detectPose();
   } catch(err) {
     console.error(err);
-    statusEl.textContent = "❌ No se pudo acceder a la cámara";
+    showFeedback("❌ No se pudo acceder a la cámara");
     startBtn.disabled = false;
   }
 }
 
 async function initDetector() {
-  statusEl.textContent = "Cargando detector...";
+  showFeedback("Cargando detector...");
   detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
     modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
   });
-  statusEl.textContent = "Detector activo ✅";
+  showFeedback("Detector activo ✅", 1500);
 }
 
 // Ángulo entre tres puntos
@@ -163,7 +175,7 @@ function isStable(y, threshold=5, frames=10){
   return (Math.max(...movementBuffer)-Math.min(...movementBuffer))<threshold;
 }
 
-// Detecta reps
+// Detecta reps con triggers optimizados
 function detectReps(kp){
   let angle=0;
 
@@ -171,21 +183,20 @@ function detectReps(kp){
   const hip = kp[23], knee = kp[25], ankle = kp[27];
   const nose = kp[0], leftHand = kp[9], rightHand = kp[10];
 
-  // Posición inicial y reps
   switch(currentExercise){
     case "pushup":
       if(shoulder && elbow && wrist){
         angle = getAngle(shoulder, elbow, wrist);
         if(!inPosition && angle>165 && Math.abs(shoulder.y-wrist.y)<20 && isStable((shoulder.y+elbow.y)/2)){
           inPosition=true;
-          statusEl.textContent="🟢 Listo para empezar";
+          showFeedback("🟢 Listo para empezar");
         }
         if(inPosition){
           if(angle<80 && !up) up=true;
           if(angle>160 && up){
             reps++;
             up=false;
-            statusEl.textContent="✅ Repetición válida";
+            showFeedback("✅ Repetición válida");
           }
         }
       }
@@ -196,14 +207,14 @@ function detectReps(kp){
         angle = getAngle(shoulder, elbow, wrist);
         if(!inPosition && angle>165 && hip.y>shoulder.y && isStable(hip.y)){
           inPosition=true;
-          statusEl.textContent="🟢 Listo para empezar";
+          showFeedback("🟢 Listo para empezar");
         }
         if(inPosition){
           if(angle<90 && !up) up=true;
           if(angle>160 && up){
             reps++;
             up=false;
-            statusEl.textContent="✅ Repetición válida";
+            showFeedback("✅ Repetición válida");
           }
         }
       }
@@ -214,14 +225,14 @@ function detectReps(kp){
         angle = getAngle(hip,knee,ankle);
         if(!inPosition && angle>165 && Math.abs(hip.x-shoulder.x)<20 && isStable(knee.y)){
           inPosition=true;
-          statusEl.textContent="🟢 Listo para empezar";
+          showFeedback("🟢 Listo para empezar");
         }
         if(inPosition){
           if(angle<90 && !up) up=true;
           if(angle>160 && up){
             reps++;
             up=false;
-            statusEl.textContent="✅ Repetición válida";
+            showFeedback("✅ Repetición válida");
           }
         }
       }
@@ -232,14 +243,14 @@ function detectReps(kp){
         const yHands = (leftHand.y+rightHand.y)/2;
         if(!inPosition && nose.y>yHands+80 && isStable(nose.y)){
           inPosition=true;
-          statusEl.textContent="🟢 Listo para empezar";
+          showFeedback("🟢 Listo para empezar");
         }
         if(inPosition){
           if(nose.y<yHands && !up) up=true;
           if(nose.y>yHands+80 && up){
             reps++;
             up=false;
-            statusEl.textContent="✅ Repetición válida";
+            showFeedback("✅ Repetición válida");
           }
         }
       }
