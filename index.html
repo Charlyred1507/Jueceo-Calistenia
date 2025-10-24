@@ -81,12 +81,10 @@
   <option value="pullup">Pull-ups</option>
 </select>
 <div id="counter">Reps: 0</div>
-
 <video id="video" playsinline autoplay muted></video>
 <canvas id="output"></canvas>
 <div id="status">Esperando cámara...</div>
 
-<!-- TensorFlow.js -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
@@ -102,12 +100,16 @@ const counterEl = document.getElementById('counter');
 let detector;
 let reps = 0, up = false;
 let currentExercise = exerciseSelect.value;
+let inPosition = false;
+let movementBuffer = [];
 
-// Cambiar ejercicio sin reiniciar cámara ni detector
+// Cambiar ejercicio
 exerciseSelect.addEventListener('change', ()=>{
   currentExercise = exerciseSelect.value;
   reps = 0;
   up = false;
+  inPosition = false;
+  movementBuffer = [];
   counterEl.textContent = "Reps: 0";
   statusEl.textContent = `Ejercicio seleccionado: ${currentExercise}`;
 });
@@ -119,7 +121,7 @@ async function initCamera() {
   startBtn.disabled = true;
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { exact: "environment" } } // 👈 Forzar cámara trasera
+      video: { facingMode: { exact: "environment" } }
     });
     video.srcObject = stream;
     await new Promise(res => video.onloadedmetadata = res);
@@ -143,7 +145,9 @@ async function initDetector() {
   statusEl.textContent = "Detector activo ✅";
 }
 
+// Ángulo entre tres puntos
 function getAngle(a,b,c){
+  if(!a || !b || !c) return 180;
   const AB = {x:b.x-a.x, y:b.y-a.y};
   const CB = {x:b.x-c.x, y:b.y-c.y};
   const dot = AB.x*CB.x + AB.y*CB.y;
@@ -152,38 +156,110 @@ function getAngle(a,b,c){
   return Math.round(Math.acos(dot/(magAB*magCB))*180/Math.PI);
 }
 
-function detectReps(kp){
-  let angle=0;
-  if(currentExercise==="pushup" || currentExercise==="dip"){
-    angle = getAngle(kp[11], kp[13], kp[15]);
-    if(angle < 80 && !up) up=true;
-    if(angle > 160 && up){ reps++; up=false; }
-  } else if(currentExercise==="squat"){
-    const hip = kp[23], knee = kp[25], ankle = kp[27];
-    if(hip && knee && ankle && hip.score>0.4 && knee.score>0.4 && ankle.score>0.4){
-        angle = getAngle(hip, knee, ankle);
-        if(angle < 90 && !up) up=true;
-        if(angle > 160 && up){ reps++; up=false; }
-    }
-  } else if(currentExercise==="pullup"){
-    const yNose = kp[0].y;
-    const yHands = (kp[9].y + kp[10].y)/2;
-    if(yNose < yHands && !up) up=true;
-    if(yNose > yHands + 80 && up){ reps++; up=false; }
-  }
-  counterEl.textContent = `Reps: ${reps}`;
+// Ver si está estable (mínimo movimiento)
+function isStable(y, threshold=5, frames=10){
+  movementBuffer.push(y);
+  if(movementBuffer.length>frames) movementBuffer.shift();
+  return (Math.max(...movementBuffer)-Math.min(...movementBuffer))<threshold;
 }
 
+// Detecta reps
+function detectReps(kp){
+  let angle=0;
+
+  const shoulder = kp[11], elbow = kp[13], wrist = kp[15];
+  const hip = kp[23], knee = kp[25], ankle = kp[27];
+  const nose = kp[0], leftHand = kp[9], rightHand = kp[10];
+
+  // Posición inicial y reps
+  switch(currentExercise){
+    case "pushup":
+      if(shoulder && elbow && wrist){
+        angle = getAngle(shoulder, elbow, wrist);
+        if(!inPosition && angle>165 && Math.abs(shoulder.y-wrist.y)<20 && isStable((shoulder.y+elbow.y)/2)){
+          inPosition=true;
+          statusEl.textContent="🟢 Listo para empezar";
+        }
+        if(inPosition){
+          if(angle<80 && !up) up=true;
+          if(angle>160 && up){
+            reps++;
+            up=false;
+            statusEl.textContent="✅ Repetición válida";
+          }
+        }
+      }
+      break;
+
+    case "dip":
+      if(shoulder && elbow && wrist && hip){
+        angle = getAngle(shoulder, elbow, wrist);
+        if(!inPosition && angle>165 && hip.y>shoulder.y && isStable(hip.y)){
+          inPosition=true;
+          statusEl.textContent="🟢 Listo para empezar";
+        }
+        if(inPosition){
+          if(angle<90 && !up) up=true;
+          if(angle>160 && up){
+            reps++;
+            up=false;
+            statusEl.textContent="✅ Repetición válida";
+          }
+        }
+      }
+      break;
+
+    case "squat":
+      if(hip && knee && ankle){
+        angle = getAngle(hip,knee,ankle);
+        if(!inPosition && angle>165 && Math.abs(hip.x-shoulder.x)<20 && isStable(knee.y)){
+          inPosition=true;
+          statusEl.textContent="🟢 Listo para empezar";
+        }
+        if(inPosition){
+          if(angle<90 && !up) up=true;
+          if(angle>160 && up){
+            reps++;
+            up=false;
+            statusEl.textContent="✅ Repetición válida";
+          }
+        }
+      }
+      break;
+
+    case "pullup":
+      if(nose && leftHand && rightHand){
+        const yHands = (leftHand.y+rightHand.y)/2;
+        if(!inPosition && nose.y>yHands+80 && isStable(nose.y)){
+          inPosition=true;
+          statusEl.textContent="🟢 Listo para empezar";
+        }
+        if(inPosition){
+          if(nose.y<yHands && !up) up=true;
+          if(nose.y>yHands+80 && up){
+            reps++;
+            up=false;
+            statusEl.textContent="✅ Repetición válida";
+          }
+        }
+      }
+      break;
+  }
+
+  counterEl.textContent=`Reps: ${reps}`;
+}
+
+// Dibuja esqueletos
 function drawSkeleton(pose){
   const keypoints = pose.keypoints;
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(video,0,0,canvas.width,canvas.height);
 
   const adjacentPairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "#00FF00";
+  ctx.lineWidth=2;
+  ctx.strokeStyle="#00FF00";
   adjacentPairs.forEach(([i,j])=>{
-    const kp1 = keypoints[i], kp2 = keypoints[j];
+    const kp1=keypoints[i], kp2=keypoints[j];
     if(kp1.score>0.4 && kp2.score>0.4){
       ctx.beginPath();
       ctx.moveTo(kp1.x,kp1.y);
@@ -204,16 +280,13 @@ function drawSkeleton(pose){
   detectReps(keypoints);
 }
 
+// Loop principal
 async function detectPose(){
   const detect = async ()=>{
     if(video.readyState>=2){
       const poses = await detector.estimatePoses(video);
-      if(poses.length>0){
-        drawSkeleton(poses[0]);
-      } else {
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        ctx.drawImage(video,0,0,canvas.width,canvas.height);
-      }
+      if(poses.length>0) drawSkeleton(poses[0]);
+      else ctx.drawImage(video,0,0,canvas.width,canvas.height);
     }
     requestAnimationFrame(detect);
   };
