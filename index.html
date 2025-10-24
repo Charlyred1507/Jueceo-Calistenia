@@ -37,9 +37,21 @@
     font-size: 1rem;
     z-index: 10;
   }
-  #exerciseSelect {
+  #startBtn {
     position: absolute;
     top: 20px;
+    background: #28a745;
+    border: none;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    z-index: 10;
+  }
+  #exerciseSelect {
+    position: absolute;
+    top: 70px;
     background: #222;
     border: none;
     color: white;
@@ -50,7 +62,7 @@
   }
   #counter {
     position: absolute;
-    top: 70px;
+    top: 120px;
     font-size: 1.5rem;
     background: rgba(0,0,0,0.7);
     padding: 8px 16px;
@@ -60,7 +72,7 @@
 </style>
 </head>
 <body>
-
+<button id="startBtn">Activar Cámara</button>
 <select id="exerciseSelect">
   <option value="pushup">Push-ups</option>
   <option value="dip">Fondos</option>
@@ -80,6 +92,7 @@ const video = document.getElementById('video');
 const canvas = document.getElementById('output');
 const ctx = canvas.getContext('2d');
 const statusEl = document.getElementById('status');
+const startBtn = document.getElementById('startBtn');
 const exerciseSelect = document.getElementById('exerciseSelect');
 const counterEl = document.getElementById('counter');
 
@@ -89,9 +102,11 @@ let currentExercise = exerciseSelect.value;
 let inPosition = false;
 let feedbackMessage = "";
 let feedbackTimer = null;
+
+// Buffer simple para detectar quietud
 let movementBufferY = [];
 
-// Feedback visual
+// Mostrar feedback
 function showFeedback(msg, duration=1500){
   if(feedbackMessage !== msg){
     feedbackMessage = msg;
@@ -112,12 +127,14 @@ exerciseSelect.addEventListener('change', ()=>{
   showFeedback(`Ejercicio seleccionado: ${currentExercise}`, 2000);
 });
 
-// Inicializa cámara automáticamente con trasera
+// Inicializar cámara
+startBtn.addEventListener('click', initCamera);
 async function initCamera() {
   showFeedback("Iniciando cámara...");
+  startBtn.disabled = true;
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } }
+      video: { facingMode: { exact: "environment" } }
     });
     video.srcObject = stream;
     await new Promise(res => video.onloadedmetadata = res);
@@ -129,10 +146,11 @@ async function initCamera() {
   } catch(err) {
     console.error(err);
     showFeedback("❌ No se pudo acceder a la cámara");
+    startBtn.disabled = false;
   }
 }
 
-// Detector
+// Inicializar detector
 async function initDetector() {
   showFeedback("Cargando detector...");
   detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
@@ -141,7 +159,7 @@ async function initDetector() {
   showFeedback("Detector activo ✅", 1500);
 }
 
-// Ángulo entre 3 puntos
+// Calcular ángulo
 function getAngle(a,b,c){
   if(!a || !b || !c) return 180;
   const AB = {x:b.x-a.x, y:b.y-a.y};
@@ -152,159 +170,135 @@ function getAngle(a,b,c){
   return Math.round(Math.acos(dot/(magAB*magCB))*180/Math.PI);
 }
 
-// Buffer para estabilidad
-function isStable(y, threshold=15, frames=20){
+// Estabilidad simple
+function isStable(y, threshold=20, frames=15){
   if(y === undefined) return false;
   movementBufferY.push(y);
   if(movementBufferY.length>frames) movementBufferY.shift();
   return (Math.max(...movementBufferY)-Math.min(...movementBufferY))<threshold;
 }
 
-// Detecta reps
+// Detecta reps y No reps con feedback + feedback posición inicial
 function detectReps(kp){
   let angle=0;
-  let reason="";
+  let reason = "";
   const shoulder = kp[11], elbow = kp[13], wrist = kp[15];
   const hip = kp[23], knee = kp[25], ankle = kp[27];
   const nose = kp[0], leftHand = kp[9], rightHand = kp[10];
+
+  const tolerance = 0.3; // ±30% tolerancia
 
   switch(currentExercise){
     case "pushup":
       if(shoulder && elbow && wrist){
         angle = getAngle(shoulder, elbow, wrist);
-        const yAvg = (shoulder.y+elbow.y)/2;
+        const yAvg = (shoulder.y + elbow.y)/2;
         if(!inPosition){
-          if(angle>150 && isStable(yAvg)){
-            inPosition=true;
-            showFeedback("🟢 Listo para empezar (mantén brazos rectos)");
+          if(angle>165*(1-tolerance) && Math.abs(shoulder.y-wrist.y)<30 && isStable(yAvg)){
+            inPosition = true;
+            showFeedback("🟢 Listo para empezar push-ups");
+          } else {
+            showFeedback("Coloca brazos rectos y torso estable");
           }
         } else {
-          if(angle<100 && !up) up=true;
-          if(angle>150 && up){
-            reps++; up=false;
+          if(angle<80*(1+tolerance) && !up) up=true;
+          if(angle>160*(1-tolerance) && up){
+            reps++;
+            up=false;
             showFeedback("✅ Repetición válida");
-          } else if(angle>150 && !up){
-            reason="Bajada insuficiente";
+          } else if(angle>160*(1-tolerance) && !up){
+            reason = "Cuerpo no bajó suficiente";
             showFeedback(`❌ No rep: ${reason}`);
           }
         }
       }
       break;
+
     case "dip":
       if(shoulder && elbow && wrist && hip){
         angle = getAngle(shoulder, elbow, wrist);
-        const yAvg=(hip.y+elbow.y)/2;
+        const yAvg = (hip.y+elbow.y)/2;
         if(!inPosition){
-          if(angle>150 && hip.y>shoulder.y && isStable(yAvg)){
-            inPosition=true;
-            showFeedback("🟢 Listo para empezar (mantén torso recto)");
+          if(angle>165*(1-tolerance) && hip.y>shoulder.y*(1-tolerance) && isStable(yAvg)){
+            inPosition = true;
+            showFeedback("🟢 Listo para empezar fondos");
+          } else {
+            showFeedback("Extiende brazos y mantén torso recto");
           }
         } else {
-          if(angle<100 && !up) up=true;
-          if(angle>150 && up){
-            reps++; up=false;
+          if(angle<90*(1+tolerance) && !up) up=true;
+          if(angle>160*(1-tolerance) && up){
+            reps++;
+            up=false;
             showFeedback("✅ Repetición válida");
-          } else if(angle>150 && !up){
-            reason="Bajada insuficiente";
+          } else if(angle>160*(1-tolerance) && !up){
+            reason = "Cuerpo no bajó suficiente";
             showFeedback(`❌ No rep: ${reason}`);
           }
         }
       }
       break;
+
     case "squat":
       if(hip && knee && ankle && shoulder){
         angle = getAngle(hip,knee,ankle);
-        const yAvg=(hip.y+knee.y)/2;
+        const yAvg = (hip.y+knee.y)/2;
         if(!inPosition){
-          if(angle>150 && Math.abs(hip.x-shoulder.x)<30 && isStable(yAvg)){
-            inPosition=true;
-            showFeedback("🟢 Listo para empezar (piernas rectas)");
+          if(angle>165*(1-tolerance) && Math.abs(hip.x-shoulder.x)<30 && isStable(yAvg)){
+            inPosition = true;
+            showFeedback("🟢 Listo para empezar squat");
+          } else {
+            showFeedback("Estira las piernas y torso recto");
           }
         } else {
-          if(angle<100 && !up) up=true;
-          if(angle>150 && up){
-            reps++; up=false;
+          if(angle<100*(1+tolerance) && !up) up=true;
+          if(angle>150*(1-tolerance) && up){
+            reps++;
+            up=false;
             showFeedback("✅ Repetición válida");
-          } else if(angle>150 && !up){
-            reason="Cadera no bajó suficiente";
+          } else if(angle>150*(1-tolerance) && !up){
+            reason = "Cadera no bajó suficiente";
             showFeedback(`❌ No rep: ${reason}`);
           }
         }
       }
       break;
+
     case "pullup":
       if(nose && leftHand && rightHand){
-        const yHands=(leftHand.y+rightHand.y)/2;
-        const yAvg=(nose.y+yHands)/2;
+        const yHands = (leftHand.y + rightHand.y)/2;
+        const yAvg = (nose.y+yHands)/2;
         if(!inPosition){
-          if(nose.y>yHands+50 && isStable(yAvg)){
-            inPosition=true;
-            showFeedback("🟢 Listo para empezar (cuélgate y brazos extendidos)");
+          if(nose.y>yHands+80*(1-tolerance) && isStable(yAvg)){
+            inPosition = true;
+            showFeedback("🟢 Listo para empezar pull-ups");
+          } else {
+            showFeedback("Cuelga completamente con brazos extendidos");
           }
         } else {
           if(nose.y<yHands && !up) up=true;
-          if(nose.y>yHands+50 && up){
-            reps++; up=false;
+          if(nose.y>yHands+80*(1-tolerance) && up){
+            reps++;
+            up=false;
             showFeedback("✅ Repetición válida");
-          } else if(nose.y>yHands+50 && !up){
-            reason="No subió suficiente";
+          } else if(nose.y>yHands+80*(1-tolerance) && !up){
+            reason = "No subió suficiente";
             showFeedback(`❌ No rep: ${reason}`);
           }
         }
       }
       break;
   }
-
-  counterEl.textContent=`Reps: ${reps}`;
+  counterEl.textContent = `Reps: ${reps}`;
 }
 
 // Dibuja skeleton
 function drawSkeleton(pose){
-  const keypoints=pose.keypoints;
+  const keypoints = pose.keypoints;
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(video,0,0,canvas.width,canvas.height);
 
   const adjacentPairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
   ctx.lineWidth=2;
   ctx.strokeStyle="#00FF00";
-  adjacentPairs.forEach(([i,j])=>{
-    const kp1=keypoints[i], kp2=keypoints[j];
-    if(kp1.score>0.4 && kp2.score>0.4){
-      ctx.beginPath();
-      ctx.moveTo(kp1.x,kp1.y);
-      ctx.lineTo(kp2.x,kp2.y);
-      ctx.stroke();
-    }
-  });
-
-  keypoints.forEach(kp=>{
-    if(kp.score>0.4){
-      ctx.beginPath();
-      ctx.arc(kp.x,kp.y,5,0,2*Math.PI);
-      ctx.fillStyle="#00FF00";
-      ctx.fill();
-    }
-  });
-
-  detectReps(keypoints);
-}
-
-// Loop principal
-async function detectPose(){
-  const detect = async ()=>{
-    if(video.readyState>=2){
-      const poses = await detector.estimatePoses(video);
-      if(poses.length>0) drawSkeleton(poses[0]);
-      else ctx.drawImage(video,0,0,canvas.width,canvas.height);
-    }
-    requestAnimationFrame(detect);
-  };
-  detect();
-}
-
-// Activar cámara automáticamente
-window.addEventListener("load", initCamera);
-
-</script>
-</body>
-</html>
+  adjacentPairs.forEach(([i,j
