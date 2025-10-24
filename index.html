@@ -36,6 +36,8 @@
     border-radius: 8px;
     font-size: 1rem;
     z-index: 10;
+    max-width: 90%;
+    text-align: center;
   }
   #startBtn {
     position: absolute;
@@ -102,8 +104,8 @@ const counterEl = document.getElementById('counter');
 let detector;
 let reps = 0, up = false;
 let currentExercise = exerciseSelect.value;
+let lastNoRep = ""; // 👈 para no repetir mensajes "no rep" idénticos
 
-// Cambiar ejercicio sin reiniciar cámara ni detector
 exerciseSelect.addEventListener('change', ()=>{
   currentExercise = exerciseSelect.value;
   reps = 0;
@@ -118,9 +120,7 @@ async function initCamera() {
   statusEl.textContent = "Iniciando cámara...";
   startBtn.disabled = true;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" }
-    });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
     video.srcObject = stream;
     await new Promise(res => video.onloadedmetadata = res);
     canvas.width = video.videoWidth;
@@ -152,26 +152,81 @@ function getAngle(a,b,c){
   return Math.round(Math.acos(dot/(magAB*magCB))*180/Math.PI);
 }
 
+function setNoRep(message){
+  if(message !== lastNoRep){
+    statusEl.textContent = `❌ No rep – ${message}`;
+    lastNoRep = message;
+  }
+}
+
+// ----------------------
+// 🔍 DETECCIÓN DE REPS
+// ----------------------
 function detectReps(kp){
   let angle=0;
-  if(currentExercise==="pushup" || currentExercise==="dip"){
-    angle = getAngle(kp[11], kp[13], kp[15]);
-    if(angle < 80 && !up) up=true;
-    if(angle > 160 && up){ reps++; up=false; }
+  let valid = false;
+
+  // ---------- PUSHUPS ----------
+  if(currentExercise==="pushup"){
+    const shoulder = kp[11], elbow = kp[13], wrist = kp[15];
+    const hip = kp[23], knee = kp[25];
+    if(shoulder && elbow && wrist && hip && knee){
+      angle = getAngle(shoulder, elbow, wrist);
+      const bodyLine = getAngle(shoulder, hip, knee);
+
+      if(angle < 90 && !up) up = true;
+      if(angle > 165 && up){
+        if(bodyLine < 160){ setNoRep("Cuerpo no alineado (cadera baja o alta)"); }
+        else { reps++; valid = true; }
+        up = false;
+      }
+    }
+
+  // ---------- DIPS ----------
+  } else if(currentExercise==="dip"){
+    const shoulder = kp[11], elbow = kp[13], wrist = kp[15];
+    if(shoulder && elbow && wrist){
+      angle = getAngle(shoulder, elbow, wrist);
+      if(angle < 90 && !up) up = true;
+      if(angle > 160 && up){
+        if(angle > 180 || angle < 70){ setNoRep("Rango incompleto de codo"); }
+        else { reps++; valid = true; }
+        up = false;
+      }
+    }
+
+  // ---------- SQUATS ----------
   } else if(currentExercise==="squat"){
     const hip = kp[23], knee = kp[25], ankle = kp[27];
     if(hip && knee && ankle && hip.score>0.4 && knee.score>0.4 && ankle.score>0.4){
-        angle = getAngle(hip, knee, ankle);
-        if(angle < 90 && !up) up=true;
-        if(angle > 160 && up){ reps++; up=false; }
+      angle = getAngle(hip, knee, ankle);
+      if(angle < 90 && !up) up = true;
+      if(angle > 165 && up){
+        if(angle > 180 || angle < 70){ setNoRep("No bajó suficiente (cadera no al nivel de rodillas)"); }
+        else { reps++; valid = true; }
+        up = false;
+      }
     }
+
+  // ---------- PULLUPS ----------
   } else if(currentExercise==="pullup"){
     const yNose = kp[0].y;
     const yHands = (kp[9].y + kp[10].y)/2;
-    if(yNose < yHands && !up) up=true;
-    if(yNose > yHands + 80 && up){ reps++; up=false; }
+    const shoulder = kp[11], elbow = kp[13], wrist = kp[15];
+    if(yNose < yHands && !up) up = true;
+    if(yNose > yHands + 80 && up){
+      const elbowAngle = getAngle(shoulder, elbow, wrist);
+      if(elbowAngle > 100){ setNoRep("Barbilla no superó la barra"); }
+      else { reps++; valid = true; }
+      up = false;
+    }
   }
-  counterEl.textContent = `Reps: ${reps}`;
+
+  if(valid){
+    counterEl.textContent = `Reps: ${reps}`;
+    statusEl.textContent = `✅ Rep válida (${currentExercise})`;
+    lastNoRep = "";
+  }
 }
 
 function drawSkeleton(pose){
