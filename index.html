@@ -69,19 +69,6 @@
     border-radius: 8px;
     z-index: 10;
   }
-  #readyBtn {
-    position: absolute;
-    top: 160px;
-    background: #007bff;
-    border: none;
-    color: white;
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-size: 1rem;
-    cursor: pointer;
-    z-index: 10;
-    display: none;
-  }
 </style>
 </head>
 <body>
@@ -94,7 +81,6 @@
   <option value="pullup">Pull-ups</option>
 </select>
 <div id="counter">Reps: 0</div>
-<button id="readyBtn">Estoy listo</button>
 <video id="video" playsinline autoplay muted></video>
 <canvas id="output"></canvas>
 <div id="status">Esperando cámara...</div>
@@ -110,7 +96,6 @@ const statusEl = document.getElementById('status');
 const startBtn = document.getElementById('startBtn');
 const exerciseSelect = document.getElementById('exerciseSelect');
 const counterEl = document.getElementById('counter');
-const readyBtn = document.getElementById('readyBtn');
 
 let detector;
 let reps = 0, up = false;
@@ -118,18 +103,18 @@ let currentExercise = exerciseSelect.value;
 let inPosition = false;
 let feedbackMessage = "";
 let feedbackTimer = null;
-
-// Buffers para suavizar movimiento
 let movementBufferY = [];
-let kpBuffer = [];
 
-// Mostrar feedback
+// Mostrar feedback sin bloquear promesas
 function showFeedback(msg, duration=1500){
   if(feedbackMessage !== msg){
     feedbackMessage = msg;
     statusEl.textContent = msg;
     if(feedbackTimer) clearTimeout(feedbackTimer);
-    feedbackTimer = setTimeout(()=>{ feedbackMessage=""; statusEl.textContent=""; }, duration);
+    feedbackTimer = setTimeout(()=>{
+      feedbackMessage="";
+      statusEl.textContent="";
+    }, duration);
   }
 }
 
@@ -140,27 +125,19 @@ exerciseSelect.addEventListener('change', ()=>{
   up = false;
   inPosition = false;
   movementBufferY = [];
-  kpBuffer = [];
   counterEl.textContent = "Reps: 0";
   showFeedback(`Ejercicio seleccionado: ${currentExercise}`, 2000);
-  readyBtn.style.display = "inline-block";
 });
 
-// Botón manual de posición inicial
-readyBtn.addEventListener('click', ()=>{
-  inPosition = true;
-  showFeedback("🟢 Listo para empezar");
-  readyBtn.style.display = "none";
-});
-
-// Inicializar cámara
+// Inicializar cámara trasera
 startBtn.addEventListener('click', initCamera);
+
 async function initCamera() {
   showFeedback("Iniciando cámara...");
   startBtn.disabled = true;
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { exact: "environment" } }
+      video: { facingMode: "environment" } // cámara trasera como antes
     });
     video.srcObject = stream;
     await new Promise(res => video.onloadedmetadata = res);
@@ -185,7 +162,7 @@ async function initDetector() {
   showFeedback("Detector activo ✅", 1500);
 }
 
-// Calcular ángulo
+// Calcular ángulo entre 3 puntos
 function getAngle(a,b,c){
   if(!a || !b || !c) return 180;
   const AB = {x:b.x-a.x, y:b.y-a.y};
@@ -196,23 +173,7 @@ function getAngle(a,b,c){
   return Math.round(Math.acos(dot/(magAB*magCB))*180/Math.PI);
 }
 
-// Suavidad de posición
-function smoothKeypoints(kp){
-  kpBuffer.push(kp);
-  if(kpBuffer.length>5) kpBuffer.shift();
-  if(kpBuffer.length===0) return kp;
-  const avg = [];
-  for(let i=0;i<kp[0].length;i++){
-    let x=0,y=0,score=0;
-    kpBuffer.forEach(frame=>{
-      x+=frame[i].x; y+=frame[i].y; score+=frame[i].score;
-    });
-    avg.push({x:x/kpBuffer.length, y:y/kpBuffer.length, score:score/kpBuffer.length});
-  }
-  return avg;
-}
-
-// Estabilidad simple
+// Detectar estabilidad
 function isStable(y, threshold=12, frames=15){
   if(y === undefined) return false;
   movementBufferY.push(y);
@@ -222,8 +183,8 @@ function isStable(y, threshold=12, frames=15){
 
 // Detectar reps
 function detectReps(kp){
-  kp = smoothKeypoints(kp);
-  let angle=0, reason="";
+  let angle=0;
+  let reason = "";
   const shoulder = kp[11], elbow = kp[13], wrist = kp[15];
   const hip = kp[23], knee = kp[25], ankle = kp[27];
   const nose = kp[0], leftHand = kp[9], rightHand = kp[10];
@@ -235,16 +196,17 @@ function detectReps(kp){
         const yAvg = (shoulder.y + elbow.y)/2;
         if(!inPosition){
           if(angle>165 && Math.abs(shoulder.y-wrist.y)<20 && isStable(yAvg)){
-            showFeedback("📌 Ajusta tu cuerpo para posición inicial");
-            readyBtn.style.display="inline-block";
+            inPosition = true;
+            showFeedback("🟢 Listo para empezar");
           }
         } else {
           if(angle<80 && !up) up=true;
           if(angle>160 && up){
-            reps++; up=false;
+            reps++;
+            up=false;
             showFeedback("✅ Repetición válida");
           } else if(angle>160 && !up){
-            reason="Cuerpo no bajó lo suficiente";
+            reason = "Cuerpo no bajó lo suficiente";
             showFeedback(`❌ No rep: ${reason}`);
           }
         }
@@ -256,16 +218,17 @@ function detectReps(kp){
         const yAvg = (hip.y+elbow.y)/2;
         if(!inPosition){
           if(angle>165 && hip.y>shoulder.y && isStable(yAvg)){
-            showFeedback("📌 Ajusta tu cuerpo para posición inicial");
-            readyBtn.style.display="inline-block";
+            inPosition = true;
+            showFeedback("🟢 Listo para empezar");
           }
         } else {
           if(angle<90 && !up) up=true;
           if(angle>160 && up){
-            reps++; up=false;
+            reps++;
+            up=false;
             showFeedback("✅ Repetición válida");
           } else if(angle>160 && !up){
-            reason="Cuerpo no bajó lo suficiente";
+            reason = "Cuerpo no bajó lo suficiente";
             showFeedback(`❌ No rep: ${reason}`);
           }
         }
@@ -277,16 +240,17 @@ function detectReps(kp){
         const yAvg = (hip.y+knee.y)/2;
         if(!inPosition){
           if(angle>165 && Math.abs(hip.x-shoulder.x)<20 && isStable(yAvg)){
-            showFeedback("📌 Extiende piernas, mantén espalda recta");
-            readyBtn.style.display="inline-block";
+            inPosition = true;
+            showFeedback("🟢 Listo para empezar");
           }
         } else {
           if(angle<90 && !up) up=true;
           if(angle>160 && up){
-            reps++; up=false;
+            reps++;
+            up=false;
             showFeedback("✅ Repetición válida");
           } else if(angle>160 && !up){
-            reason="Cadera no bajó lo suficiente";
+            reason = "Cadera no bajó lo suficiente";
             showFeedback(`❌ No rep: ${reason}`);
           }
         }
@@ -298,33 +262,36 @@ function detectReps(kp){
         const yAvg = (nose.y+yHands)/2;
         if(!inPosition){
           if(nose.y>yHands+80 && isStable(yAvg)){
-            showFeedback("📌 Cuelga de la barra, brazos extendidos");
-            readyBtn.style.display="inline-block";
+            inPosition = true;
+            showFeedback("🟢 Listo para empezar");
           }
         } else {
           if(nose.y<yHands && !up) up=true;
           if(nose.y>yHands+80 && up){
-            reps++; up=false;
+            reps++;
+            up=false;
             showFeedback("✅ Repetición válida");
           } else if(nose.y>yHands+80 && !up){
-            reason="No subió lo suficiente";
+            reason = "No subió lo suficiente";
             showFeedback(`❌ No rep: ${reason}`);
           }
         }
       }
       break;
   }
+
   counterEl.textContent = `Reps: ${reps}`;
 }
 
-// Dibuja skeleton
+// Dibujar skeleton
 function drawSkeleton(pose){
   const keypoints = pose.keypoints;
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(video,0,0,canvas.width,canvas.height);
 
   const adjacentPairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
-  ctx.lineWidth=2; ctx.strokeStyle="#00FF00";
+  ctx.lineWidth=2;
+  ctx.strokeStyle="#00FF00";
   adjacentPairs.forEach(([i,j])=>{
     const kp1=keypoints[i], kp2=keypoints[j];
     if(kp1.score>0.4 && kp2.score>0.4){
@@ -338,4 +305,28 @@ function drawSkeleton(pose){
   keypoints.forEach(kp=>{
     if(kp.score>0.4){
       ctx.beginPath();
-      ctx
+      ctx.arc(kp.x,kp.y,5,0,2*Math.PI);
+      ctx.fillStyle="#00FF00";
+      ctx.fill();
+    }
+  });
+
+  detectReps(keypoints);
+}
+
+// Loop principal
+async function detectPose(){
+  const detect = async ()=>{
+    if(video.readyState>=2){
+      const poses = await detector.estimatePoses(video);
+      if(poses.length>0) drawSkeleton(poses[0]);
+      else ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    }
+    requestAnimationFrame(detect);
+  };
+  detect();
+}
+</script>
+</body>
+</html>
+``
