@@ -83,8 +83,10 @@ async function initCamera(){
   showFeedback("Iniciando cámara...");
   startBtn.disabled=true;
   try{
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevice = devices.find(d => d.kind==="videoinput" && d.label.toLowerCase().includes("back")) || devices.find(d => d.kind==="videoinput");
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" } // cámara trasera preferida, confiable
+      video: { deviceId: videoDevice.deviceId ? { exact: videoDevice.deviceId } : undefined }
     });
     video.srcObject = stream;
     await new Promise(res=>video.onloadedmetadata=res);
@@ -95,7 +97,8 @@ async function initCamera(){
     detectPose();
   }catch(err){
     console.error(err);
-    showFeedback("❌ No se pudo acceder a la cámara"); startBtn.disabled=false;
+    showFeedback("❌ No se pudo acceder a la cámara");
+    startBtn.disabled=false;
   }
 }
 
@@ -134,7 +137,6 @@ function getSmoothedKeypoints(keypoints){
   return smoothed;
 }
 
-// Dibujo y medición de ángulo (velocímetro semicircular)
 function drawAngleMeter(angle,x,y){
   ctx.save();
   ctx.translate(x,y);
@@ -148,7 +150,6 @@ function drawAngleMeter(angle,x,y){
   ctx.restore();
 }
 
-// Barra vertical para pull-ups
 function drawPullupBar(noseY,handY){
   const x=canvas.width-50, yTop=100, yBottom=canvas.height-100;
   const progress=Math.min(Math.max((noseY-handY)/(yBottom-yTop),0),1);
@@ -233,15 +234,3 @@ function drawSkeleton(pose){
 
 async function detectPose(){
   const detect = async ()=>{
-    if(video.readyState>=2){
-      const poses = await detector.estimatePoses(video);
-      if(poses.length>0) drawSkeleton(poses[0]);
-      else ctx.drawImage(video,0,0,canvas.width,canvas.height);
-    }
-    requestAnimationFrame(detect);
-  };
-  detect();
-}
-</script>
-</body>
-</html>
