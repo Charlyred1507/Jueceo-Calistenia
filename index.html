@@ -1,15 +1,15 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Detector de Movimiento Calistenia (Optimizado)</title>
+<title>Detector de Movimiento Calistenia</title>
 <style>
   body {
     margin: 0;
     background: #111;
     color: #fff;
-    font-family: sans-serif;
+    font-family: 'Poppins', sans-serif;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -28,31 +28,18 @@
     border-radius: 12px;
     object-fit: cover;
   }
-  #ui-controls {
-    position: absolute;
-    top: 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    z-index: 10;
-  }
-  #ui-controls > * {
-    margin: 5px;
-  }
   #status {
     position: absolute;
     bottom: 20px;
-    background: rgba(255, 255, 255, 0.9);
-    color: #111;
+    background: rgba(0,0,0,0.7);
     padding: 10px 20px;
     border-radius: 8px;
     font-size: 1rem;
-    font-weight: bold;
     z-index: 10;
-    min-width: 200px;
-    text-align: center;
   }
   #startBtn {
+    position: absolute;
+    top: 20px;
     background: #28a745;
     border: none;
     color: white;
@@ -60,40 +47,43 @@
     border-radius: 8px;
     font-size: 1rem;
     cursor: pointer;
+    z-index: 10;
   }
   #exerciseSelect {
+    position: absolute;
+    top: 70px;
     background: #222;
-    border: 2px solid #fff;
+    border: none;
     color: white;
     padding: 8px 16px;
     border-radius: 8px;
     font-size: 1rem;
+    z-index: 10;
   }
   #counter {
+    position: absolute;
+    top: 120px;
     font-size: 1.5rem;
     background: rgba(0,0,0,0.7);
-    color: white;
     padding: 8px 16px;
     border-radius: 8px;
+    z-index: 10;
   }
 </style>
 </head>
 <body>
 
-<div id="ui-controls">
-  <button id="startBtn">Activar Cámara</button>
-  <select id="exerciseSelect">
-    <option value="pushup">Push-ups</option>
-    <option value="dip">Fondos</option>
-    <option value="squat">Squats</option>
-    <option value="pullup">Pull-ups</option>
-  </select>
-  <div id="counter">Reps: 0</div>
-</div>
-
-<video id="video" playsinline muted style="display:none;"></video>
+<button id="startBtn">Activar Cámara</button>
+<select id="exerciseSelect">
+  <option value="pushup">Push-ups</option>
+  <option value="dip">Fondos</option>
+  <option value="squat">Squats</option>
+  <option value="pullup">Pull-ups</option>
+</select>
+<div id="counter">Reps: 0</div>
+<video id="video" playsinline autoplay muted></video>
 <canvas id="output"></canvas>
-<div id="status">Presiona 'Activar Cámara' para comenzar.</div>
+<div id="status">Esperando cámara...</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
@@ -113,45 +103,64 @@ let currentExercise = exerciseSelect.value;
 let inPosition = false;
 let feedbackMessage = "";
 let feedbackTimer = null;
-let movementBufferY = []; // Buffer para la quietud
-let angleBuffer = {}; // Buffer para el suavizado de ángulo
-const MIN_SCORE = 0.7; // Confianza mínima para evitar detecciones fantasma
-const SMOOTHING_FRAMES = 5; // Frames para el promedio móvil
 
-// --- Funciones de Utilidad ---
+// Buffer simple para detectar quietud
+let movementBufferY = [];
 
+// Mostrar feedback
 function showFeedback(msg, duration=1500){
-  if(feedbackMessage !== msg || statusEl.textContent === ""){
+  if(feedbackMessage !== msg){
     feedbackMessage = msg;
     statusEl.textContent = msg;
     if(feedbackTimer) clearTimeout(feedbackTimer);
-    if(duration > 0){
-        feedbackTimer = setTimeout(()=>{ feedbackMessage=""; statusEl.textContent=""; }, duration);
-    }
+    feedbackTimer = setTimeout(()=>{ feedbackMessage=""; statusEl.textContent=""; }, duration);
   }
 }
 
-// Promedio Móvil para Suavizado
-function getSmoothedAngle(exercise, angle) {
-    if (!angleBuffer[exercise]) {
-        angleBuffer[exercise] = [];
-    }
-    
-    angleBuffer[exercise].push(angle);
+// Cambiar ejercicio
+exerciseSelect.addEventListener('change', ()=>{
+  currentExercise = exerciseSelect.value;
+  reps = 0;
+  up = false;
+  inPosition = false;
+  movementBufferY = [];
+  counterEl.textContent = "Reps: 0";
+  showFeedback(`Ejercicio seleccionado: ${currentExercise}`, 2000);
+});
 
-    if (angleBuffer[exercise].length > SMOOTHING_FRAMES) {
-        angleBuffer[exercise].shift();
-    }
+startBtn.addEventListener('click', initCamera);
 
-    if (angleBuffer[exercise].length < SMOOTHING_FRAMES) {
-        return angle;
-    }
-    
-    const sum = angleBuffer[exercise].reduce((a, b) => a + b, 0);
-    return sum / angleBuffer[exercise].length;
+async function initCamera() {
+  showFeedback("Iniciando cámara...");
+  startBtn.disabled = true;
+  let stream;
+  try {
+    // Intentar abrir cámara trasera
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal:1280 }, height: { ideal:720 }, facingMode: { exact: "environment" } },
+      audio: false
+    });
+  } catch(e) {
+    console.warn("No se pudo abrir cámara trasera, usando cualquier cámara disponible", e);
+    stream = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
+  }
+  video.srcObject = stream;
+  await video.play();
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  showFeedback("Cámara activa ✅");
+  await initDetector();
+  detectPose();
 }
 
-// Calcula el ángulo (misma función robusta)
+async function initDetector() {
+  showFeedback("Cargando detector...");
+  detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+    modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+  });
+  showFeedback("Detector activo ✅", 1500);
+}
+
 function getAngle(a,b,c){
   if(!a || !b || !c) return 180;
   const AB = {x:b.x-a.x, y:b.y-a.y};
@@ -159,232 +168,124 @@ function getAngle(a,b,c){
   const dot = AB.x*CB.x + AB.y*CB.y;
   const magAB = Math.sqrt(AB.x**2 + AB.y**2);
   const magCB = Math.sqrt(CB.x**2 + CB.y**2);
-  if(magAB*magCB === 0) return 180;
-  let cosAngle = dot/(magAB*magCB);
-  cosAngle = Math.max(-1, Math.min(1, cosAngle));
-  return Math.round(Math.acos(cosAngle)*180/Math.PI);
+  return Math.round(Math.acos(dot/(magAB*magCB))*180/Math.PI);
 }
 
-// Estabilidad para Quietud 
-function isStable(y, threshold=10, frames=30){
-  if (y === undefined) return false;
+// Estabilidad simple
+function isStable(y, threshold=15, frames=20){
+  if(y === undefined) return false;
   movementBufferY.push(y);
-  if (movementBufferY.length > frames) movementBufferY.shift();
-  if (movementBufferY.length < frames) return false;
-  return (Math.max(...movementBufferY) - Math.min(...movementBufferY)) < threshold;
+  if(movementBufferY.length>frames) movementBufferY.shift();
+  return (Math.max(...movementBufferY)-Math.min(...movementBufferY))<threshold;
 }
 
-// --- Inicialización y Bucle de Detección (Sin cambios) ---
-
-async function initDetector() {
-    showFeedback("Cargando detector...", 0);
-    detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
-        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-    });
-    showFeedback("Detector cargado.", 1000);
-}
-
-async function initCamera() {
-    startBtn.disabled = true;
-    showFeedback("Solicitando permisos de cámara...", 0);
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment' },
-            audio: false
-        });
-        video.srcObject = stream;
-        
-        await new Promise((resolve) => {
-            video.onloadedmetadata = () => {
-                resolve(video);
-            };
-        });
-
-        video.width = video.videoWidth;
-        video.height = video.videoHeight;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        await video.play();
-
-        showFeedback("Cámara activa. Inicializando IA...", 0);
-        await initDetector();
-        detectPose();
-    } catch(err) {
-        console.error("Error al acceder a la cámara o iniciar:", err);
-        showFeedback(`❌ ERROR: No se pudo iniciar la cámara.`, 0);
-        startBtn.disabled = false;
-    }
-}
-
-function drawSkeleton(pose){
-    const keypoints = pose.keypoints;
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.drawImage(video,0,0,canvas.width,canvas.height);
-
-    const adjacentPairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
-    ctx.lineWidth=4;
-    ctx.strokeStyle="#00FF00";
-    adjacentPairs.forEach(([i,j])=>{
-        const kp1=keypoints[i], kp2=keypoints[j];
-        if(kp1.score>0.5 && kp2.score>0.5){
-            ctx.beginPath();
-            ctx.moveTo(kp1.x,kp1.y);
-            ctx.lineTo(kp2.x,kp2.y);
-            ctx.stroke();
-        }
-    });
-
-    keypoints.forEach(kp=>{
-        if(kp.score>0.5){
-            ctx.beginPath();
-            ctx.arc(kp.x,kp.y,6,0,2*Math.PI);
-            ctx.fillStyle="#00FF00";
-            ctx.fill();
-        }
-    });
-
-    if(keypoints.length > 0) detectReps(keypoints);
-}
-
-async function detectPose(){
-    const detect = async ()=>{
-        if(video.readyState>=2 && detector){
-            const poses = await detector.estimatePoses(video);
-            if(poses.length>0) drawSkeleton(poses[0]);
-            else ctx.drawImage(video,0,0,canvas.width,canvas.height);
-        }
-        requestAnimationFrame(detect);
-    };
-    detect();
-}
-
-// --- Detección de Repeticiones con Corrección de Quietud (Lógica CLAVE) ---
-
+// Detecta reps y posición inicial con triggers más permisivos
 function detectReps(kp){
-  
-  // 1. Mapeo de Keypoints
-  const [nose, , , , , shoulderL, shoulderR, elbowL, elbowR, wristL, wristR, hipL, hipR, kneeL, kneeR, ankleL, ankleR] = kp;
-  
-  // Usamos el punto con mejor score
-  const shoulder = shoulderR.score > shoulderL.score ? shoulderR : shoulderL;
-  const elbow = elbowR.score > elbowL.score ? elbowR : elbowL;
-  const wrist = wristR.score > wristL.score ? wristR : wristL;
-  const hip = hipL.score > hipR.score ? hipL : hipR;
-  const knee = kneeL.score > kneeR.score ? kneeL : kneeR;
-  const ankle = ankleL.score > ankleR.score ? ankleL : ankleR;
-  
-  // 2. FILTRO DE CONFIANZA (Anti-fantasma)
-  const mainScore = Math.max(shoulder.score, hip.score, nose.score);
-  
-  if (mainScore < MIN_SCORE) {
-    inPosition = false;
-    up = false;
-    showFeedback("Esperando detección de persona...", 0); 
-    return;
-  }
+  let angle=0;
+  let reason = "";
 
-  // Punto de referencia Y para estabilidad
-  const yAvg = hip.y; 
-  if(yAvg) movementBufferY.push(yAvg);
-  
+  const shoulder = kp[11], elbow = kp[13], wrist = kp[15];
+  const hip = kp[23], knee = kp[25], ankle = kp[27];
+  const nose = kp[0], leftHand = kp[9], rightHand = kp[10];
 
   switch(currentExercise){
     case "pushup":
-    case "dip":
-      if(shoulder.score < MIN_SCORE || elbow.score < MIN_SCORE || wrist.score < MIN_SCORE) return;
-      
-      const rawAngle = getAngle(shoulder, elbow, wrist);
-      const angle = getSmoothedAngle(currentExercise, rawAngle); 
-      
-      const targetAngle = (currentExercise === "pushup") ? 105 : 95; 
-      const instruction = (currentExercise === "pushup") ? "Push-ups" : "Fondos";
-
-      // Posición Inicial (CORRECCIÓN: Quietud requerida en 15 frames, no 30)
-      if(!inPosition){
-        // Usamos el ángulo suavizado para chequear la posición
-        if(angle > 155 && isStable(yAvg, 10, **15**)){ 
-          inPosition = true;
-          showFeedback(`🟢 Listo para empezar ${instruction}`, 0);
+      if(shoulder && elbow && wrist){
+        angle = getAngle(shoulder, elbow, wrist);
+        const yAvg = (shoulder.y + elbow.y)/2;
+        if(!inPosition){
+          if(angle>150 && Math.abs(shoulder.y-wrist.y)<40 && isStable(yAvg)){
+            inPosition = true;
+            showFeedback("🟢 Listo para empezar push-ups");
+          } else {
+            showFeedback("Colócate en posición inicial: brazos extendidos");
+          }
         } else {
-          showFeedback(`Colócate en posición inicial: brazos extendidos (${instruction})`, 0);
-        }
-      } else {
-        // Fase 1: Bajada/Flexión (Trigger)
-        if(angle <= targetAngle && !up) { up = true; }
-        
-        // Fase 2: Subida y conteo (Requiere quietud en la posición extendida)
-        if(angle >= 155 && up){
-          if (isStable(yAvg, 15, 10)) { 
+          if(angle<100 && !up) up=true;
+          if(angle>150 && up){
             reps++;
             up=false;
             showFeedback("✅ Repetición válida");
+          } else if(angle>150 && !up){
+            reason = "No bajaste suficiente";
+            showFeedback(`❌ No rep: ${reason}`);
           }
-        } else if(angle >= 155 && !up){
-          showFeedback(`❌ No rep: No bajaste suficiente (necesitas <= ${targetAngle}°)`, 0);
+        }
+      }
+      break;
+
+    case "dip":
+      if(shoulder && elbow && wrist && hip){
+        angle = getAngle(shoulder, elbow, wrist);
+        const yAvg = (hip.y+elbow.y)/2;
+        if(!inPosition){
+          if(angle>150 && hip.y>shoulder.y-20 && isStable(yAvg)){
+            inPosition = true;
+            showFeedback("🟢 Listo para empezar dips");
+          } else {
+            showFeedback("Colócate en posición inicial: brazos extendidos, cuerpo recto");
+          }
+        } else {
+          if(angle<100 && !up) up=true;
+          if(angle>150 && up){
+            reps++;
+            up=false;
+            showFeedback("✅ Repetición válida");
+          } else if(angle>150 && !up){
+            reason = "No bajaste suficiente";
+            showFeedback(`❌ No rep: ${reason}`);
+          }
         }
       }
       break;
 
     case "squat":
-      if(hip.score < MIN_SCORE || knee.score < MIN_SCORE || ankle.score < MIN_SCORE) return;
-      
-      const rawKneeAngle = getAngle(hip, knee, ankle);
-      const kneeAngle = getSmoothedAngle(currentExercise, rawKneeAngle); 
-
-      // Posición Inicial (CORRECCIÓN: Quietud requerida en 15 frames, no 30)
-      if(!inPosition){
-        if(kneeAngle > 155 && isStable(yAvg, 10, **15**)){
-          inPosition = true;
-          showFeedback("🟢 Listo para empezar Squats", 0);
+      if(hip && knee && ankle && shoulder){
+        const kneeAngle = getAngle(hip,knee,ankle);
+        const hipAngle = getAngle(shoulder,hip,knee);
+        const yAvg = (hip.y+knee.y)/2;
+        if(!inPosition){
+          if(kneeAngle>165 && Math.abs(hip.x-shoulder.x)<30 && isStable(yAvg)){
+            inPosition = true;
+            showFeedback("🟢 Listo para empezar squats");
+          } else {
+            showFeedback("Colócate en posición inicial: piernas rectas, torso vertical");
+          }
         } else {
-          showFeedback("Colócate en posición inicial: piernas rectas", 0);
-        }
-      } else {
-        // Fase 1: Bajada (Trigger)
-        if(kneeAngle <= 130 && !up) { up = true; }
-        
-        // Fase 2: Subida y conteo (Requiere quietud en la posición recta)
-        if(kneeAngle >= 155 && up){
-          if (isStable(yAvg, 15, 10)) {
+          if(kneeAngle<=117 && !up) up=true; // bajada mínima relajada
+          if(kneeAngle>=165 && up){
             reps++;
             up=false;
             showFeedback("✅ Repetición válida");
+          } else if(kneeAngle>=165 && !up){
+            reason = "No bajaste suficiente";
+            showFeedback(`❌ No rep: ${reason}`);
           }
-        } else if(kneeAngle >= 155 && !up){
-          showFeedback(`❌ No rep: No bajaste suficiente (necesitas <= 130°)`, 0);
         }
       }
       break;
 
     case "pullup":
-      if(nose.score < MIN_SCORE || wristL.score < MIN_SCORE || wristR.score < MIN_SCORE) return;
-      
-      const yHands = (wristL.y + wristR.y)/2;
-      const yNose = nose.y;
-
-      // Posición Inicial (CORRECCIÓN: Quietud requerida en 15 frames, no 30)
-      if(!inPosition){
-        if(yNose > yHands + 80 && isStable(yAvg, 10, **15**)){
-          inPosition = true;
-          showFeedback("🟢 Listo para empezar Pull-ups", 0);
+      if(nose && leftHand && rightHand){
+        const yHands = (leftHand.y + rightHand.y)/2;
+        const yAvg = (nose.y+yHands)/2;
+        if(!inPosition){
+          if(nose.y>yHands+80 && isStable(yAvg)){
+            inPosition = true;
+            showFeedback("🟢 Listo para empezar pull-ups");
+          } else {
+            showFeedback("Colócate en posición inicial: cuelga con brazos extendidos");
+          }
         } else {
-          showFeedback("Colócate en posición inicial: cuelga con brazos extendidos", 0);
-        }
-      } else {
-        // Lógica Invertida (Subida/Bajada)
-        
-        // Fase 1: Subida (Trigger: Nariz al tope)
-        if(yNose <= yHands && !up) { up = true; } 
-        
-        // Fase 2: Bajada y conteo (Se cuenta al regresar a colgado)
-        if(yNose >= yHands + 80 && up){
-          if (isStable(yAvg, 15, 10)) { 
+          if(nose.y<yHands && !up) up=true;
+          if(nose.y>yHands+80 && up){
             reps++;
             up=false;
             showFeedback("✅ Repetición válida");
+          } else if(nose.y>yHands+80 && !up){
+            reason = "No subiste suficiente";
+            showFeedback(`❌ No rep: ${reason}`);
           }
-        } else if(yNose >= yHands + 80 && !up){
-          showFeedback(`❌ No rep: No subiste suficiente (Nariz no alcanzó el nivel de las manos)`, 0);
         }
       }
       break;
@@ -393,21 +294,49 @@ function detectReps(kp){
   counterEl.textContent = `Reps: ${reps}`;
 }
 
-// --- Eventos ---
+// Dibuja skeleton
+function drawSkeleton(pose){
+  const keypoints = pose.keypoints;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
 
-startBtn.addEventListener('click', initCamera);
+  const adjacentPairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
+  ctx.lineWidth=2;
+  ctx.strokeStyle="#00FF00";
+  adjacentPairs.forEach(([i,j])=>{
+    const kp1=keypoints[i], kp2=keypoints[j];
+    if(kp1.score>0.4 && kp2.score>0.4){
+      ctx.beginPath();
+      ctx.moveTo(kp1.x,kp1.y);
+      ctx.lineTo(kp2.x,kp2.y);
+      ctx.stroke();
+    }
+  });
 
-exerciseSelect.addEventListener('change', ()=>{
-  currentExercise = exerciseSelect.value;
-  reps = 0;
-  up = false;
-  inPosition = false;
-  movementBufferY = [];
-  angleBuffer = {}; 
-  counterEl.textContent = "Reps: 0";
-  const exerciseName = exerciseSelect.options[exerciseSelect.selectedIndex].text;
-  showFeedback(`Ejercicio seleccionado: ${exerciseName}`, 2000);
-});
+  keypoints.forEach(kp=>{
+    if(kp.score>0.4){
+      ctx.beginPath();
+      ctx.arc(kp.x,kp.y,5,0,2*Math.PI);
+      ctx.fillStyle="#00FF00";
+      ctx.fill();
+    }
+  });
+
+  detectReps(keypoints);
+}
+
+// Loop principal
+async function detectPose(){
+  const detect = async ()=>{
+    if(video.readyState>=2 && detector){
+      const poses = await detector.estimatePoses(video);
+      if(poses.length>0) drawSkeleton(poses[0]);
+      else ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    }
+    requestAnimationFrame(detect);
+  };
+  detect();
+}
 </script>
 </body>
 </html>
