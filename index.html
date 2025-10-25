@@ -165,13 +165,13 @@ function getAngle(a,b,c){
   return Math.round(Math.acos(cosAngle)*180/Math.PI);
 }
 
-// Estabilidad para Quietud (10px en 30 frames para inicio, 15px en 10 frames para conteo)
+// Estabilidad para Quietud 
 function isStable(y, threshold=10, frames=30){
-  if(y === undefined) return false;
+  if (y === undefined) return false;
   movementBufferY.push(y);
-  if(movementBufferY.length>frames) movementBufferY.shift();
-  if(movementBufferY.length < frames) return false;
-  return (Math.max(...movementBufferY)-Math.min(...movementBufferY))<threshold;
+  if (movementBufferY.length > frames) movementBufferY.shift();
+  if (movementBufferY.length < frames) return false;
+  return (Math.max(...movementBufferY) - Math.min(...movementBufferY)) < threshold;
 }
 
 // --- Inicialización y Bucle de Detección (Sin cambios) ---
@@ -258,7 +258,7 @@ async function detectPose(){
     detect();
 }
 
-// --- Detección de Repeticiones con Suavizado (Lógica CLAVE) ---
+// --- Detección de Repeticiones con Corrección de Quietud (Lógica CLAVE) ---
 
 function detectReps(kp){
   
@@ -294,14 +294,15 @@ function detectReps(kp){
       if(shoulder.score < MIN_SCORE || elbow.score < MIN_SCORE || wrist.score < MIN_SCORE) return;
       
       const rawAngle = getAngle(shoulder, elbow, wrist);
-      const angle = getSmoothedAngle(currentExercise, rawAngle); // ➡️ USAR ÁNGULO SUAVIZADO
+      const angle = getSmoothedAngle(currentExercise, rawAngle); 
       
       const targetAngle = (currentExercise === "pushup") ? 105 : 95; 
       const instruction = (currentExercise === "pushup") ? "Push-ups" : "Fondos";
 
-      // Posición Inicial
+      // Posición Inicial (CORRECCIÓN: Quietud requerida en 15 frames, no 30)
       if(!inPosition){
-        if(angle > 155 && isStable(yAvg, 10, 30)){
+        // Usamos el ángulo suavizado para chequear la posición
+        if(angle > 155 && isStable(yAvg, 10, **15**)){ 
           inPosition = true;
           showFeedback(`🟢 Listo para empezar ${instruction}`, 0);
         } else {
@@ -313,7 +314,7 @@ function detectReps(kp){
         
         // Fase 2: Subida y conteo (Requiere quietud en la posición extendida)
         if(angle >= 155 && up){
-          if (isStable(yAvg, 15, 10)) { // ➡️ Estabilidad al final de la repetición
+          if (isStable(yAvg, 15, 10)) { 
             reps++;
             up=false;
             showFeedback("✅ Repetición válida");
@@ -328,11 +329,11 @@ function detectReps(kp){
       if(hip.score < MIN_SCORE || knee.score < MIN_SCORE || ankle.score < MIN_SCORE) return;
       
       const rawKneeAngle = getAngle(hip, knee, ankle);
-      const kneeAngle = getSmoothedAngle(currentExercise, rawKneeAngle); // ➡️ USAR ÁNGULO SUAVIZADO
+      const kneeAngle = getSmoothedAngle(currentExercise, rawKneeAngle); 
 
-      // Posición Inicial
+      // Posición Inicial (CORRECCIÓN: Quietud requerida en 15 frames, no 30)
       if(!inPosition){
-        if(kneeAngle > 155 && isStable(yAvg, 10, 30)){
+        if(kneeAngle > 155 && isStable(yAvg, 10, **15**)){
           inPosition = true;
           showFeedback("🟢 Listo para empezar Squats", 0);
         } else {
@@ -344,7 +345,7 @@ function detectReps(kp){
         
         // Fase 2: Subida y conteo (Requiere quietud en la posición recta)
         if(kneeAngle >= 155 && up){
-          if (isStable(yAvg, 15, 10)) { // ➡️ Estabilidad al final de la repetición
+          if (isStable(yAvg, 15, 10)) {
             reps++;
             up=false;
             showFeedback("✅ Repetición válida");
@@ -361,9 +362,9 @@ function detectReps(kp){
       const yHands = (wristL.y + wristR.y)/2;
       const yNose = nose.y;
 
-      // Posición Inicial
+      // Posición Inicial (CORRECCIÓN: Quietud requerida en 15 frames, no 30)
       if(!inPosition){
-        if(yNose > yHands + 80 && isStable(yAvg, 10, 30)){
+        if(yNose > yHands + 80 && isStable(yAvg, 10, **15**)){
           inPosition = true;
           showFeedback("🟢 Listo para empezar Pull-ups", 0);
         } else {
@@ -377,7 +378,7 @@ function detectReps(kp){
         
         // Fase 2: Bajada y conteo (Se cuenta al regresar a colgado)
         if(yNose >= yHands + 80 && up){
-          if (isStable(yAvg, 15, 10)) { // ➡️ Estabilidad al final de la repetición (Colgado)
+          if (isStable(yAvg, 15, 10)) { 
             reps++;
             up=false;
             showFeedback("✅ Repetición válida");
@@ -402,7 +403,7 @@ exerciseSelect.addEventListener('change', ()=>{
   up = false;
   inPosition = false;
   movementBufferY = [];
-  angleBuffer = {}; // ➡️ Resetear el buffer de suavizado
+  angleBuffer = {}; 
   counterEl.textContent = "Reps: 0";
   const exerciseName = exerciseSelect.options[exerciseSelect.selectedIndex].text;
   showFeedback(`Ejercicio seleccionado: ${exerciseName}`, 2000);
