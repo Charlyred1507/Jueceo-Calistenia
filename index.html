@@ -1,342 +1,760 @@
- <!DOCTYPE html>
-<html lang="es">
+<!DOCTYPE html><html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Detector de Movimiento Calistenia</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<title>AI Calisthenics Judge — Push-ups V2</title>
 <style>
-  body {
-    margin: 0;
-    background: #111;
-    color: #fff;
-    font-family: 'Poppins', sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    overflow: hidden;
-  }
-  video, canvas {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 100%;
-    height: auto;
-    max-height: 100vh;
-    border-radius: 12px;
-    object-fit: cover;
-  }
-  #status {
-    position: absolute;
-    bottom: 20px;
-    background: rgba(0,0,0,0.7);
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-size: 1rem;
-    z-index: 10;
-  }
-  #startBtn {
-    position: absolute;
-    top: 20px;
-    background: #28a745;
-    border: none;
-    color: white;
-    padding: 12px 24px;
-    border-radius: 8px;
-    font-size: 1rem;
-    cursor: pointer;
-    z-index: 10;
-  }
-  #exerciseSelect {
-    position: absolute;
-    top: 70px;
-    background: #222;
-    border: none;
-    color: white;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 1rem;
-    z-index: 10;
-  }
-  #counter {
-    position: absolute;
-    top: 120px;
-    font-size: 1.5rem;
-    background: rgba(0,0,0,0.7);
-    padding: 8px 16px;
-    border-radius: 8px;
-    z-index: 10;
-  }
+*{box-sizing:border-box}
+body{margin:0;background:#0b0d10;color:#fff;font-family:Arial,sans-serif;min-height:100vh;overflow:hidden}
+#app{position:relative;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;background:#111}
+video,#output{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+video{z-index:1}
+#output{z-index:2}
+.panel{position:absolute;z-index:5;background:rgba(8,10,14,.78);
+backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.12);
+border-radius:14px;padding:10px 12px}
+#top{top:12px;left:12px;right:12px;display:flex;gap:8px;
+align-items:center;justify-content:space-between}
+#exerciseSelect,#startBtn{border:0;border-radius:10px;padding:10px 12px;font-size:15px}
+#exerciseSelect{background:#1d222a;color:#fff}
+#startBtn{background:#19a463;color:#fff;font-weight:700;cursor:pointer}
+#startBtn:disabled{opacity:.55}
+#counter{font-size:24px;font-weight:800;padding:8px 14px;
+border-radius:12px;background:rgba(0,0,0,.7)}
+#status{left:50%;transform:translateX(-50%);bottom:18px;
+max-width:92%;text-align:center;font-weight:700;font-size:16px}
+#metrics{left:12px;bottom:18px;min-width:190px;font-size:13px;line-height:1.55}
+.ok{color:#5dffae}.bad{color:#ff6b6b}.warn{color:#ffd166}
+@media(max-width:600px){
+#top{flex-wrap:wrap}
+#counter{font-size:20px}
+.panel{padding:8px}
+}
 </style>
-</head>
-<body>
-
-<button id="startBtn">Activar Cámara</button>
-<select id="exerciseSelect">
-  <option value="pushup">Push-ups</option>
-  <option value="dip">Fondos</option>
-  <option value="squat">Squats</option>
-  <option value="pullup">Pull-ups</option>
-</select>
-<div id="counter">Reps: 0</div>
-<video id="video" playsinline autoplay muted></video>
+</head><body>
+<div id="app"><video id="video" playsinline autoplay muted></video>
 <canvas id="output"></canvas>
-<div id="status">Esperando cámara...</div>
 
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+<div id="top" class="panel">
+<select id="exerciseSelect">
+<option value="pushup">Push-ups</option>
+<option value="dip">Fondos</option>
+<option value="squat">Squats</option>
+<option value="pullup">Pull-ups</option>
+</select><div id="counter">Reps: 0</div><button id="startBtn">Activar cámara</button>
 
-<script>
-const video = document.getElementById('video');
-const canvas = document.getElementById('output');
-const ctx = canvas.getContext('2d');
-const statusEl = document.getElementById('status');
-const startBtn = document.getElementById('startBtn');
-const exerciseSelect = document.getElementById('exerciseSelect');
-const counterEl = document.getElementById('counter');
+</div><div id="metrics" class="panel">
+Detector: —<br>
+Confianza: —<br>
+Ángulo codo: —<br>
+Alineación: —
+</div><div id="status" class="panel">
+Selecciona Push-ups y activa la cámara.
+</div></div><script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0"></script><script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script><script>
 
-let detector;
-let reps = 0, up = false;
-let currentExercise = exerciseSelect.value;
-let inPosition = false;
-let feedbackMessage = "";
-let feedbackTimer = null;
+const video=document.getElementById('video');
+const canvas=document.getElementById('output');
+const ctx=canvas.getContext('2d');
 
-// Buffer simple para detectar quietud
-let movementBufferY = [];
+const statusEl=document.getElementById('status');
+const counterEl=document.getElementById('counter');
+const metricsEl=document.getElementById('metrics');
 
-// Mostrar feedback
-function showFeedback(msg, duration=1500){
-  if(feedbackMessage !== msg){
-    feedbackMessage = msg;
-    statusEl.textContent = msg;
-    if(feedbackTimer) clearTimeout(feedbackTimer);
-    feedbackTimer = setTimeout(()=>{ feedbackMessage=""; statusEl.textContent=""; }, duration);
-  }
+const startBtn=document.getElementById('startBtn');
+const exerciseSelect=document.getElementById('exerciseSelect');
+
+let detector=null;
+let reps=0;
+
+let state='WAITING';
+
+let lastFrame=0;
+let stream=null;
+
+let angleHistory=[];
+
+const CONF=.45;
+
+
+/* =========================
+   UTILIDADES
+========================= */
+
+function kp(p,i){
+
+const x=p.keypoints[i];
+
+return x && x.score>=CONF ? x : null;
+
 }
 
-// Cambiar ejercicio
-exerciseSelect.addEventListener('change', ()=>{
-  currentExercise = exerciseSelect.value;
-  reps = 0;
-  up = false;
-  inPosition = false;
-  movementBufferY = [];
-  counterEl.textContent = "Reps: 0";
-  showFeedback(`Ejercicio seleccionado: ${currentExercise}`, 2000);
+
+function angle(a,b,c){
+
+if(!a||!b||!c)return null;
+
+const abx=a.x-b.x;
+const aby=a.y-b.y;
+
+const cbx=c.x-b.x;
+const cby=c.y-b.y;
+
+const magnitude=
+Math.hypot(abx,aby)*
+Math.hypot(cbx,cby);
+
+if(!magnitude)return null;
+
+const dot=abx*cbx+aby*cby;
+
+return Math.acos(
+Math.max(-1,Math.min(1,dot/magnitude))
+)*180/Math.PI;
+
+}
+
+
+function median(a){
+
+if(!a.length)return null;
+
+const x=[...a].sort((a,b)=>a-b);
+
+return x[Math.floor(x.length/2)];
+
+}
+
+
+function smooth(v){
+
+if(v==null)return null;
+
+angleHistory.push(v);
+
+if(angleHistory.length>7)
+angleHistory.shift();
+
+return median(angleHistory);
+
+}
+
+
+function status(message,type=''){
+
+statusEl.className='panel '+type;
+
+statusEl.textContent=message;
+
+}
+
+
+function reset(){
+
+reps=0;
+
+state='WAITING';
+
+angleHistory=[];
+
+counterEl.textContent='Reps: 0';
+
+status(
+'Colócate de lado, con cuerpo completo visible.',
+'warn'
+);
+
+}
+
+
+/* =========================
+   CAMBIO DE EJERCICIO
+========================= */
+
+exerciseSelect.addEventListener(
+'change',
+()=>{
+
+reset();
+
+if(exerciseSelect.value!=='pushup'){
+
+status(
+'Esta V2 está optimizada primero para Push-ups.',
+'warn'
+);
+
+}
+
 });
 
-startBtn.addEventListener('click', initCamera);
 
-async function initCamera() {
-  showFeedback("Iniciando cámara...");
-  startBtn.disabled = true;
-  let stream;
-  try {
-    // Intentar abrir cámara trasera
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal:1280 }, height: { ideal:720 }, facingMode: { exact: "environment" } },
-      audio: false
-    });
-  } catch(e) {
-    console.warn("No se pudo abrir cámara trasera, usando cualquier cámara disponible", e);
-    stream = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
-  }
-  video.srcObject = stream;
-  await video.play();
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  showFeedback("Cámara activa ✅");
-  await initDetector();
-  detectPose();
+/* =========================
+   CÁMARA
+========================= */
+
+startBtn.addEventListener(
+'click',
+init
+);
+
+
+async function init(){
+
+try{
+
+startBtn.disabled=true;
+
+status(
+'Solicitando cámara…',
+'warn'
+);
+
+
+try{
+
+stream=
+await navigator.mediaDevices.getUserMedia({
+
+audio:false,
+
+video:{
+facingMode:{ideal:'environment'},
+width:{ideal:1280},
+height:{ideal:720}
 }
 
-async function initDetector() {
-  showFeedback("Cargando detector...");
-  detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
-    modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-  });
-  showFeedback("Detector activo ✅", 1500);
+});
+
 }
 
-function getAngle(a,b,c){
-  if(!a || !b || !c) return 180;
-  const AB = {x:b.x-a.x, y:b.y-a.y};
-  const CB = {x:b.x-c.x, y:b.y-c.y};
-  const dot = AB.x*CB.x + AB.y*CB.y;
-  const magAB = Math.sqrt(AB.x**2 + AB.y**2);
-  const magCB = Math.sqrt(CB.x**2 + CB.y**2);
-  return Math.round(Math.acos(dot/(magAB*magCB))*180/Math.PI);
+catch(e){
+
+stream=
+await navigator.mediaDevices.getUserMedia({
+
+audio:false,
+video:true
+
+});
+
 }
 
-// Estabilidad simple
-function isStable(y, threshold=15, frames=20){
-  if(y === undefined) return false;
-  movementBufferY.push(y);
-  if(movementBufferY.length>frames) movementBufferY.shift();
-  return (Math.max(...movementBufferY)-Math.min(...movementBufferY))<threshold;
+
+video.srcObject=stream;
+
+await video.play();
+
+await tf.ready();
+
+
+status(
+'Cargando MoveNet Thunder…',
+'warn'
+);
+
+
+detector=
+await poseDetection.createDetector(
+
+poseDetection.SupportedModels.MoveNet,
+
+{
+
+modelType:
+poseDetection.movenet.modelType.SINGLEPOSE_THUNDER,
+
+enableSmoothing:true
+
 }
 
-// Detecta reps y posición inicial con triggers más permisivos
-function detectReps(kp){
-  let angle=0;
-  let reason = "";
+);
 
-  const shoulder = kp[11], elbow = kp[13], wrist = kp[15];
-  const hip = kp[23], knee = kp[25], ankle = kp[27];
-  const nose = kp[0], leftHand = kp[9], rightHand = kp[10];
 
-  switch(currentExercise){
-    case "pushup":
-      if(shoulder && elbow && wrist){
-        angle = getAngle(shoulder, elbow, wrist);
-        const yAvg = (shoulder.y + elbow.y)/2;
-        if(!inPosition){
-          if(angle>150 && Math.abs(shoulder.y-wrist.y)<40 && isStable(yAvg)){
-            inPosition = true;
-            showFeedback("🟢 Listo para empezar push-ups");
-          } else {
-            showFeedback("Colócate en posición inicial: brazos extendidos");
-          }
-        } else {
-          if(angle<100 && !up) up=true;
-          if(angle>150 && up){
-            reps++;
-            up=false;
-            showFeedback("✅ Repetición válida");
-          } else if(angle>150 && !up){
-            reason = "No bajaste suficiente";
-            showFeedback(`❌ No rep: ${reason}`);
-          }
-        }
-      }
-      break;
+canvas.width=
+video.videoWidth || 1280;
 
-    case "dip":
-      if(shoulder && elbow && wrist && hip){
-        angle = getAngle(shoulder, elbow, wrist);
-        const yAvg = (hip.y+elbow.y)/2;
-        if(!inPosition){
-          if(angle>150 && hip.y>shoulder.y-20 && isStable(yAvg)){
-            inPosition = true;
-            showFeedback("🟢 Listo para empezar dips");
-          } else {
-            showFeedback("Colócate en posición inicial: brazos extendidos, cuerpo recto");
-          }
-        } else {
-          if(angle<100 && !up) up=true;
-          if(angle>150 && up){
-            reps++;
-            up=false;
-            showFeedback("✅ Repetición válida");
-          } else if(angle>150 && !up){
-            reason = "No bajaste suficiente";
-            showFeedback(`❌ No rep: ${reason}`);
-          }
-        }
-      }
-      break;
+canvas.height=
+video.videoHeight || 720;
 
-    case "squat":
-      if(hip && knee && ankle && shoulder){
-        const kneeAngle = getAngle(hip,knee,ankle);
-        const hipAngle = getAngle(shoulder,hip,knee);
-        const yAvg = (hip.y+knee.y)/2;
-        if(!inPosition){
-          if(kneeAngle>165 && Math.abs(hip.x-shoulder.x)<30 && isStable(yAvg)){
-            inPosition = true;
-            showFeedback("🟢 Listo para empezar squats");
-          } else {
-            showFeedback("Colócate en posición inicial: piernas rectas, torso vertical");
-          }
-        } else {
-          if(kneeAngle<=117 && !up) up=true; // bajada mínima relajada
-          if(kneeAngle>=165 && up){
-            reps++;
-            up=false;
-            showFeedback("✅ Repetición válida");
-          } else if(kneeAngle>=165 && !up){
-            reason = "No bajaste suficiente";
-            showFeedback(`❌ No rep: ${reason}`);
-          }
-        }
-      }
-      break;
 
-    case "pullup":
-      if(nose && leftHand && rightHand){
-        const yHands = (leftHand.y + rightHand.y)/2;
-        const yAvg = (nose.y+yHands)/2;
-        if(!inPosition){
-          if(nose.y>yHands+80 && isStable(yAvg)){
-            inPosition = true;
-            showFeedback("🟢 Listo para empezar pull-ups");
-          } else {
-            showFeedback("Colócate en posición inicial: cuelga con brazos extendidos");
-          }
-        } else {
-          if(nose.y<yHands && !up) up=true;
-          if(nose.y>yHands+80 && up){
-            reps++;
-            up=false;
-            showFeedback("✅ Repetición válida");
-          } else if(nose.y>yHands+80 && !up){
-            reason = "No subiste suficiente";
-            showFeedback(`❌ No rep: ${reason}`);
-          }
-        }
-      }
-      break;
-  }
+status(
+'🟢 Listo. Colócate de lado y muestra todo el cuerpo.',
+'ok'
+);
 
-  counterEl.textContent = `Reps: ${reps}`;
+
+requestAnimationFrame(loop);
+
 }
 
-// Dibuja skeleton
-function drawSkeleton(pose){
-  const keypoints = pose.keypoints;
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+catch(e){
 
-  const adjacentPairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
-  ctx.lineWidth=2;
-  ctx.strokeStyle="#00FF00";
-  adjacentPairs.forEach(([i,j])=>{
-    const kp1=keypoints[i], kp2=keypoints[j];
-    if(kp1.score>0.4 && kp2.score>0.4){
-      ctx.beginPath();
-      ctx.moveTo(kp1.x,kp1.y);
-      ctx.lineTo(kp2.x,kp2.y);
-      ctx.stroke();
-    }
-  });
+console.error(e);
 
-  keypoints.forEach(kp=>{
-    if(kp.score>0.4){
-      ctx.beginPath();
-      ctx.arc(kp.x,kp.y,5,0,2*Math.PI);
-      ctx.fillStyle="#00FF00";
-      ctx.fill();
-    }
-  });
+status(
+'❌ No se pudo iniciar cámara/detector. Revisa permisos.',
+'bad'
+);
 
-  detectReps(keypoints);
+startBtn.disabled=false;
+
 }
 
-// Loop principal
-async function detectPose(){
-  const detect = async ()=>{
-    if(video.readyState>=2 && detector){
-      const poses = await detector.estimatePoses(video);
-      if(poses.length>0) drawSkeleton(poses[0]);
-      else ctx.drawImage(video,0,0,canvas.width,canvas.height);
-    }
-    requestAnimationFrame(detect);
-  };
-  detect();
 }
-</script>
-</body>
+
+
+/* =========================
+   SELECCIÓN DEL LADO
+========================= */
+
+function chooseSide(p){
+
+const left=[
+kp(p,5),
+kp(p,7),
+kp(p,9)
+]
+.filter(Boolean)
+.reduce(
+(s,x)=>s+x.score,
+0
+);
+
+
+const right=[
+kp(p,6),
+kp(p,8),
+kp(p,10)
+]
+.filter(Boolean)
+.reduce(
+(s,x)=>s+x.score,
+0
+);
+
+
+return left>=right ? 'L':'R';
+
+}
+
+
+/* =========================
+   JUEZ DE PUSH-UPS
+========================= */
+
+function pushup(p){
+
+const side=chooseSide(p);
+
+
+const sh=
+kp(p,side==='L'?5:6);
+
+const el=
+kp(p,side==='L'?7:8);
+
+const wr=
+kp(p,side==='L'?9:10);
+
+const hip=
+kp(p,side==='L'?11:12);
+
+const ank=
+kp(p,side==='L'?15:16);
+
+
+if(
+!sh||
+!el||
+!wr||
+!hip||
+!ank
+){
+
+status(
+'🟡 Necesito ver hombro, codo, muñeca, cadera y tobillo.',
+'warn'
+);
+
+return;
+
+}
+
+
+/* Ángulo del codo */
+
+const elbow=
+smooth(
+angle(sh,el,wr)
+);
+
+
+/* Alineación corporal */
+
+const bodyAngle=
+angle(sh,hip,ank);
+
+const bodyError=
+Math.abs(180-bodyAngle);
+
+
+/* Confianza */
+
+const confidence=
+Math.min(
+sh.score,
+el.score,
+wr.score,
+hip.score,
+ank.score
+);
+
+
+/* =========================
+   UMBRALES
+========================= */
+
+const ready=
+elbow>150 &&
+bodyError<28;
+
+
+const bottom=
+elbow<105 &&
+bodyError<35;
+
+
+const top=
+elbow>150 &&
+bodyError<28;
+
+
+/* =========================
+   INFORMACIÓN
+========================= */
+
+metricsEl.innerHTML=
+
+'Detector: MoveNet Thunder<br>'+
+'Confianza: '+
+Math.round(confidence*100)+
+'%<br>'+
+'Ángulo codo: '+
+Math.round(elbow)+
+'°<br>'+
+'Alineación: '+
+Math.round(bodyError)+
+'°';
+
+
+/* =========================
+   MÁQUINA DE ESTADOS
+========================= */
+
+
+/* POSICIÓN INICIAL */
+
+if(state==='WAITING'){
+
+if(ready){
+
+state='TOP';
+
+status(
+'🟢 Posición inicial correcta. Baja para comenzar.',
+'ok'
+);
+
+}
+
+return;
+
+}
+
+
+/* ARRIBA */
+
+if(state==='TOP'){
+
+if(!top){
+
+state='DOWN';
+
+status(
+'🔵 Bajando…'
+);
+
+}
+
+return;
+
+}
+
+
+/* BAJANDO */
+
+if(state==='DOWN'){
+
+/* Alcanzó profundidad */
+
+if(bottom){
+
+state='BOTTOM';
+
+status(
+'🟢 Profundidad alcanzada. Sube.',
+'ok'
+);
+
+}
+
+
+/* Se arrepintió y volvió arriba */
+
+else if(elbow>145){
+
+state='TOP';
+
+status(
+'❌ NO REP — No alcanzaste suficiente profundidad.',
+'bad'
+);
+
+}
+
+return;
+
+}
+
+
+/* FONDO */
+
+if(state==='BOTTOM'){
+
+if(elbow>125){
+
+state='UP';
+
+}
+
+return;
+
+}
+
+
+/* SUBIENDO */
+
+if(state==='UP'){
+
+if(top){
+
+reps++;
+
+counterEl.textContent=
+'Reps: '+reps;
+
+state='TOP';
+
+status(
+'✅ REP VÁLIDA',
+'ok'
+);
+
+}
+
+return;
+
+}
+
+}
+
+
+/* =========================
+   DIBUJAR ESQUELETO
+========================= */
+
+function draw(p){
+
+ctx.clearRect(
+0,
+0,
+canvas.width,
+canvas.height
+);
+
+
+ctx.drawImage(
+video,
+0,
+0,
+canvas.width,
+canvas.height
+);
+
+
+const pairs=
+poseDetection.util.getAdjacentPairs(
+poseDetection.SupportedModels.MoveNet
+);
+
+
+ctx.lineWidth=4;
+
+ctx.strokeStyle='#00ff66';
+
+
+pairs.forEach(
+([i,j])=>{
+
+const a=p.keypoints[i];
+const b=p.keypoints[j];
+
+
+if(
+a.score>=CONF &&
+b.score>=CONF
+){
+
+ctx.beginPath();
+
+ctx.moveTo(
+a.x,
+a.y
+);
+
+ctx.lineTo(
+b.x,
+b.y
+);
+
+ctx.stroke();
+
+}
+
+}
+);
+
+
+p.keypoints.forEach(
+x=>{
+
+if(x.score>=CONF){
+
+ctx.beginPath();
+
+ctx.arc(
+x.x,
+x.y,
+5,
+0,
+Math.PI*2
+);
+
+ctx.fillStyle='#00ff66';
+
+ctx.fill();
+
+}
+
+}
+);
+
+}
+
+
+/* =========================
+   LOOP PRINCIPAL
+========================= */
+
+async function loop(t){
+
+if(
+!detector ||
+video.readyState<2
+){
+
+requestAnimationFrame(loop);
+
+return;
+
+}
+
+
+/* Limitamos aproximadamente a 30 FPS */
+
+if(
+t-lastFrame<33
+){
+
+requestAnimationFrame(loop);
+
+return;
+
+}
+
+lastFrame=t;
+
+
+try{
+
+const poses=
+await detector.estimatePoses(
+video,
+{
+maxPoses:1,
+flipHorizontal:false
+}
+);
+
+
+if(poses.length){
+
+draw(
+poses[0]
+);
+
+
+if(
+exerciseSelect.value==='pushup'
+){
+
+pushup(
+poses[0]
+);
+
+}
+
+}
+else{
+
+ctx.drawImage(
+video,
+0,
+0,
+canvas.width,
+canvas.height
+);
+
+
+status(
+'🟡 No detecto una persona. Aléjate y muestra el cuerpo completo.',
+'warn'
+);
+
+}
+
+}
+
+catch(e){
+
+console.error(e);
+
+}
+
+
+requestAnimationFrame(loop);
+
+}
+
+</script></body>
 </html>
