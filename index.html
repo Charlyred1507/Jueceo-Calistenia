@@ -1,760 +1,2273 @@
-<!DOCTYPE html><html lang="es">
+<!DOCTYPE html>
+<html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
-<title>AI Calisthenics Judge — Push-ups V2</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<meta name="theme-color" content="#070a0f" />
+<title>Jueceo Calistenia AI</title>
+
 <style>
-*{box-sizing:border-box}
-body{margin:0;background:#0b0d10;color:#fff;font-family:Arial,sans-serif;min-height:100vh;overflow:hidden}
-#app{position:relative;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;background:#111}
-video,#output{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-video{z-index:1}
-#output{z-index:2}
-.panel{position:absolute;z-index:5;background:rgba(8,10,14,.78);
-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.12);
-border-radius:14px;padding:10px 12px}
-#top{top:12px;left:12px;right:12px;display:flex;gap:8px;
-align-items:center;justify-content:space-between}
-#exerciseSelect,#startBtn{border:0;border-radius:10px;padding:10px 12px;font-size:15px}
-#exerciseSelect{background:#1d222a;color:#fff}
-#startBtn{background:#19a463;color:#fff;font-weight:700;cursor:pointer}
+:root{
+  --bg:#070a0f;
+  --panel:rgba(7,10,15,.78);
+  --line:rgba(255,255,255,.12);
+  --text:#f6f7f9;
+  --muted:#aeb7c4;
+  --green:#46f59a;
+  --red:#ff6577;
+  --yellow:#ffd166;
+}
+
+*{
+  box-sizing:border-box;
+  -webkit-tap-highlight-color:transparent
+}
+
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  background:var(--bg);
+  color:var(--text);
+  font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  overflow:hidden
+}
+
+button,select{font:inherit}
+
+#app{
+  position:relative;
+  width:100vw;
+  height:100dvh;
+  min-height:100svh;
+  background:#0b0f16;
+  overflow:hidden
+}
+
+#video,#overlay{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover
+}
+
+#video{
+  z-index:1;
+  background:#111
+}
+
+#overlay{
+  z-index:2;
+  pointer-events:none
+}
+
+.panel{
+  position:absolute;
+  z-index:5;
+  background:var(--panel);
+  border:1px solid var(--line);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  box-shadow:0 8px 30px rgba(0,0,0,.28)
+}
+
+#topBar{
+  top:max(8px,env(safe-area-inset-top));
+  left:8px;
+  right:8px;
+  border-radius:16px;
+  padding:8px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+  align-items:center
+}
+
+#controls{
+  display:flex;
+  min-width:0;
+  gap:8px;
+  align-items:center
+}
+
+#exerciseSelect,#startBtn{
+  min-height:42px;
+  border:0;
+  border-radius:11px;
+  padding:8px 11px;
+  color:#fff
+}
+
+#exerciseSelect{
+  min-width:0;
+  max-width:190px;
+  flex:1;
+  background:#1a2230;
+  font-size:clamp(13px,3.4vw,15px)
+}
+
+#startBtn{
+  background:#158957;
+  font-weight:800;
+  white-space:nowrap;
+  font-size:clamp(12px,3.2vw,14px)
+}
+
 #startBtn:disabled{opacity:.55}
-#counter{font-size:24px;font-weight:800;padding:8px 14px;
-border-radius:12px;background:rgba(0,0,0,.7)}
-#status{left:50%;transform:translateX(-50%);bottom:18px;
-max-width:92%;text-align:center;font-weight:700;font-size:16px}
-#metrics{left:12px;bottom:18px;min-width:190px;font-size:13px;line-height:1.55}
-.ok{color:#5dffae}.bad{color:#ff6b6b}.warn{color:#ffd166}
-@media(max-width:600px){
-#top{flex-wrap:wrap}
-#counter{font-size:20px}
-.panel{padding:8px}
+
+#counter{
+  min-width:84px;
+  padding:6px 10px;
+  border-radius:12px;
+  text-align:center;
+  background:rgba(0,0,0,.42)
+}
+
+#counter .num{
+  display:block;
+  font-size:clamp(25px,7vw,34px);
+  line-height:.95;
+  font-weight:900
+}
+
+#counter .label{
+  display:block;
+  margin-top:3px;
+  font-size:10px;
+  color:var(--muted);
+  font-weight:800;
+  text-transform:uppercase
+}
+
+#status{
+  left:8px;
+  right:8px;
+  bottom:max(8px,env(safe-area-inset-bottom));
+  border-radius:16px;
+  padding:10px 12px;
+  text-align:center;
+  font-size:clamp(13px,3.5vw,16px);
+  font-weight:800;
+  line-height:1.25;
+  min-height:43px;
+  display:flex;
+  align-items:center;
+  justify-content:center
+}
+
+#metrics{
+  left:8px;
+  top:calc(max(8px,env(safe-area-inset-top)) + 70px);
+  border-radius:14px;
+  padding:8px 10px;
+  max-width:min(52vw,230px);
+  font-size:clamp(10px,2.7vw,12px);
+  line-height:1.45
+}
+
+.metricRow{
+  display:flex;
+  gap:8px;
+  justify-content:space-between
+}
+
+.metricRow span:first-child{color:var(--muted)}
+
+#guide{
+  right:8px;
+  top:calc(max(8px,env(safe-area-inset-top)) + 70px);
+  border-radius:14px;
+  padding:8px 10px;
+  max-width:min(43vw,210px);
+  font-size:clamp(10px,2.7vw,12px);
+  line-height:1.35
+}
+
+.ok{color:var(--green)!important}
+.bad{color:var(--red)!important}
+.warn{color:var(--yellow)!important}
+.info{color:#fff!important}
+
+.pulse{animation:pulse .35s ease}
+
+@keyframes pulse{
+  50%{transform:scale(1.04)}
+}
+
+@media(max-width:430px){
+  #topBar{grid-template-columns:1fr auto}
+  #controls{gap:6px}
+  #exerciseSelect,#startBtn{
+    min-height:39px;
+    padding:7px 8px
+  }
+  #counter{
+    min-width:72px;
+    padding:5px 8px
+  }
+  #metrics,#guide{
+    top:calc(max(8px,env(safe-area-inset-top)) + 64px)
+  }
+}
+
+@media(max-height:650px){
+  #metrics,#guide{display:none}
+  #status{
+    font-size:12px;
+    padding:8px
+  }
 }
 </style>
-</head><body>
-<div id="app"><video id="video" playsinline autoplay muted></video>
-<canvas id="output"></canvas>
+</head>
 
-<div id="top" class="panel">
-<select id="exerciseSelect">
-<option value="pushup">Push-ups</option>
-<option value="dip">Fondos</option>
-<option value="squat">Squats</option>
-<option value="pullup">Pull-ups</option>
-</select><div id="counter">Reps: 0</div><button id="startBtn">Activar cámara</button>
+<body>
 
-</div><div id="metrics" class="panel">
-Detector: —<br>
-Confianza: —<br>
-Ángulo codo: —<br>
-Alineación: —
-</div><div id="status" class="panel">
-Selecciona Push-ups y activa la cámara.
-</div></div><script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0"></script><script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script><script>
+<div id="app">
+
+  <video id="video" playsinline autoplay muted></video>
+  <canvas id="overlay"></canvas>
+
+  <div id="topBar" class="panel">
+
+    <div id="controls">
+
+      <select id="exerciseSelect">
+        <option value="pushup">Push-ups</option>
+        <option value="dip">Fondos</option>
+        <option value="pullup">Pull-ups</option>
+        <option value="squat">Squats</option>
+      </select>
+
+      <button id="startBtn">Activar cámara</button>
+
+    </div>
+
+    <div id="counter">
+      <span class="num" id="repNum">0</span>
+      <span class="label">reps</span>
+    </div>
+
+  </div>
+
+  <div id="metrics" class="panel">
+
+    <div class="metricRow">
+      <span>Detector</span>
+      <b id="mDetector">—</b>
+    </div>
+
+    <div class="metricRow">
+      <span>Confianza</span>
+      <b id="mConfidence">—</b>
+    </div>
+
+    <div class="metricRow">
+      <span>Ángulo</span>
+      <b id="mAngle">—</b>
+    </div>
+
+    <div class="metricRow">
+      <span>Alineación</span>
+      <b id="mAlign">—</b>
+    </div>
+
+  </div>
+
+  <div id="guide" class="panel">
+    Coloca el teléfono de lado y procura mostrar el cuerpo completo.
+  </div>
+
+  <div id="status" class="panel warn">
+    Selecciona un ejercicio y activa la cámara.
+  </div>
+
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js"></script>
+
+
+<script>
 
 const video=document.getElementById('video');
-const canvas=document.getElementById('output');
+const canvas=document.getElementById('overlay');
 const ctx=canvas.getContext('2d');
-
-const statusEl=document.getElementById('status');
-const counterEl=document.getElementById('counter');
-const metricsEl=document.getElementById('metrics');
 
 const startBtn=document.getElementById('startBtn');
 const exerciseSelect=document.getElementById('exerciseSelect');
 
+const repNum=document.getElementById('repNum');
+const statusEl=document.getElementById('status');
+const guideEl=document.getElementById('guide');
+
+const mDetector=document.getElementById('mDetector');
+const mConfidence=document.getElementById('mConfidence');
+const mAngle=document.getElementById('mAngle');
+const mAlign=document.getElementById('mAlign');
+
+
+/* ================================
+   CONFIGURACIÓN DEL DETECTOR
+================================ */
+
+const CONF=0.42;
+
+/*
+Una condición debe mantenerse durante
+varios frames para evitar falsas reps.
+*/
+const REQUIRED_STABLE_FRAMES=3;
+
+const MAX_HISTORY=5;
+
+const TARGET_FPS_MS=38;
+
+
 let detector=null;
-let reps=0;
-
-let state='WAITING';
-
-let lastFrame=0;
 let stream=null;
 
-let angleHistory=[];
+let running=false;
+let busy=false;
 
-const CONF=.45;
+let lastFrameAt=0;
+
+let reps=0;
+
+let phase='WAITING';
+
+let stableTag='';
+let stableFrames=0;
+
+let lockedSide=null;
+
+let histories={};
+
+let noRepCooldown=0;
 
 
-/* =========================
-   UTILIDADES
-========================= */
+/* ================================
+   ÍNDICES MOVENET
+================================ */
 
-function kp(p,i){
+const IDX={
 
-const x=p.keypoints[i];
+  nose:0,
 
-return x && x.score>=CONF ? x : null;
+  leftShoulder:5,
+  rightShoulder:6,
+
+  leftElbow:7,
+  rightElbow:8,
+
+  leftWrist:9,
+  rightWrist:10,
+
+  leftHip:11,
+  rightHip:12,
+
+  leftKnee:13,
+  rightKnee:14,
+
+  leftAnkle:15,
+  rightAnkle:16
+
+};
+
+
+/* ================================
+   EJERCICIOS
+================================ */
+
+const EXERCISES={
+
+  pushup:{
+    name:'Push-up',
+    guide:'Vista lateral · cuerpo completo · manos y pies visibles.'
+  },
+
+  dip:{
+    name:'Fondo',
+    guide:'Vista lateral · hombro, codo y muñeca claramente visibles.'
+  },
+
+  pullup:{
+    name:'Pull-up',
+    guide:'Cuerpo completo · brazos y manos visibles durante todo el recorrido.'
+  },
+
+  squat:{
+    name:'Squat',
+    guide:'Vista lateral · cadera, rodilla y tobillo visibles.'
+  }
+
+};
+
+
+/* ================================
+   INTERFAZ
+================================ */
+
+function setStatus(text,type='info'){
+
+  statusEl.className=`panel ${type}`;
+
+  statusEl.textContent=text;
+
+}
+
+
+function flashCounter(){
+
+  const box=document.getElementById('counter');
+
+  box.classList.remove('pulse');
+
+  void box.offsetWidth;
+
+  box.classList.add('pulse');
+
+}
+
+
+function resetJudge(){
+
+  reps=0;
+
+  repNum.textContent='0';
+
+  phase='WAITING';
+
+  stableTag='';
+  stableFrames=0;
+
+  lockedSide=null;
+
+  histories={};
+
+  noRepCooldown=0;
+
+  const ex=EXERCISES[exerciseSelect.value];
+
+  guideEl.textContent=ex.guide;
+
+  setStatus(
+    `Colócate en posición inicial para ${ex.name}.`,
+    'warn'
+  );
+
+}
+
+
+exerciseSelect.addEventListener(
+  'change',
+  resetJudge
+);
+
+
+/* ================================
+   UTILIDADES DE POSE
+================================ */
+
+function point(pose,index){
+
+  const p=pose.keypoints[index];
+
+  return p && (p.score ?? 0)>=CONF
+    ? p
+    : null;
 
 }
 
 
 function angle(a,b,c){
 
-if(!a||!b||!c)return null;
+  if(!a||!b||!c)
+    return null;
 
-const abx=a.x-b.x;
-const aby=a.y-b.y;
+  const v1={
+    x:a.x-b.x,
+    y:a.y-b.y
+  };
 
-const cbx=c.x-b.x;
-const cby=c.y-b.y;
+  const v2={
+    x:c.x-b.x,
+    y:c.y-b.y
+  };
 
-const magnitude=
-Math.hypot(abx,aby)*
-Math.hypot(cbx,cby);
+  const den=
+    Math.hypot(v1.x,v1.y) *
+    Math.hypot(v2.x,v2.y);
 
-if(!magnitude)return null;
+  if(!den)
+    return null;
 
-const dot=abx*cbx+aby*cby;
+  const cos=Math.max(
+    -1,
+    Math.min(
+      1,
+      (v1.x*v2.x+v1.y*v2.y)/den
+    )
+  );
 
-return Math.acos(
-Math.max(-1,Math.min(1,dot/magnitude))
-)*180/Math.PI;
-
-}
-
-
-function median(a){
-
-if(!a.length)return null;
-
-const x=[...a].sort((a,b)=>a-b);
-
-return x[Math.floor(x.length/2)];
-
-}
-
-
-function smooth(v){
-
-if(v==null)return null;
-
-angleHistory.push(v);
-
-if(angleHistory.length>7)
-angleHistory.shift();
-
-return median(angleHistory);
+  return Math.acos(cos)*180/Math.PI;
 
 }
 
 
-function status(message,type=''){
+/* ================================
+   FILTRADO DE JITTER
+================================ */
 
-statusEl.className='panel '+type;
+function median(values){
 
-statusEl.textContent=message;
+  if(!values.length)
+    return null;
 
-}
+  const a=[...values].sort(
+    (x,y)=>x-y
+  );
 
+  const mid=Math.floor(a.length/2);
 
-function reset(){
-
-reps=0;
-
-state='WAITING';
-
-angleHistory=[];
-
-counterEl.textContent='Reps: 0';
-
-status(
-'Colócate de lado, con cuerpo completo visible.',
-'warn'
-);
+  return a.length%2
+    ? a[mid]
+    : (a[mid-1]+a[mid])/2;
 
 }
 
 
-/* =========================
-   CAMBIO DE EJERCICIO
-========================= */
+function filtered(key,value){
 
-exerciseSelect.addEventListener(
-'change',
-()=>{
+  if(
+    value==null ||
+    Number.isNaN(value)
+  )
+    return null;
 
-reset();
+  if(!histories[key])
+    histories[key]=[];
 
-if(exerciseSelect.value!=='pushup'){
+  histories[key].push(value);
 
-status(
-'Esta V2 está optimizada primero para Push-ups.',
-'warn'
-);
+  if(histories[key].length>MAX_HISTORY)
+    histories[key].shift();
+
+  return median(histories[key]);
 
 }
 
-});
+
+/* ================================
+   VALIDACIÓN POR VARIOS FRAMES
+================================ */
+
+function stable(
+  tag,
+  condition,
+  frames=REQUIRED_STABLE_FRAMES
+){
+
+  if(!condition){
+
+    if(stableTag===tag){
+
+      stableTag='';
+      stableFrames=0;
+
+    }
+
+    return false;
+
+  }
+
+  if(stableTag!==tag){
+
+    stableTag=tag;
+    stableFrames=1;
+
+  }else{
+
+    stableFrames++;
+
+  }
+
+  if(stableFrames>=frames){
+
+    stableTag='';
+    stableFrames=0;
+
+    return true;
+
+  }
+
+  return false;
+
+}
 
 
-/* =========================
-   CÁMARA
-========================= */
+/* ================================
+   CONFIANZA
+================================ */
+
+function confidenceOf(...pts){
+
+  const arr=pts.filter(Boolean);
+
+  return arr.length
+    ? Math.min(
+        ...arr.map(
+          p=>p.score??0
+        )
+      )
+    :0;
+
+}
+
+
+/* ================================
+   SELECCIÓN AUTOMÁTICA DEL LADO
+================================ */
+
+function sideScore(pose,side){
+
+  const ids=
+    side==='L'
+    ?[5,7,9,11,13,15]
+    :[6,8,10,12,14,16];
+
+  return ids.reduce(
+    (s,i)=>
+      s+(pose.keypoints[i]?.score||0),
+    0
+  );
+
+}
+
+
+function bestSide(pose){
+
+  return sideScore(pose,'L')>=
+         sideScore(pose,'R')
+         ?'L'
+         :'R';
+
+}
+
+
+function sidePoints(pose,side){
+
+  const L=side==='L';
+
+  return{
+
+    shoulder:point(
+      pose,
+      L
+      ?IDX.leftShoulder
+      :IDX.rightShoulder
+    ),
+
+    elbow:point(
+      pose,
+      L
+      ?IDX.leftElbow
+      :IDX.rightElbow
+    ),
+
+    wrist:point(
+      pose,
+      L
+      ?IDX.leftWrist
+      :IDX.rightWrist
+    ),
+
+    hip:point(
+      pose,
+      L
+      ?IDX.leftHip
+      :IDX.rightHip
+    ),
+
+    knee:point(
+      pose,
+      L
+      ?IDX.leftKnee
+      :IDX.rightKnee
+    ),
+
+    ankle:point(
+      pose,
+      L
+      ?IDX.leftAnkle
+      :IDX.rightAnkle
+    ),
+
+    nose:point(
+      pose,
+      IDX.nose
+    )
+
+  };
+
+}
+
+
+function getSide(pose){
+
+  if(lockedSide)
+    return lockedSide;
+
+  return bestSide(pose);
+
+}
+
+
+/* ================================
+   ALINEACIÓN CORPORAL
+================================ */
+
+function bodyLineError(
+  shoulder,
+  hip,
+  ankle
+){
+
+  const a=angle(
+    shoulder,
+    hip,
+    ankle
+  );
+
+  return a==null
+    ?null
+    :Math.abs(180-a);
+
+}
+
+
+/* ================================
+   MÉTRICAS
+================================ */
+
+function updateMetrics(
+  conf,
+  primaryAngle,
+  align
+){
+
+  mDetector.textContent='MoveNet';
+
+  mConfidence.textContent=
+    conf
+    ?`${Math.round(conf*100)}%`
+    :'—';
+
+  mAngle.textContent=
+    primaryAngle==null
+    ?'—'
+    :`${Math.round(primaryAngle)}°`;
+
+  mAlign.textContent=
+    align==null
+    ?'—'
+    :`${Math.round(align)}°`;
+
+}
+
+
+/* ================================
+   REP VÁLIDA
+================================ */
+
+function validRep(){
+
+  reps++;
+
+  repNum.textContent=String(reps);
+
+  flashCounter();
+
+  lockedSide=null;
+
+  setStatus(
+    '✅ REP VÁLIDA',
+    'ok'
+  );
+
+}
+
+
+/* ================================
+   NO REP
+================================ */
+
+function noRep(reason){
+
+  if(Date.now()<noRepCooldown)
+    return;
+
+  noRepCooldown=
+    Date.now()+700;
+
+  lockedSide=null;
+
+  setStatus(
+    `❌ NO REP — ${reason}`,
+    'bad'
+  );
+
+}
+
+
+/* ======================================================
+                 JUEZ DE PUSH-UPS
+====================================================== */
+
+function judgePushup(pose){
+
+  const side=getSide(pose);
+
+  const p=sidePoints(
+    pose,
+    side
+  );
+
+  if(
+    !p.shoulder||
+    !p.elbow||
+    !p.wrist||
+    !p.hip||
+    !p.ankle
+  ){
+
+    setStatus(
+      '🟡 Muestra hombro, codo, muñeca, cadera y tobillo.',
+      'warn'
+    );
+
+    return;
+
+  }
+
+
+  const elbow=
+    filtered(
+      'push_elbow',
+      angle(
+        p.shoulder,
+        p.elbow,
+        p.wrist
+      )
+    );
+
+
+  const align=
+    filtered(
+      'push_align',
+      bodyLineError(
+        p.shoulder,
+        p.hip,
+        p.ankle
+      )
+    );
+
+
+  const conf=
+    confidenceOf(
+      p.shoulder,
+      p.elbow,
+      p.wrist,
+      p.hip,
+      p.ankle
+    );
+
+
+  updateMetrics(
+    conf,
+    elbow,
+    align
+  );
+
+
+  /*
+  POSICIÓN SUPERIOR
+  */
+
+  const top=
+    elbow>=150 &&
+    align<=30;
+
+
+  /*
+  PROFUNDIDAD
+  */
+
+  const bottom=
+    elbow<=100 &&
+    align<=38;
+
+
+  /* ESPERANDO POSICIÓN INICIAL */
+
+  if(phase==='WAITING'){
+
+    if(
+      stable(
+        'push_ready',
+        top
+      )
+    ){
+
+      phase='TOP';
+
+      lockedSide=side;
+
+      setStatus(
+        '🟢 Listo. Baja controladamente.',
+        'ok'
+      );
+
+    }
+
+    else if(align>38){
+
+      setStatus(
+        '🟡 Mantén hombros, cadera y tobillos más alineados.',
+        'warn'
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  /* ARRIBA */
+
+  if(phase==='TOP'){
+
+    if(
+      stable(
+        'push_leave_top',
+        elbow<140,
+        2
+      )
+    ){
+
+      phase='DOWN';
+
+      setStatus(
+        '🔵 Bajando…',
+        'info'
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  /* BAJANDO */
+
+  if(phase==='DOWN'){
+
+    if(
+      stable(
+        'push_bottom',
+        bottom
+      )
+    ){
+
+      phase='BOTTOM';
+
+      setStatus(
+        '🟢 Profundidad válida. Ahora sube.',
+        'ok'
+      );
+
+    }
+
+    else if(
+      stable(
+        'push_abort',
+        elbow>=148,
+        2
+      )
+    ){
+
+      phase='TOP';
+
+      noRep(
+        'bajada insuficiente'
+      );
+
+    }
+
+    else if(align>42){
+
+      setStatus(
+        '🟡 Evita quebrar la cadera.',
+        'warn'
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  /* ABAJO */
+
+  if(phase==='BOTTOM'){
+
+    if(
+      stable(
+        'push_up',
+        elbow>118,
+        2
+      )
+    ){
+
+      phase='UP';
+
+      setStatus(
+        '🔵 Subiendo…',
+        'info'
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  /* SUBIENDO */
+
+  if(phase==='UP'){
+
+    if(
+      stable(
+        'push_finish',
+        top
+      )
+    ){
+
+      phase='TOP';
+
+      validRep();
+
+    }
+
+    else if(align>42){
+
+      setStatus(
+        '🟡 Mantén el cuerpo alineado al subir.',
+        'warn'
+      );
+
+    }
+
+  }
+
+}
+
+
+/* ======================================================
+                    JUEZ DE FONDOS
+====================================================== */
+
+function judgeDip(pose){
+
+  const side=getSide(pose);
+
+  const p=sidePoints(
+    pose,
+    side
+  );
+
+
+  if(
+    !p.shoulder||
+    !p.elbow||
+    !p.wrist
+  ){
+
+    setStatus(
+      '🟡 Necesito ver hombro, codo y muñeca.',
+      'warn'
+    );
+
+    return;
+
+  }
+
+
+  const elbow=
+    filtered(
+      'dip_elbow',
+      angle(
+        p.shoulder,
+        p.elbow,
+        p.wrist
+      )
+    );
+
+
+  const conf=
+    confidenceOf(
+      p.shoulder,
+      p.elbow,
+      p.wrist
+    );
+
+
+  updateMetrics(
+    conf,
+    elbow,
+    null
+  );
+
+
+  const top=
+    elbow>=150;
+
+
+  /*
+  En la imagen las coordenadas Y
+  aumentan hacia abajo.
+  */
+
+  const shoulderBelowElbow=
+    p.shoulder.y>
+    p.elbow.y-12;
+
+
+  const bottom=
+    elbow<=100 &&
+    shoulderBelowElbow;
+
+
+  if(phase==='WAITING'){
+
+    if(
+      stable(
+        'dip_ready',
+        top
+      )
+    ){
+
+      phase='TOP';
+
+      lockedSide=side;
+
+      setStatus(
+        '🟢 Listo. Desciende hasta romper 90°.',
+        'ok'
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  if(phase==='TOP'){
+
+    if(
+      stable(
+        'dip_down',
+        elbow<140,
+        2
+      )
+    ){
+
+      phase='DOWN';
+
+      setStatus(
+        '🔵 Bajando…',
+        'info'
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  if(phase==='DOWN'){
+
+    if(
+      stable(
+        'dip_bottom',
+        bottom
+      )
+    ){
+
+      phase='BOTTOM';
+
+      setStatus(
+        '🟢 Profundidad válida. Sube.',
+        'ok'
+      );
+
+    }
+
+    else if(
+      stable(
+        'dip_abort',
+        elbow>=148,
+        2
+      )
+    ){
+
+      phase='TOP';
+
+      noRep(
+        'el hombro no bajó lo suficiente'
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  if(phase==='BOTTOM'){
+
+    if(
+      stable(
+        'dip_up',
+        elbow>118,
+        2
+      )
+    ){
+
+      phase='UP';
+
+      setStatus(
+        '🔵 Subiendo…',
+        'info'
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  if(
+    phase==='UP' &&
+    stable(
+      'dip_finish',
+      top
+    )
+  ){
+
+    phase='TOP';
+
+    validRep();
+
+  }
+
+}
+
+
+/* ======================================================
+                    JUEZ DE SQUATS
+====================================================== */
+
+function judgeSquat(pose){
+
+  const side=getSide(pose);
+
+  const p=sidePoints(
+    pose,
+    side
+  );
+
+
+  if(
+    !p.hip||
+    !p.knee||
+    !p.ankle||
+    !p.shoulder
+  ){
+
+    setStatus(
+      '🟡 Necesito ver hombro, cadera, rodilla y tobillo.',
+      'warn'
+    );
+
+    return;
+
+  }
+
+
+  const knee=
+    filtered(
+      'sq_knee',
+      angle(
+        p.hip,
+        p.knee,
+        p.ankle
+      )
+    );
+
+
+  const torso=
+    filtered(
+      'sq_torso',
+
+      Math.abs(
+        90-
+        Math.abs(
+          Math.atan2(
+            p.shoulder.y-p.hip.y,
+            p.shoulder.x-p.hip.x
+          )*
+          180/
+          Math.PI
+        )
+      )
+    );
+
+
+  const conf=
+    confidenceOf(
+      p.shoulder,
+      p.hip,
+      p.knee,
+      p.ankle
+    );
+
+
+  updateMetrics(
+    conf,
+    knee,
+    torso
+  );
+
+
+  const top=
+    knee>=155;
+
+
+  /*
+  Cadera aproximadamente
+  a la altura de rodilla
+  */
+
+  const hipBelowKnee=
+    p.hip.y>=
+    p.knee.y-8;
+
+
+  const bottom=
+    knee<=100 &&
+    hipBelowKnee;
+
+
+  if(phase==='WAITING'){
+
+    if(
+      stable(
+        'sq_ready',
+        top
+      )
+    ){
+
+      phase='TOP';
+
+      lockedSide=side;
+
+      setStatus(
+        '🟢 Listo. Baja la cadera.',
+        'ok'
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  if(phase==='TOP'){
+
+    if(
+      stable(
+        'sq_down',
+        knee<145,
+        2
+      )
+    ){
+
+      phase='DOWN';
+
+      setStatus(
+        '🔵 Bajando…',
+        'info'
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  if(phase==='DOWN'){
+
+    if(
+      stable(
+        'sq_bottom',
+        bottom
+      )
+    ){
+
+      phase='BOTTOM';
+
+      setStatus(
+        '🟢 Profundidad válida. Sube.',
+        'ok'
+      );
+
+    }
+
+    else if(
+      stable(
+        'sq_abort',
+        knee>=150,
+        2
+      )
+    ){
+
+      phase='TOP';
+
+      noRep(
+        'la cadera no bajó hasta la altura requerida'
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  if(phase==='BOTTOM'){
+
+    if(
+      stable(
+        'sq_up',
+        knee>120,
+        2
+      )
+    ){
+
+      phase='UP';
+
+      setStatus(
+        '🔵 Subiendo…',
+        'info'
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  if(
+    phase==='UP' &&
+    stable(
+      'sq_finish',
+      top
+    )
+  ){
+
+    phase='TOP';
+
+    validRep();
+
+  }
+
+}
+
+
+/* ======================================================
+                  JUEZ DE PULL-UPS
+====================================================== */
+
+function judgePullup(pose){
+
+  const side=getSide(pose);
+
+  const p=sidePoints(
+    pose,
+    side
+  );
+
+
+  if(
+    !p.shoulder||
+    !p.elbow||
+    !p.wrist||
+    !p.nose
+  ){
+
+    setStatus(
+      '🟡 Necesito ver cara, hombro, codo y mano.',
+      'warn'
+    );
+
+    return;
+
+  }
+
+
+  const elbow=
+    filtered(
+      'pu_elbow',
+      angle(
+        p.shoulder,
+        p.elbow,
+        p.wrist
+      )
+    );
+
+
+  /*
+  Estimación de la barbilla.
+
+  MoveNet no tiene landmark
+  específico de barbilla.
+  */
+
+  const shoulderWidth=(()=>{
+
+    const l=
+      point(
+        pose,
+        IDX.leftShoulder
+      );
+
+    const r=
+      point(
+        pose,
+        IDX.rightShoulder
+      );
+
+    return l&&r
+      ?Math.hypot(
+          l.x-r.x,
+          l.y-r.y
+        )
+      :80;
+
+  })();
+
+
+  const chinY=
+    p.nose.y+
+    shoulderWidth*0.18;
+
+
+  /*
+  Altura estimada de barra/manos
+  */
+
+  const barY=(()=>{
+
+    const lw=
+      point(
+        pose,
+        IDX.leftWrist
+      );
+
+    const rw=
+      point(
+        pose,
+        IDX.rightWrist
+      );
+
+    if(lw&&rw)
+      return(
+        lw.y+
+        rw.y
+      )/2;
+
+    return p.wrist.y;
+
+  })();
+
+
+  const chinAboveBar=
+    chinY<=
+    barY+10;
+
+
+  const conf=
+    confidenceOf(
+      p.shoulder,
+      p.elbow,
+      p.wrist,
+      p.nose
+    );
+
+
+  updateMetrics(
+    conf,
+    elbow,
+    null
+  );
+
+
+  /*
+  EXTENSIÓN COMPLETA
+  */
+
+  const bottom=
+    elbow>=160;
+
+
+  /*
+  POSICIÓN SUPERIOR
+  */
+
+  const top=
+    elbow<=115 &&
+    chinAboveBar;
+
+
+  /* ESPERANDO */
+
+  if(phase==='WAITING'){
+
+    if(
+      stable(
+        'pu_ready',
+        bottom
+      )
+    ){
+
+      phase='BOTTOM';
+
+      lockedSide=side;
+
+      setStatus(
+        '🟢 Extensión completa. Puedes subir.',
+        'ok'
+      );
+
+    }
+
+    else{
+
+      setStatus(
+        '🟡 Estira completamente los codos para iniciar.',
+        'warn'
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  /* ABAJO */
+
+  if(phase==='BOTTOM'){
+
+    if(
+      stable(
+        'pu_up',
+        elbow<150,
+        2
+      )
+    ){
+
+      phase='UP';
+
+      setStatus(
+        '🔵 Subiendo…',
+        'info'
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  /* SUBIENDO */
+
+  if(phase==='UP'){
+
+    if(
+      stable(
+        'pu_top',
+        top
+      )
+    ){
+
+      phase='TOP';
+
+      setStatus(
+        '🟢 Altura válida. Baja hasta extensión completa.',
+        'ok'
+      );
+
+    }
+
+    else if(
+      stable(
+        'pu_abort_up',
+        elbow>=158,
+        2
+      )
+    ){
+
+      phase='BOTTOM';
+
+      noRep(
+        'la barbilla no alcanzó la altura de las manos/barra'
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  /* ARRIBA */
+
+  if(phase==='TOP'){
+
+    if(
+      stable(
+        'pu_down',
+        elbow>130,
+        2
+      )
+    ){
+
+      phase='DOWN';
+
+      setStatus(
+        '🔵 Bajando…',
+        'info'
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  /* DESCENDIENDO */
+
+  if(phase==='DOWN'){
+
+    if(
+      stable(
+        'pu_finish',
+        bottom
+      )
+    ){
+
+      phase='BOTTOM';
+
+      validRep();
+
+    }
+
+    else if(elbow<125){
+
+      setStatus(
+        '🟡 Completa el descenso hasta extender los codos.',
+        'warn'
+      );
+
+    }
+
+  }
+
+}
+
+
+/* ======================================================
+                SELECCIONAR JUEZ
+====================================================== */
+
+function judge(pose){
+
+  switch(exerciseSelect.value){
+
+    case 'pushup':
+      return judgePushup(pose);
+
+    case 'dip':
+      return judgeDip(pose);
+
+    case 'pullup':
+      return judgePullup(pose);
+
+    case 'squat':
+      return judgeSquat(pose);
+
+  }
+
+}
+
+
+/* ======================================================
+                  DIBUJAR ESQUELETO
+====================================================== */
+
+function resizeCanvas(){
+
+  if(
+    !video.videoWidth||
+    !video.videoHeight
+  )
+    return;
+
+  if(
+    canvas.width!==video.videoWidth||
+    canvas.height!==video.videoHeight
+  ){
+
+    canvas.width=
+      video.videoWidth;
+
+    canvas.height=
+      video.videoHeight;
+
+  }
+
+}
+
+
+function drawPose(pose){
+
+  resizeCanvas();
+
+  ctx.clearRect(
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+
+  const pairs=
+    poseDetection.util.getAdjacentPairs(
+      poseDetection.SupportedModels.MoveNet
+    );
+
+
+  ctx.lineWidth=
+    Math.max(
+      3,
+      canvas.width/300
+    );
+
+  ctx.lineCap='round';
+
+  ctx.strokeStyle='#46f59a';
+
+  ctx.fillStyle='#46f59a';
+
+
+  pairs.forEach(
+    ([i,j])=>{
+
+      const a=
+        pose.keypoints[i];
+
+      const b=
+        pose.keypoints[j];
+
+      if(
+        (a?.score||0)>=CONF &&
+        (b?.score||0)>=CONF
+      ){
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+          a.x,
+          a.y
+        );
+
+        ctx.lineTo(
+          b.x,
+          b.y
+        );
+
+        ctx.stroke();
+
+      }
+
+    }
+  );
+
+
+  const r=
+    Math.max(
+      4,
+      canvas.width/220
+    );
+
+
+  pose.keypoints.forEach(
+    p=>{
+
+      if(
+        (p?.score||0)>=CONF
+      ){
+
+        ctx.beginPath();
+
+        ctx.arc(
+          p.x,
+          p.y,
+          r,
+          0,
+          Math.PI*2
+        );
+
+        ctx.fill();
+
+      }
+
+    }
+  );
+
+}
+
+
+/* ======================================================
+                     CÁMARA
+====================================================== */
+
+async function start(){
+
+  try{
+
+    startBtn.disabled=true;
+
+    setStatus(
+      'Solicitando acceso a la cámara…',
+      'warn'
+    );
+
+
+    if(stream){
+
+      stream
+      .getTracks()
+      .forEach(
+        t=>t.stop()
+      );
+
+    }
+
+
+    /*
+    Intentamos usar primero
+    la cámara trasera.
+    */
+
+    try{
+
+      stream=
+        await navigator
+        .mediaDevices
+        .getUserMedia({
+
+          audio:false,
+
+          video:{
+
+            facingMode:{
+              ideal:'environment'
+            },
+
+            width:{
+              ideal:1280
+            },
+
+            height:{
+              ideal:720
+            }
+
+          }
+
+        });
+
+    }
+
+    catch(_){
+
+      /*
+      Fallback si el teléfono
+      no acepta facingMode.
+      */
+
+      stream=
+        await navigator
+        .mediaDevices
+        .getUserMedia({
+
+          audio:false,
+
+          video:true
+
+        });
+
+    }
+
+
+    video.srcObject=
+      stream;
+
+
+    await video.play();
+
+
+    resizeCanvas();
+
+
+    setStatus(
+      'Cargando detector de pose…',
+      'warn'
+    );
+
+
+    await tf.ready();
+
+
+    detector=
+      await poseDetection
+      .createDetector(
+
+        poseDetection
+        .SupportedModels
+        .MoveNet,
+
+        {
+
+          modelType:
+            poseDetection
+            .movenet
+            .modelType
+            .SINGLEPOSE_THUNDER,
+
+          enableSmoothing:true
+
+        }
+
+      );
+
+
+    mDetector.textContent=
+      'MoveNet Thunder';
+
+
+    running=true;
+
+
+    resetJudge();
+
+
+    startBtn.textContent=
+      'Cámara activa';
+
+
+    requestAnimationFrame(
+      loop
+    );
+
+  }
+
+  catch(err){
+
+    console.error(err);
+
+    setStatus(
+      '❌ No se pudo iniciar. Revisa permisos de cámara y abre el sitio con HTTPS.',
+      'bad'
+    );
+
+    startBtn.disabled=false;
+
+    startBtn.textContent=
+      'Reintentar';
+
+  }
+
+}
+
 
 startBtn.addEventListener(
-'click',
-init
+  'click',
+  ()=>{
+
+    if(!running)
+      start();
+
+  }
 );
 
 
-async function init(){
+/* ======================================================
+                   LOOP PRINCIPAL
+====================================================== */
 
-try{
+async function loop(ts){
 
-startBtn.disabled=true;
+  if(!running)
+    return;
 
-status(
-'Solicitando cámara…',
-'warn'
+
+  requestAnimationFrame(
+    loop
+  );
+
+
+  /*
+  Evita ejecutar dos inferencias
+  simultáneamente.
+  */
+
+  if(
+    busy||
+    !detector||
+    video.readyState<2||
+    ts-lastFrameAt<TARGET_FPS_MS
+  )
+    return;
+
+
+  lastFrameAt=ts;
+
+  busy=true;
+
+
+  try{
+
+    const poses=
+      await detector
+      .estimatePoses(
+
+        video,
+
+        {
+
+          maxPoses:1,
+
+          flipHorizontal:false
+
+        }
+
+      );
+
+
+    if(poses.length){
+
+      drawPose(
+        poses[0]
+      );
+
+      judge(
+        poses[0]
+      );
+
+    }
+
+    else{
+
+      ctx.clearRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+
+      updateMetrics(
+        0,
+        null,
+        null
+      );
+
+
+      setStatus(
+        '🟡 No detecto una persona. Aléjate y muestra el cuerpo completo.',
+        'warn'
+      );
+
+    }
+
+  }
+
+  catch(err){
+
+    console.error(err);
+
+  }
+
+  finally{
+
+    busy=false;
+
+  }
+
+}
+
+
+/* ======================================================
+                   EVENTOS
+====================================================== */
+
+window.addEventListener(
+  'resize',
+  resizeCanvas
 );
 
 
-try{
+document.addEventListener(
+  'visibilitychange',
+  ()=>{
 
-stream=
-await navigator.mediaDevices.getUserMedia({
+    if(document.hidden)
+      histories={};
 
-audio:false,
-
-video:{
-facingMode:{ideal:'environment'},
-width:{ideal:1280},
-height:{ideal:720}
-}
-
-});
-
-}
-
-catch(e){
-
-stream=
-await navigator.mediaDevices.getUserMedia({
-
-audio:false,
-video:true
-
-});
-
-}
-
-
-video.srcObject=stream;
-
-await video.play();
-
-await tf.ready();
-
-
-status(
-'Cargando MoveNet Thunder…',
-'warn'
+  }
 );
 
 
-detector=
-await poseDetection.createDetector(
+resetJudge();
 
-poseDetection.SupportedModels.MoveNet,
+</script>
 
-{
-
-modelType:
-poseDetection.movenet.modelType.SINGLEPOSE_THUNDER,
-
-enableSmoothing:true
-
-}
-
-);
-
-
-canvas.width=
-video.videoWidth || 1280;
-
-canvas.height=
-video.videoHeight || 720;
-
-
-status(
-'🟢 Listo. Colócate de lado y muestra todo el cuerpo.',
-'ok'
-);
-
-
-requestAnimationFrame(loop);
-
-}
-
-catch(e){
-
-console.error(e);
-
-status(
-'❌ No se pudo iniciar cámara/detector. Revisa permisos.',
-'bad'
-);
-
-startBtn.disabled=false;
-
-}
-
-}
-
-
-/* =========================
-   SELECCIÓN DEL LADO
-========================= */
-
-function chooseSide(p){
-
-const left=[
-kp(p,5),
-kp(p,7),
-kp(p,9)
-]
-.filter(Boolean)
-.reduce(
-(s,x)=>s+x.score,
-0
-);
-
-
-const right=[
-kp(p,6),
-kp(p,8),
-kp(p,10)
-]
-.filter(Boolean)
-.reduce(
-(s,x)=>s+x.score,
-0
-);
-
-
-return left>=right ? 'L':'R';
-
-}
-
-
-/* =========================
-   JUEZ DE PUSH-UPS
-========================= */
-
-function pushup(p){
-
-const side=chooseSide(p);
-
-
-const sh=
-kp(p,side==='L'?5:6);
-
-const el=
-kp(p,side==='L'?7:8);
-
-const wr=
-kp(p,side==='L'?9:10);
-
-const hip=
-kp(p,side==='L'?11:12);
-
-const ank=
-kp(p,side==='L'?15:16);
-
-
-if(
-!sh||
-!el||
-!wr||
-!hip||
-!ank
-){
-
-status(
-'🟡 Necesito ver hombro, codo, muñeca, cadera y tobillo.',
-'warn'
-);
-
-return;
-
-}
-
-
-/* Ángulo del codo */
-
-const elbow=
-smooth(
-angle(sh,el,wr)
-);
-
-
-/* Alineación corporal */
-
-const bodyAngle=
-angle(sh,hip,ank);
-
-const bodyError=
-Math.abs(180-bodyAngle);
-
-
-/* Confianza */
-
-const confidence=
-Math.min(
-sh.score,
-el.score,
-wr.score,
-hip.score,
-ank.score
-);
-
-
-/* =========================
-   UMBRALES
-========================= */
-
-const ready=
-elbow>150 &&
-bodyError<28;
-
-
-const bottom=
-elbow<105 &&
-bodyError<35;
-
-
-const top=
-elbow>150 &&
-bodyError<28;
-
-
-/* =========================
-   INFORMACIÓN
-========================= */
-
-metricsEl.innerHTML=
-
-'Detector: MoveNet Thunder<br>'+
-'Confianza: '+
-Math.round(confidence*100)+
-'%<br>'+
-'Ángulo codo: '+
-Math.round(elbow)+
-'°<br>'+
-'Alineación: '+
-Math.round(bodyError)+
-'°';
-
-
-/* =========================
-   MÁQUINA DE ESTADOS
-========================= */
-
-
-/* POSICIÓN INICIAL */
-
-if(state==='WAITING'){
-
-if(ready){
-
-state='TOP';
-
-status(
-'🟢 Posición inicial correcta. Baja para comenzar.',
-'ok'
-);
-
-}
-
-return;
-
-}
-
-
-/* ARRIBA */
-
-if(state==='TOP'){
-
-if(!top){
-
-state='DOWN';
-
-status(
-'🔵 Bajando…'
-);
-
-}
-
-return;
-
-}
-
-
-/* BAJANDO */
-
-if(state==='DOWN'){
-
-/* Alcanzó profundidad */
-
-if(bottom){
-
-state='BOTTOM';
-
-status(
-'🟢 Profundidad alcanzada. Sube.',
-'ok'
-);
-
-}
-
-
-/* Se arrepintió y volvió arriba */
-
-else if(elbow>145){
-
-state='TOP';
-
-status(
-'❌ NO REP — No alcanzaste suficiente profundidad.',
-'bad'
-);
-
-}
-
-return;
-
-}
-
-
-/* FONDO */
-
-if(state==='BOTTOM'){
-
-if(elbow>125){
-
-state='UP';
-
-}
-
-return;
-
-}
-
-
-/* SUBIENDO */
-
-if(state==='UP'){
-
-if(top){
-
-reps++;
-
-counterEl.textContent=
-'Reps: '+reps;
-
-state='TOP';
-
-status(
-'✅ REP VÁLIDA',
-'ok'
-);
-
-}
-
-return;
-
-}
-
-}
-
-
-/* =========================
-   DIBUJAR ESQUELETO
-========================= */
-
-function draw(p){
-
-ctx.clearRect(
-0,
-0,
-canvas.width,
-canvas.height
-);
-
-
-ctx.drawImage(
-video,
-0,
-0,
-canvas.width,
-canvas.height
-);
-
-
-const pairs=
-poseDetection.util.getAdjacentPairs(
-poseDetection.SupportedModels.MoveNet
-);
-
-
-ctx.lineWidth=4;
-
-ctx.strokeStyle='#00ff66';
-
-
-pairs.forEach(
-([i,j])=>{
-
-const a=p.keypoints[i];
-const b=p.keypoints[j];
-
-
-if(
-a.score>=CONF &&
-b.score>=CONF
-){
-
-ctx.beginPath();
-
-ctx.moveTo(
-a.x,
-a.y
-);
-
-ctx.lineTo(
-b.x,
-b.y
-);
-
-ctx.stroke();
-
-}
-
-}
-);
-
-
-p.keypoints.forEach(
-x=>{
-
-if(x.score>=CONF){
-
-ctx.beginPath();
-
-ctx.arc(
-x.x,
-x.y,
-5,
-0,
-Math.PI*2
-);
-
-ctx.fillStyle='#00ff66';
-
-ctx.fill();
-
-}
-
-}
-);
-
-}
-
-
-/* =========================
-   LOOP PRINCIPAL
-========================= */
-
-async function loop(t){
-
-if(
-!detector ||
-video.readyState<2
-){
-
-requestAnimationFrame(loop);
-
-return;
-
-}
-
-
-/* Limitamos aproximadamente a 30 FPS */
-
-if(
-t-lastFrame<33
-){
-
-requestAnimationFrame(loop);
-
-return;
-
-}
-
-lastFrame=t;
-
-
-try{
-
-const poses=
-await detector.estimatePoses(
-video,
-{
-maxPoses:1,
-flipHorizontal:false
-}
-);
-
-
-if(poses.length){
-
-draw(
-poses[0]
-);
-
-
-if(
-exerciseSelect.value==='pushup'
-){
-
-pushup(
-poses[0]
-);
-
-}
-
-}
-else{
-
-ctx.drawImage(
-video,
-0,
-0,
-canvas.width,
-canvas.height
-);
-
-
-status(
-'🟡 No detecto una persona. Aléjate y muestra el cuerpo completo.',
-'warn'
-);
-
-}
-
-}
-
-catch(e){
-
-console.error(e);
-
-}
-
-
-requestAnimationFrame(loop);
-
-}
-
-</script></body>
+</body>
 </html>
