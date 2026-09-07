@@ -144,7 +144,7 @@ body:not([data-mode="camera"]) #app{display:none}
 #cameraTools{
   position:absolute;
   z-index:8;
-  top:calc(max(8px,env(safe-area-inset-top)) + 190px);
+  top:calc(max(8px,env(safe-area-inset-top)) + 210px);
   left:8px;
   right:8px;
   display:flex;
@@ -304,7 +304,7 @@ body:not([data-mode="camera"]) #app{display:none}
   #guide{display:none}
   #metrics{font-size:12px}
   #cameraTools{
-    top:calc(max(8px,env(safe-area-inset-top)) + 185px);
+    top:calc(max(8px,env(safe-area-inset-top)) + 210px);
   }
   #scoreCount{font-size:26vmin}
 }
@@ -318,6 +318,48 @@ body:not([data-mode="camera"]) #app{display:none}
   #scoreboard{transition:none}
   .pulse{animation:none}
 }
+
+#pairSummary{position:absolute;z-index:9;right:8px;top:calc(max(8px,env(safe-area-inset-top)) + 78px);max-width:49%;border-radius:10px;background:#070a0fee;padding:5px 8px;text-align:right;font-size:11px;line-height:1.3}#pairSummary span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}#pairSummary b{display:block;font-size:15px;letter-spacing:2px}
+/* V5: compact camera controls; large scoreboard targets and text labels. */
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #ffd166;outline-offset:3px}
+button:disabled{opacity:.5;cursor:default}
+#workoutChoice{border:1px solid #394353;border-radius:14px;padding:12px;display:flex;gap:12px;flex-wrap:wrap}
+#workoutChoice label{margin:0;display:flex;align-items:center;gap:8px;min-height:44px;flex:1}
+#workoutChoice input{width:20px;min-height:20px;margin:0;accent-color:#46f59a}
+#circuitBuilder{background:#111923;border:1px solid #394353;border-radius:14px;margin-top:12px;padding:12px}
+#circuitBuilder p{font-size:14px;margin-top:0}
+.stageRow{display:grid;grid-template-columns:minmax(0,1fr) 76px;gap:8px;padding:12px 0;border-bottom:1px solid #394353}
+.stageRow label{font-size:13px;margin:0}
+.stageRow select,.stageRow input{width:100%;min-height:44px;background:#1a2230;color:white;border:1px solid #596679;border-radius:10px;padding:8px;font-size:16px;letter-spacing:normal}
+.stageRow .rowActions{grid-column:1/-1;display:flex;gap:6px}
+.stageRow .rowActions button{margin:0;padding:4px 8px;font-size:13px;width:auto;flex:1}
+#roundsInput{max-width:110px;letter-spacing:normal}
+#builderTotal{display:block;margin-top:12px}
+#toggleTools{position:absolute;z-index:10;top:calc(max(8px,env(safe-area-inset-top)) + 78px);left:8px;border:1px solid #596679;border-radius:12px;background:#101925;color:white;min-height:44px;padding:8px 12px}
+#metrics,#guide,#cameraTools{display:none}
+body.tools-open #metrics{display:block;top:calc(max(8px,env(safe-area-inset-top)) + 130px);width:calc(100% - 16px);max-width:420px}
+body.tools-open #cameraTools{display:flex;top:calc(max(8px,env(safe-area-inset-top)) + 260px);max-height:calc(100dvh - 450px);overflow:auto;border:1px solid #596679}
+body.tools-open #guide{display:block;position:static;flex-basis:100%;max-width:none;margin:0;padding:0;font-size:13px}
+.cameraHelp{flex-basis:100%;margin:0;color:#aeb7c4;font-size:12px}
+#phoneCircuit{top:calc(max(8px,env(safe-area-inset-top)) + 134px);left:8px;right:8px;padding:10px;border-radius:14px;max-width:420px;font-size:13px;line-height:1.4}
+body.tools-open #phoneCircuit{display:none}
+#phoneRound{color:#aeb7c4}#phoneTotal{display:block;font-size:16px;margin:4px 0}
+progress{width:100%;height:10px;accent-color:#46f59a;display:block;margin:10px 0}
+.circuitActions{display:flex;gap:8px;margin-top:8px}
+.circuitActions button{min-height:44px;border:1px solid #596679;border-radius:10px;background:#1a2230;color:white;padding:8px;flex:1}
+button.primary,.circuitActions button.primary{background:#158957!important;color:white;font-weight:800}
+#scoreboard{gap:12px;padding:20px;justify-content:flex-start}
+#scoreboard header{flex:none}#scoreboard main{flex:1;display:flex;flex-direction:column;justify-content:center;min-height:min-content}
+#scoreboard footer{flex:none;position:sticky;bottom:0;background:#070a0fee;padding:10px 0}
+#scoreCount{font-size:clamp(88px,23vmin,220px)}#scoreTarget{font-size:clamp(18px,3vw,26px);color:#c4d0dd}
+#scoreCircuit{width:100%;max-width:760px;margin:12px auto 0}
+#scoreRound{font-size:18px;color:#c4d0dd}#scoreTotal{font-size:20px;font-weight:800}
+#scoreNext{margin-top:6px;font-size:18px}#scoreMessage{font-size:clamp(18px,3vw,28px);min-height:2em;margin:12px 0}
+#scoreStages{list-style:none;padding:0;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:12px 0}
+#scoreStages li{flex:1 1 160px;border:1px solid #596679;border-radius:12px;padding:10px;font-size:16px;background:#101925}
+#scoreStages li.current{border:2px solid #46f59a}
+@media(max-height:540px){#phoneCircuit{top:130px;left:auto;right:8px;width:45%;font-size:12px}#phoneCircuit progress{margin:4px 0}#phoneCircuit .circuitActions{margin-top:4px}#toggleTools{top:78px}body.tools-open #cameraTools{top:130px;max-height:calc(100dvh - 225px)}body.tools-open #metrics{display:none}#progressCard{display:none}#scoreCount{font-size:80px}}
+
 </style>
 </head>
 
@@ -338,13 +380,22 @@ body:not([data-mode="camera"]) #app{display:none}
     </div>
     <div id="counter">
       <span class="num" id="repNum">0</span>
-      <span class="label">reps</span>
+      <span class="label" id="repLabel">reps</span>
     </div>
   </div>
 
+  <section id="phoneCircuit" class="panel" hidden aria-label="Avance del circuito">
+    <div id="phoneRound"></div><strong id="phoneTotal"></strong>
+    <progress id="phoneProgress" value="0" max="60" aria-label="Repeticiones del circuito"></progress>
+    <div id="phoneNext"></div>
+    <div class="circuitActions"><button id="phoneAction" class="primary">Iniciar estación</button><button id="phonePause">Pausar</button></div>
+  </section>
+  <div id="pairSummary"><span id="linkState">Sin marcador</span><b id="sessionCode"></b></div>
+  <button id="toggleTools" aria-expanded="false">Ajustes y conexión</button>
   <div id="metrics" class="panel">
     <div class="metricRow">
-      <span>Detector</span><b id="mDetector">—</b>
+      <span>Detector</span><b id="mDetector">—</b></div>
+    <div class="metricRow"><span>Imágenes/s</span><b id="mFps">—</b>
     </div>
     <div class="metricRow">
       <span>Confianza</span><b id="mConfidence">—</b>
@@ -361,16 +412,14 @@ body:not([data-mode="camera"]) #app{display:none}
     </div>
   </div>
 
-  <div id="guide" class="panel">
-    Coloca el teléfono de lado y muestra el cuerpo completo.
-  </div>
 
   <div id="cameraTools" hidden>
-    <span id="linkState">Sin marcador</span>
-    <b id="sessionCode"></b>
     <button id="pairCamera">Conectar tablet</button>
+    <button id="calibratePull" hidden>Calibrar altura pull-up</button>
     <button id="resetCount">Reiniciar</button>
     <button id="exitCamera">Salir</button>
+    <p id="guide">Coloca el teléfono de lado y muestra el cuerpo completo.</p>
+    <p class="cameraHelp">Abre Ajustes para consultar ángulos, conexión y calibración.</p>
   </div>
 
   <div id="progressCard" class="panel">
@@ -390,13 +439,24 @@ body:not([data-mode="camera"]) #app{display:none}
 
 <section id="stationSetup">
   <div class="stationBox">
-    <p>JUECEO CALISTENIA · ESTACIÓN V4.1 · CÁMARA</p>
+    <p>JUECEO CALISTENIA · ESTACIÓN V5 · CIRCUITOS</p>
     <h1>Conecta tu estación</h1>
     <p>
       Usa el teléfono como cámara y la tablet como marcador.
       Mantén ambas páginas abiertas y con internet.
     </p>
 
+    <fieldset id="workoutChoice"><legend>En el teléfono, elige la rutina</legend>
+      <label><input type="radio" name="workoutMode" value="free" checked> Ejercicio libre</label>
+      <label><input type="radio" name="workoutMode" value="circuit"> Circuito</label>
+    </fieldset>
+    <section id="circuitBuilder" hidden aria-label="Configurar circuito">
+      <p>Completa cada meta en orden. El cambio de estación se confirma desde el teléfono o la tablet.</p>
+      <div id="circuitRows"></div>
+      <button id="addStage" type="button">+ Agregar ejercicio</button>
+      <label for="roundsInput">Rondas</label><input id="roundsInput" type="number" min="1" max="20" step="1" value="1" inputmode="numeric">
+      <strong id="builderTotal"></strong>
+    </section>
     <button id="chooseCamera" class="primary">
       Este dispositivo es la cámara
     </button>
@@ -426,14 +486,21 @@ body:not([data-mode="camera"]) #app{display:none}
 <section id="scoreboard" hidden aria-label="Marcador de repeticiones">
   <header>
     <div id="scoreConnection" role="status">Conectando…</div>
-    <h1 id="scoreExercise">Push-ups</h1>
+    <div id="scoreRound"></div><h1 id="scoreExercise">Push-ups</h1>
   </header>
   <main>
     <div id="scoreCount">0</div>
-    <div>REPETICIONES</div>
+    <div id="scoreTarget">REPETICIONES</div>
+    <section id="scoreCircuit" hidden>
+      <progress id="scoreProgress" value="0" max="60" aria-label="Avance total del circuito"></progress>
+      <div id="scoreTotal"></div><div id="scoreNext"></div>
+      <ol id="scoreStages" aria-label="Avance por ejercicio"></ol>
+    </section>
     <p id="scoreMessage" aria-live="polite">Esperando cámara…</p>
   </main>
   <footer>
+    <button id="scoreAction" class="primary" hidden>Iniciar estación</button>
+    <button id="scorePause" hidden>Pausar</button>
     <button id="fullScreen">Pantalla completa</button>
     <button id="reconnectScore">Reconectar</button>
     <button id="exitScore">Salir</button>
@@ -469,9 +536,9 @@ const progressFill = $('progressFill');
 
 const CONF = 0.28;
 const DRAW_CONF = 0.20;
-const KEYPOINT_HOLD_MS = 300;
+const KEYPOINT_HOLD_MS = 0;
 const MAX_HISTORY = 5;
-const TARGET_FPS_MS = 38;
+const TARGET_FPS_MS = 0;
 const MISSING_FRAMES_BEFORE_WARNING = 5;
 
 let detector = null;
@@ -540,7 +607,7 @@ const EXERCISES = {
   },
   pullup:{
     name:'Pull-up',
-    guide:'Cuerpo completo · brazos, manos y cara visibles durante todo el recorrido.'
+    guide:'Vista oblicua suave · cara, mano y codo visibles. Calibra con barbilla justo sobre la barra; vuelve a extensión completa.'
   },
   squat:{
     name:'Squat',
@@ -617,6 +684,7 @@ function clearStable(prefix=''){
 }
 
 function loseAttempt(){
+  cycle = null;
   phase = 'WAITING';
   lockedSide = null;
   histories = {};
@@ -625,7 +693,173 @@ function loseAttempt(){
   resetAttemptMetrics();
 }
 
+const CIRCUIT_NAMES = {pushup:'Push-ups',dip:'Dips / fondos',pullup:'Pull-ups',squat:'Squats'};
+let circuit = null;
+let controlRevision = 0;
+let poseEpoch = 0;
+let remoteCircuit = null;
+let circuitDraft = [{exercise:'pushup',target:20},{exercise:'dip',target:20},{exercise:'pullup',target:20}];
+
+function renderBuilder(){
+  $('circuitRows').replaceChildren();
+  circuitDraft.forEach((item,index)=>{
+    const row = document.createElement('div'); row.className = 'stageRow';
+    const exerciseLabel = document.createElement('label'); exerciseLabel.textContent = 'Ejercicio '+(index+1);
+    const select = document.createElement('select');
+    Object.entries(CIRCUIT_NAMES).forEach(([value,name])=>{
+      const option = document.createElement('option');option.value=value;option.textContent=name;select.append(option);
+    });
+    select.value=item.exercise;
+    select.onchange=()=>{item.exercise=select.value;updateBuilderTotal();};
+    exerciseLabel.append(select);
+    const targetLabel=document.createElement('label');targetLabel.textContent='Reps';
+    const input=document.createElement('input');input.type='number';input.min='1';input.max='500';input.step='1';input.inputMode='numeric';input.value=item.target;
+    input.oninput=()=>{item.target=Number(input.value);updateBuilderTotal();};targetLabel.append(input);
+    const actions=document.createElement('div');actions.className='rowActions';
+    const addButton=(text,disabled,action)=>{const b=document.createElement('button');b.type='button';b.textContent=text;b.disabled=disabled;b.onclick=action;actions.append(b);};
+    addButton('↑ Subir',index===0,()=>{[circuitDraft[index-1],circuitDraft[index]]=[item,circuitDraft[index-1]];renderBuilder();});
+    addButton('↓ Bajar',index===circuitDraft.length-1,()=>{[circuitDraft[index+1],circuitDraft[index]]=[item,circuitDraft[index+1]];renderBuilder();});
+    addButton('Eliminar',circuitDraft.length===1,()=>{circuitDraft.splice(index,1);renderBuilder();});
+    row.append(exerciseLabel,targetLabel,actions);$('circuitRows').append(row);
+  });
+  $('addStage').disabled=circuitDraft.length>=8;
+  updateBuilderTotal();
+}
+function validCircuitPlan(plan,rounds){
+  return Array.isArray(plan) && plan.length>=1 && plan.length<=8 &&
+    Number.isInteger(rounds) && rounds>=1 && rounds<=20 &&
+    plan.every(x=>Object.hasOwn(CIRCUIT_NAMES,x.exercise) && Number.isInteger(x.target) && x.target>=1 && x.target<=500);
+}
+function updateBuilderTotal(){
+  const rounds=Number($('roundsInput').value);
+  $('builderTotal').textContent=validCircuitPlan(circuitDraft,rounds)
+    ? circuitDraft.reduce((a,x)=>a+x.target,0)*rounds+' reps en total · '+rounds+' ronda(s)'
+    : 'Usa 1–500 reps por ejercicio y 1–20 rondas, en números enteros.';
+}
+function circuitGoal(){return circuit?.plan[circuit.index]?.target ?? Infinity;}
+function invalidatePose(){poseEpoch++;loseAttempt();}
+function circuitView(){
+  if(!circuit) return null;
+  const {plan,index,round,rounds,state,completed}=circuit;
+  const nextIndex=index+1<plan.length ? index+1 : 0;
+  const hasNext=index+1<plan.length || round<rounds;
+  return {state,revision:controlRevision,index,round,rounds,
+    target:plan[index].target,
+    total:completed.reduce((n,x)=>n+x.reps,0)+(state==='transition'||state==='complete'?0:reps),
+    goal:plan.reduce((n,x)=>n+x.target,0)*rounds,
+    next:state==='complete'?'':hasNext?CIRCUIT_NAMES[plan[nextIndex].exercise]+' · '+plan[nextIndex].target+' reps':'Última estación',
+    steps:plan.map((x,i)=>({name:CIRCUIT_NAMES[x.exercise],target:x.target,
+      count:i<index?x.target:i===index?reps:0, current:i===index})),
+    finished:completed.length,canStart:running&&!document.hidden};
+}
+function circuitMessage(v){
+  if(!v) return '';
+  if(v.state==='complete') return '✅ Circuito completado. '+v.total+' de '+v.goal+' reps válidas.';
+  if(v.state==='transition') return '✅ Meta completada. Prepara la siguiente estación; el conteo está detenido.';
+  if(v.state==='ready') return 'Ajusta la cámara y pulsa Iniciar estación. Después adopta la posición inicial.';
+  if(v.state==='paused') return '⏸ Circuito en pausa. Al reanudar, retoma la posición inicial.';
+  return '';
+}
+function actionLabel(v){
+  return v.state==='transition'?'Preparar siguiente':v.state==='paused'?'Reanudar':'Iniciar estación';
+}
+function renderPhoneCircuit(){
+  const v=circuitView();
+  $('phoneCircuit').hidden=!v;
+  exerciseSelect.disabled=!!v;
+  $('repLabel').textContent=v?'de '+v.target+' reps':'reps';
+  $('resetCount').textContent=v?'Reiniciar circuito':'Reiniciar';
+  if(!v) return;
+  $('phoneRound').textContent='Ronda '+v.round+'/'+v.rounds+' · Estación '+(v.index+1)+'/'+v.steps.length;
+  $('phoneTotal').textContent=v.state==='complete'?'Circuito completado':v.total+' / '+v.goal+' reps totales';
+  $('phoneProgress').max=v.goal;$('phoneProgress').value=v.total;
+  $('phoneNext').textContent=v.state==='complete'?'Todas las metas alcanzadas':'Siguiente: '+v.next;
+  $('phoneAction').textContent=actionLabel(v);
+  $('phoneAction').hidden=['active','complete'].includes(v.state);
+  $('phoneAction').disabled=!v.canStart;
+  $('phonePause').hidden=v.state!=='active';
+}
+function createCircuit(plan,rounds){
+  if(!validCircuitPlan(plan,rounds)) return false;
+  circuit={plan:plan.map(x=>({...x})),rounds,round:1,index:0,state:'ready',completed:[]};
+  controlRevision++;
+  exerciseSelect.value=circuit.plan[0].exercise;
+  resetJudge();renderPhoneCircuit();return true;
+}
+function circuitControl(action,revision=controlRevision){
+  if(!circuit || revision!==controlRevision) return false;
+  if(action==='pause' && circuit.state==='active') circuit.state='paused';
+  else if(action==='advance' && circuit.state==='transition'){
+    if(circuit.index+1<circuit.plan.length) circuit.index++;
+    else {circuit.index=0;circuit.round++;}
+    circuit.state='ready';exerciseSelect.value=circuit.plan[circuit.index].exercise;
+    resetJudge();
+  }else if(action==='start' && ['ready','paused'].includes(circuit.state) && running && !document.hidden){
+    circuit.state='active';
+  }else return false;
+  controlRevision++;invalidatePose();latestEvent=null;
+  renderPhoneCircuit();setStatus(circuitMessage(circuitView())||'🟢 Retoma la posición inicial para empezar.','info');broadcast();
+  return true;
+}
+function circuitRepAccepted(){
+  if(!circuit) return;
+  if(reps>=circuitGoal()){
+    reps=circuitGoal();repNum.textContent=String(reps);
+    circuit.completed.push({round:circuit.round,index:circuit.index,exercise:exerciseSelect.value,reps});
+    circuit.state=circuit.index===circuit.plan.length-1 && circuit.round===circuit.rounds?'complete':'transition';
+    controlRevision++;poseEpoch++;
+    // Do not reset the cycle inside validRep: its caller is still finishing.
+    setStatus(circuitMessage(circuitView()),'ok');
+    latestEvent.message=circuit.state==='complete'?'CIRCUITO COMPLETADO':'META COMPLETADA';
+  }
+  renderPhoneCircuit();broadcast();
+}
+function renderScoreCircuit(v){
+  remoteCircuit=v;
+  $('scoreCircuit').hidden=!v;
+  $('scoreAction').hidden=!v || ['active','complete'].includes(v.state);
+  $('scorePause').hidden=!v || v.state!=='active';
+  $('scoreRound').textContent=v?'Ronda '+v.round+'/'+v.rounds+' · Estación '+(v.index+1)+'/'+v.steps.length:'';
+  $('scoreTarget').textContent=v?(v.state==='complete'?'REPETICIONES TOTALES':'DE '+v.target+' REPETICIONES'):'REPETICIONES';
+  if(!v) return;
+  $('scoreAction').textContent=actionLabel(v);$('scoreAction').disabled=!v.canStart;
+  $('scorePause').disabled=false;
+  $('scoreTotal').textContent=v.total+' / '+v.goal+' reps totales';
+  $('scoreNext').textContent=v.state==='complete'?'Todas las metas alcanzadas':'Siguiente: '+v.next;
+  $('scoreProgress').max=v.goal;$('scoreProgress').value=v.total;
+  $('scoreStages').replaceChildren();
+  v.steps.forEach((x,i)=>{const li=document.createElement('li');
+    li.textContent=(x.count===x.target?'✓ ':x.current?'Actual · ':'')+x.name+' · '+x.count+'/'+x.target;
+    if(x.current)li.className='current';$('scoreStages').append(li);
+  });
+  if(v.state==='complete'){$('scoreCount').textContent=String(v.total);$('scoreExercise').textContent='Circuito completado';}
+}
+function validRemoteCircuit(v){
+  return v===null || (v && ['ready','active','paused','transition','complete'].includes(v.state) &&
+    Number.isSafeInteger(v.revision) && Number.isSafeInteger(v.round) && Number.isSafeInteger(v.rounds) && v.round>=1 && v.round<=v.rounds && v.rounds<=20 &&
+    Number.isSafeInteger(v.index) && Array.isArray(v.steps) && v.steps.length>=1 && v.steps.length<=8 && v.index>=0 && v.index<v.steps.length &&
+    Number.isSafeInteger(v.target) && v.target>=1 && v.target<=500 &&
+    Number.isSafeInteger(v.goal) && v.goal>=1 && v.goal<=80000 && Number.isSafeInteger(v.total) && v.total>=0 && v.total<=v.goal &&
+    typeof v.next==='string' && typeof v.canStart==='boolean' &&
+    v.steps.every(x=>typeof x.name==='string' && x.name.length<=80 && Number.isSafeInteger(x.target) && x.target>=1 && x.target<=500 && Number.isSafeInteger(x.count) && x.count>=0 && x.count<=x.target));
+}
+function sendCircuitCommand(action){
+  if(!remoteCircuit || !connection?.open || !lastReceived || Date.now()-lastReceived>3500) return;
+  $('scoreAction').disabled=true;$('scorePause').disabled=true;
+  connection.send({kind:'control',version:2,session,action,revision:remoteCircuit.revision});
+}
+function receiveCircuitCommand(s){
+  if(!s || s.version!==2 || s.kind!=='control' || s.session!==session || !Number.isSafeInteger(s.revision) || !['start','pause','advance'].includes(s.action)) return;
+  circuitControl(s.action,s.revision);
+  broadcast();
+}
+
 function resetJudge(){
+  poseEpoch++;
+  pullReference = null;
+  pullSample = null;
+  $('calibratePull').hidden = exerciseSelect.value !== 'pullup';
+  $('calibratePull').textContent = 'Calibrar altura pull-up';
   reps = 0;
   repNum.textContent = '0';
   missingPoseFrames = 0;
@@ -633,6 +867,7 @@ function resetJudge(){
   latestEvent = null;
   loseAttempt();
 
+  renderPhoneCircuit();
   const ex = EXERCISES[exerciseSelect.value];
   guideEl.textContent = ex.guide;
   setStatus(`Colócate en posición inicial para ${ex.name}.`,'warn');
@@ -690,13 +925,68 @@ function median(values){
 }
 
 function filtered(key,value){
-  if(value == null || Number.isNaN(value)) return null;
-  if(!histories[key]) histories[key] = [];
-  histories[key].push(value);
-  if(histories[key].length > MAX_HISTORY){
-    histories[key].shift();
+  if(value == null || !Number.isFinite(value)) return null;
+  const previous = histories[key];
+  // Preserve brief extremes; damp small stationary jitter only.
+  const result = previous == null || Math.abs(value-previous) > 8
+    ? value : previous + 0.65*(value-previous);
+  histories[key] = result;
+  return result;
+}
+
+let cycle = null;
+let lastJudgedAt = 0;
+let lastVideoTime = -1;
+let fpsTimes = [];
+let pullReference = null;
+let pullSample = null;
+
+function followCycle({home,away,depart,side,pull=false,reason}){
+  const now = performance.now();
+  const homePhase = pull ? 'BOTTOM' : 'TOP';
+  if(!cycle) cycle = {ready:0,active:false,hit:false,samples:0,last:now};
+  if(now-cycle.last > 350){
+    loseAttempt();
+    cycle = {ready:0,active:false,hit:false,samples:0,last:now};
   }
-  return median(histories[key]);
+  cycle.last = now;
+  if(phase === 'WAITING'){
+    cycle.ready = home ? cycle.ready+1 : 0;
+    if(home) cycle.homeAt = now;
+    if(cycle.ready >= 2){
+      phase = homePhase;
+      lockedSide = side;
+      setStatus('🟢 Listo. Puedes iniciar el recorrido.','ok');
+    }else setStatus(pull ? '🟡 Cuelga con los codos extendidos para iniciar.' : '🟡 Extiende y alinea el cuerpo para iniciar.','warn');
+    return;
+  }
+  if(!cycle.active){
+    if(home) cycle.homeAt = now;
+    if(!depart) return;
+    startAttempt(side);
+    cycle.active = true;
+    cycle.started = cycle.homeAt ?? now;
+    cycle.samples = 0;
+    cycle.hit = false;
+  }
+  if(!home) cycle.samples++;
+  if(away){
+    cycle.hit = true;
+    setStatus(pull ? '🟢 Altura alcanzada. Baja hasta extender los codos.' : '🟢 Profundidad alcanzada. Vuelve a extender.','ok');
+  }
+  phase = cycle.hit ? (pull ? 'DOWN' : 'UP') : (pull ? 'UP' : 'DOWN');
+  if(home){
+    const supported = cycle.samples >= 2 && now-cycle.started >= 180;
+    const hit = cycle.hit;
+    cycle.active = false;
+    cycle.homeAt = now;
+    cycle.hit = false;
+    phase = homePhase;
+    if(hit && supported) validRep();
+    else noRep(hit ? 'recorrido demasiado breve o con pocas imágenes para validarlo' : reason);
+    // Keep the same visible side throughout a continuous set.
+    lockedSide = side;
+  }
 }
 
 function stable(tag,condition,frames=3){
@@ -798,6 +1088,7 @@ function missingWarning(parts){
 /* RESULTADOS */
 
 function validRep(){
+  if(circuit && (circuit.state!=='active' || reps>=circuitGoal())) return;
   reps++;
   repNum.textContent = String(reps);
   flashCounter();
@@ -817,6 +1108,7 @@ function validRep(){
     message:'REP VÁLIDA',
     at:Date.now()
   };
+  circuitRepAccepted();
   broadcast();
 
   setTimeout(()=>{
@@ -897,75 +1189,7 @@ function judgePushup(pose){
     setProgress(progress,phaseLabel());
   }
 
-  if(phase === 'WAITING'){
-    resetAttemptMetrics();
-    trackMinAngle(elbow);
-
-    if(stable('push_ready',top,3)){
-      phase = 'TOP';
-      startAttempt(side);
-      setStatus(
-        '🟢 Posición inicial correcta. Baja controladamente.',
-        'ok'
-      );
-    }else if(align > 42){
-      setStatus(
-        '🟡 Mantén hombros, cadera y tobillos más alineados.',
-        'warn'
-      );
-    }else{
-      setStatus('🟡 Extiende los codos para iniciar.','warn');
-    }
-    return;
-  }
-
-  if(phase === 'TOP'){
-    if(stable('push_leave',elbow < 140,2)){
-      if(!lockedSide) startAttempt(side);
-      phase = 'DOWN';
-      setStatus('🔵 Bajando…','info');
-    }
-    return;
-  }
-
-  if(phase === 'DOWN'){
-    if(stable('push_bottom',bottom,2)){
-      phase = 'BOTTOM';
-      setProgress(100,'Profundidad OK');
-      setStatus('🟢 Profundidad válida. Ahora sube.','ok');
-      return;
-    }
-
-    if(align > 46){
-      setStatus('🟡 Evita quebrar la cadera.','warn');
-    }
-
-    if(stable('push_abort',elbow >= 148,3)){
-      phase = 'TOP';
-      noRep('bajada insuficiente');
-    }
-    return;
-  }
-
-  if(phase === 'BOTTOM'){
-    if(stable('push_up',elbow > 118,2)){
-      phase = 'UP';
-      setStatus('🔵 Subiendo…','info');
-    }
-    return;
-  }
-
-  if(phase === 'UP'){
-    if(stable('push_finish',top,3)){
-      phase = 'TOP';
-      validRep();
-      return;
-    }
-
-    if(align > 46){
-      setStatus('🟡 Mantén el cuerpo alineado al subir.','warn');
-    }
-  }
+  followCycle({home:top,away:bottom,depart:elbow < 140,side,reason:'bajada insuficiente o cuerpo desalineado'});
 }
 
 /* JUEZ FONDOS */
@@ -1010,60 +1234,7 @@ function judgeDip(pose){
     setProgress(progress,phaseLabel());
   }
 
-  if(phase === 'WAITING'){
-    resetAttemptMetrics();
-    trackMinAngle(elbow);
-
-    if(stable('dip_ready',top,3)){
-      phase = 'TOP';
-      startAttempt(side);
-      setStatus('🟢 Posición inicial correcta. Desciende.','ok');
-    }else{
-      setStatus('🟡 Estira los codos para iniciar.','warn');
-    }
-    return;
-  }
-
-  if(phase === 'TOP'){
-    if(stable('dip_leave',elbow < 140,2)){
-      if(!lockedSide) startAttempt(side);
-      phase = 'DOWN';
-      setStatus('🔵 Bajando…','info');
-    }
-    return;
-  }
-
-  if(phase === 'DOWN'){
-    if(stable('dip_bottom',bottom,2)){
-      phase = 'BOTTOM';
-      setProgress(100,'Profundidad OK');
-      setStatus('🟢 Profundidad válida. Sube.','ok');
-      return;
-    }
-
-    if(elbow <= 112 && shoulderDepth < -0.15){
-      setStatus('🟡 Baja un poco más el hombro.','warn');
-    }
-
-    if(stable('dip_abort',elbow >= 148,3)){
-      phase = 'TOP';
-      noRep('faltó profundidad');
-    }
-    return;
-  }
-
-  if(phase === 'BOTTOM'){
-    if(stable('dip_up',elbow > 118,2)){
-      phase = 'UP';
-      setStatus('🔵 Subiendo…','info');
-    }
-    return;
-  }
-
-  if(phase === 'UP' && stable('dip_finish',top,3)){
-    phase = 'TOP';
-    validRep();
-  }
+  followCycle({home:top,away:bottom,depart:elbow < 140,side,reason:'faltó profundidad'});
 }
 
 /* JUEZ SQUATS */
@@ -1103,60 +1274,7 @@ function judgeSquat(pose){
     setProgress(progress,phaseLabel());
   }
 
-  if(phase === 'WAITING'){
-    resetAttemptMetrics();
-    trackMinAngle(knee);
-
-    if(stable('sq_ready',top,3)){
-      phase = 'TOP';
-      startAttempt(side);
-      setStatus('🟢 Posición inicial correcta. Baja la cadera.','ok');
-    }else{
-      setStatus('🟡 Estira las piernas para iniciar.','warn');
-    }
-    return;
-  }
-
-  if(phase === 'TOP'){
-    if(stable('sq_leave',knee < 145,2)){
-      if(!lockedSide) startAttempt(side);
-      phase = 'DOWN';
-      setStatus('🔵 Bajando…','info');
-    }
-    return;
-  }
-
-  if(phase === 'DOWN'){
-    if(stable('sq_bottom',bottom,2)){
-      phase = 'BOTTOM';
-      setProgress(100,'Profundidad OK');
-      setStatus('🟢 Profundidad válida. Sube.','ok');
-      return;
-    }
-
-    if(knee <= 115 && !hipNearOrBelow){
-      setStatus('🟡 Un poco más abajo con la cadera.','warn');
-    }
-
-    if(stable('sq_abort',knee >= 150,3)){
-      phase = 'TOP';
-      noRep('faltó profundidad');
-    }
-    return;
-  }
-
-  if(phase === 'BOTTOM'){
-    if(stable('sq_up',knee > 120,2)){
-      phase = 'UP';
-      setStatus('🔵 Subiendo…','info');
-    }
-    return;
-  }
-
-  if(phase === 'UP' && stable('sq_finish',top,3)){
-    phase = 'TOP';
-    validRep();
-  }
+  followCycle({home:top,away:bottom,depart:knee < 145,side,reason:'faltó profundidad'});
 }
 
 /* JUEZ PULL-UPS */
@@ -1164,139 +1282,51 @@ function judgeSquat(pose){
 function judgePullup(pose){
   const side = lockedSide || bestArmSide(pose);
   const p = sidePoints(pose,side);
-  const missing = [];
-
-  if(!p.shoulder) missing.push('hombro');
-  if(!p.elbow) missing.push('codo');
-  if(!p.wrist) missing.push('mano');
-  if(!p.nose) missing.push('cara');
-
-  if(missing.length){
-    missingWarning(missing);
+  if(!p.shoulder || !p.elbow || !p.wrist || !p.nose){
+    pullSample = null;
+    missingWarning(['hombro, codo, mano y cara visibles']);
     return;
   }
-
   markVisible();
-
-  const elbow = filtered(
-    'pu_elbow',
-    angle(p.shoulder,p.elbow,p.wrist)
-  );
+  const elbow = filtered('pu_elbow',angle(p.shoulder,p.elbow,p.wrist));
   if(elbow == null) return;
-
-  const ls = point(pose,IDX.leftShoulder);
-  const rs = point(pose,IDX.rightShoulder);
-
-  const shoulderWidth = Math.max(
-    1,
-    ls && rs
-      ? distance(ls,rs)
-      : Math.max(60,distance(p.shoulder,p.elbow) || 80)
-  );
-
-  // MoveNet no detecta la barbilla directamente.
-  // Se mantiene la estimación de la versión anterior.
-  const chinY = p.nose.y+shoulderWidth*0.18;
-  const lw = point(pose,IDX.leftWrist);
-  const rw = point(pose,IDX.rightWrist);
-  const barY = lw && rw ? (lw.y+rw.y)/2 : p.wrist.y;
-  const chinClearance = (barY-chinY)/shoulderWidth;
-  const chinAboveBar = chinClearance >= -0.08;
-
-  const conf = confidenceOf(
-    p.shoulder,p.elbow,p.wrist,p.nose
-  );
-
-  updateMetrics(conf,elbow,chinClearance*100,'Barbilla','%');
-  trackMinAngle(elbow);
-
+  const forearm = distance(p.elbow,p.wrist);
+  if(!forearm || forearm < 15){
+    pullSample = null;
+    loseAttempt();
+    setStatus('🟡 Acerca o ajusta la cámara: el antebrazo se ve demasiado corto.','warn');
+    return;
+  }
+  // Compare face and wrist on the SAME side, avoiding sloping-bar averaging.
+  // MoveNet has no chin landmark: this remains a calibrated approximation.
+  const faceHeight = (p.wrist.y-p.nose.y)/forearm;
+  const target = pullReference ?? 0.25;
+  const clearance = faceHeight-target;
+  pullSample = {at:performance.now(),faceHeight,elbow};
   const bottom = elbow >= 160;
-  const top = elbow <= 120 && chinAboveBar;
-
-  const armProgress = clamp((165-elbow)/(165-115)*100,0,100);
-  const chinProgress = clamp((chinClearance+0.30)/0.22*100,0,100);
-  const progress = Math.min(armProgress,chinProgress);
-
-  if(phase !== 'WAITING'){
-    setProgress(progress,phaseLabel());
-  }
-
-  if(phase === 'WAITING'){
-    resetAttemptMetrics();
-    trackMinAngle(elbow);
-
-    if(stable('pu_ready',bottom,3)){
-      phase = 'BOTTOM';
-      startAttempt(side);
-      setStatus('🟢 Extensión completa. Puedes subir.','ok');
-    }else{
-      setStatus(
-        '🟡 Estira completamente los codos para iniciar.',
-        'warn'
-      );
-    }
-    return;
-  }
-
-  if(phase === 'BOTTOM'){
-    if(stable('pu_leave',elbow < 150,2)){
-      if(!lockedSide) startAttempt(side);
-      phase = 'UP';
-      setStatus('🔵 Subiendo…','info');
-    }
-    return;
-  }
-
-  if(phase === 'UP'){
-    if(stable('pu_top',top,2)){
-      phase = 'TOP';
-      setProgress(100,'Altura OK');
-      setStatus(
-        '🟢 Altura válida. Baja hasta extensión completa.',
-        'ok'
-      );
-      return;
-    }
-
-    if(elbow <= 125 && !chinAboveBar){
-      setStatus(
-        '🟡 Sube un poco más: barbilla sobre la altura de las manos.',
-        'warn'
-      );
-    }
-
-    if(stable('pu_abort',elbow >= 158,3)){
-      phase = 'BOTTOM';
-      noRep('la barbilla no alcanzó la altura requerida');
-    }
-    return;
-  }
-
-  if(phase === 'TOP'){
-    if(stable('pu_down',elbow > 130,2)){
-      phase = 'DOWN';
-      setStatus('🔵 Bajando…','info');
-    }
-    return;
-  }
-
-  if(phase === 'DOWN'){
-    if(stable('pu_finish',bottom,3)){
-      phase = 'BOTTOM';
-      validRep();
-      return;
-    }
-
-    if(elbow > 150){
-      setStatus(
-        '🟡 Completa el descenso hasta extender totalmente los codos.',
-        'warn'
-      );
-    }
+  const top = elbow <= 125 && clearance >= -0.04;
+  updateMetrics(confidenceOf(p.shoulder,p.elbow,p.wrist,p.nose),elbow,clearance*100,
+    pullReference == null ? 'Altura estimada' : 'Altura calibrada','%');
+  trackMinAngle(elbow);
+  setProgress(clamp((165-elbow)/65*100,0,100),phaseLabel());
+  followCycle({home:bottom,away:top,depart:elbow < 150,side,pull:true,
+    reason:'no se observó la altura válida antes de volver a extensión'});
+  if(cycle?.active && !cycle.hit && elbow <= 125){
+    setStatus('🟡 Falta altura. Si tu barbilla ya supera la barra, calibra la altura con ayuda.','warn');
   }
 }
 
 function judge(pose){
+  if(circuit && circuit.state!=='active'){
+    if(exerciseSelect.value==='pullup' && ['ready','paused'].includes(circuit.state)){
+      const side=bestArmSide(pose),p=sidePoints(pose,side);
+      const length=distance(p.elbow,p.wrist);
+      pullSample=p.shoulder&&p.elbow&&p.wrist&&p.nose&&length>=15
+        ? {at:performance.now(),faceHeight:(p.wrist.y-p.nose.y)/length,elbow:angle(p.shoulder,p.elbow,p.wrist)} : null;
+    }
+    setStatus(circuitMessage(circuitView()),circuit.state==='complete'?'ok':'info');
+    return;
+  }
   switch(exerciseSelect.value){
     case 'pushup': return judgePushup(pose);
     case 'dip': return judgeDip(pose);
@@ -1501,7 +1531,7 @@ async function start(){
       poseDetection.createDetector(
         poseDetection.SupportedModels.MoveNet,
         {
-          modelType:poseDetection.movenet.modelType.SINGLEPOSE_THUNDER,
+          modelType:poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
           enableSmoothing:true
         }
       ),
@@ -1509,10 +1539,11 @@ async function start(){
       'La descarga del detector tardó demasiado. Revisa internet y pulsa Reintentar.',
       model=>model.dispose()
     );
-    mDetector.textContent = 'MoveNet Thunder';
+    mDetector.textContent = 'MoveNet Lightning';
     running = true;
-    resetJudge();
-    setStatus('Cámara lista. Adopta la posición inicial.','info');
+    invalidatePose();
+    renderPhoneCircuit();
+    setStatus(circuit ? circuitMessage(circuitView()) : 'Cámara lista. Adopta la posición inicial.','info');
     startBtn.textContent = 'Cámara activa';
     requestAnimationFrame(loop);
   }catch(error){
@@ -1546,8 +1577,11 @@ async function loop(ts){
     return;
   }
 
+  if(video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
   lastFrameAt = ts;
   busy = true;
+  const frameEpoch = poseEpoch;
 
   try{
     const poses = await detector.estimatePoses(video,{
@@ -1555,7 +1589,13 @@ async function loop(ts){
       flipHorizontal:false
     });
 
-    if(document.hidden) return;
+    if(document.hidden || frameEpoch!==poseEpoch) return;
+    const judgedAt = performance.now();
+    if(lastJudgedAt && judgedAt-lastJudgedAt > 350) loseAttempt();
+    lastJudgedAt = judgedAt;
+    fpsTimes.push(judgedAt);
+    fpsTimes = fpsTimes.filter(t=>judgedAt-t < 1000);
+    $('mFps').textContent = String(fpsTimes.length);
 
     if(poses.length){
       drawPose(poses[0]);
@@ -1611,6 +1651,7 @@ function disconnect(){
 function linkMessage(text){
   if(mode === 'camera'){
     $('linkState').textContent = text;
+    $('linkState').title = text;
   }else{
     $('scoreConnection').textContent = text;
   }
@@ -1618,14 +1659,15 @@ function linkMessage(text){
 
 function snapshot(){
   return {
-    version:1,
+    version:2,
     kind:'state',
+    circuit:circuitView(),
     session,
     reps,
     exercise:exerciseSelect.selectedOptions[0].textContent,
     status:document.hidden
       ? 'Cámara en pausa: vuelve al teléfono.'
-      : statusEl.textContent,
+      : circuit && circuit.state!=='active' ? circuitMessage(circuitView()) : statusEl.textContent,
     warning:document.hidden || statusEl.classList.contains('warn'),
     event:latestEvent,
     active:running && !document.hidden
@@ -1645,7 +1687,8 @@ function broadcast(){
 function showState(s){
   if(
     !s ||
-    s.version !== 1 ||
+    s.version !== 2 ||
+    !validRemoteCircuit(s.circuit) ||
     s.kind !== 'state' ||
     s.session !== session ||
     !Number.isSafeInteger(s.reps) ||
@@ -1665,6 +1708,7 @@ function showState(s){
     ? 'Conectado · '+session
     : 'Conectado · cámara en pausa';
 
+  renderScoreCircuit(s.circuit);
   const e = s.event;
 
   if(!e){
@@ -1716,7 +1760,7 @@ function connect(role,code){
   linkMessage('Conectando…');
 
   peer = role === 'camera'
-    ? new Peer('calistenia-v4-'+code)
+    ? new Peer('calistenia-v5-'+code)
     : new Peer();
 
   pairingTimer = setTimeout(()=>{
@@ -1748,14 +1792,15 @@ function connect(role,code){
     });
 
     c.on('data',s=>{
-      if(ticket === generation && role === 'score'){
-        showState(s);
-      }
+      if(ticket !== generation || connection!==c) return;
+      if(role === 'score') showState(s);
+      else receiveCircuitCommand(s);
     });
 
     c.on('close',()=>{
       if(ticket !== generation || connection !== c) return;
       connection = null;
+      $('scoreAction').disabled=true;$('scorePause').disabled=true;
       linkMessage('Desconectado. Conservamos el último conteo.');
     });
 
@@ -1773,7 +1818,7 @@ function connect(role,code){
       $('sessionCode').textContent = code;
       linkMessage('Código para tu tablet:');
     }else{
-      attach(peer.connect('calistenia-v4-'+code,{reliable:true}));
+      attach(peer.connect('calistenia-v5-'+code,{reliable:true}));
     }
   });
 
@@ -1803,8 +1848,44 @@ function connect(role,code){
 }
 
 /* BOTONES */
+$('toggleTools').onclick=()=>{
+  const opened=document.body.classList.toggle('tools-open');
+  $('toggleTools').setAttribute('aria-expanded',String(opened));
+  $('toggleTools').textContent=opened?'Cerrar ajustes':'Ajustes y conexión';
+};
+document.querySelectorAll('input[name="workoutMode"]').forEach(input=>input.onchange=()=>{
+  $('circuitBuilder').hidden=input.value!=='circuit';
+});
+$('addStage').onclick=()=>{if(circuitDraft.length<8){circuitDraft.push({exercise:'squat',target:20});renderBuilder();}};
+$('roundsInput').oninput=updateBuilderTotal;
+$('phoneAction').onclick=()=>circuitControl(circuit?.state==='transition'?'advance':'start');
+$('phonePause').onclick=()=>circuitControl('pause');
+$('scoreAction').onclick=()=>sendCircuitCommand(remoteCircuit?.state==='transition'?'advance':'start');
+$('scorePause').onclick=()=>sendCircuitCommand('pause');
+
+$('calibratePull').onclick = ()=>{
+  if(circuit?.state==='active'){setStatus('Pausa la estación antes de calibrar la altura.','warn');return;}
+  if(!pullSample || performance.now()-pullSample.at > 500 || pullSample.elbow > 125){
+    setStatus('🟡 Con ayuda, mantén la barbilla justo sobre la barra y pulsa Calibrar altura.','warn');
+    return;
+  }
+  if(pullSample.faceHeight < 0 || pullSample.faceHeight > 0.9){
+    setStatus('🟡 No se ve una referencia fiable. Ajusta la cámara para ver cara, mano y codo.','warn');
+    return;
+  }
+  pullReference = pullSample.faceHeight;
+  loseAttempt();
+  $('calibratePull').textContent = 'Altura calibrada · recalibrar';
+  setStatus('🟢 Referencia guardada. Baja a extensión completa para iniciar. Recalibra si cambias atleta o cámara.','ok');
+};
+
 
 $('chooseCamera').onclick = ()=>{
+  const isCircuit=document.querySelector('input[name="workoutMode"]:checked').value==='circuit';
+  if(isCircuit && !createCircuit(circuitDraft,Number($('roundsInput').value))){
+    $('setupMessage').textContent='Revisa las metas: 1–500 reps por ejercicio y 1–20 rondas.';return;
+  }
+  if(!isCircuit){circuit=null;resetJudge();}
   mode = 'camera';
   document.body.dataset.mode = 'camera';
   $('stationSetup').hidden = true;
@@ -1845,12 +1926,15 @@ $('reconnectScore').onclick = ()=>{
 };
 
 $('resetCount').onclick = ()=>{
-  if(confirm('¿Reiniciar el contador a cero?')){
-    resetJudge();
+  if(confirm(circuit?'¿Reiniciar TODO el circuito? Se borrarán las reps y las rondas de esta tanda.':'¿Reiniciar el contador a cero?')){
+    if(circuit) createCircuit(circuit.plan,circuit.rounds);
+    else resetJudge();
+    broadcast();
   }
 };
 
 function exitStation(){
+  if(mode==='camera' && circuit && !confirm('¿Salir del circuito? Se perderá el progreso de esta tanda.')) return;
   disconnect();
   running = false;
 
@@ -1884,13 +1968,14 @@ startBtn.addEventListener('click',()=>{
   if(!running) start();
 });
 
-exerciseSelect.addEventListener('change',resetJudge);
+exerciseSelect.addEventListener('change',()=>{if(!circuit) resetJudge();});
 
 window.addEventListener('resize',resizeCanvas);
 
 document.addEventListener('visibilitychange',()=>{
   if(mode === 'camera'){
-    loseAttempt();
+    invalidatePose();
+    if(document.hidden && circuit?.state==='active') circuitControl('pause');
 
     if(!document.hidden){
       setStatus('Retoma la posición inicial.','warn');
@@ -1916,6 +2001,7 @@ setInterval(()=>{
     clearTimeout(flashTimer);
     flashTimer = null;
 
+    $('scoreAction').disabled=true;$('scorePause').disabled=true;
     $('scoreboard').dataset.signal = 'warning';
     $('scoreConnection').textContent =
       'Sin señal · último conteo recibido';
@@ -1924,8 +2010,11 @@ setInterval(()=>{
   }
 },500);
 
+renderBuilder();
 resetJudge();
 </script>
 </body>
 </html>
+
+
 
