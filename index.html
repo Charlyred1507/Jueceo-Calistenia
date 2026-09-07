@@ -1,42 +1,221 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
-<meta name="theme-color" content="#070a0f" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070a0f">
 <title>Jueceo Calistenia AI</title>
+
 <style>
 :root{
-  --bg:#070a0f;--panel:rgba(7,10,15,.80);--line:rgba(255,255,255,.12);
-  --text:#f6f7f9;--muted:#aeb7c4;--green:#46f59a;--red:#ff6577;
-  --yellow:#ffd166;--blue:#62a8ff
+  --bg:#070a0f;
+  --panel:rgba(7,10,15,.88);
+  --line:rgba(255,255,255,.12);
+  --text:#f6f7f9;
+  --muted:#aeb7c4;
+  --green:#46f59a;
+  --red:#ff6577;
+  --yellow:#ffd166;
+  --blue:#62a8ff;
 }
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}
-button,select{font:inherit}
-#app{position:relative;width:100vw;height:100dvh;min-height:100svh;background:#0b0f16;overflow:hidden}
-#video,#overlay{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+*{
+  box-sizing:border-box;
+  -webkit-tap-highlight-color:transparent;
+}
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  background:var(--bg);
+  color:var(--text);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  overflow:hidden;
+}
+button,select,input{font:inherit}
+button{cursor:pointer}
+[hidden]{display:none!important}
+body:not([data-mode="camera"]) #app{display:none}
+
+#app{
+  position:relative;
+  width:100%;
+  height:100dvh;
+  min-height:100svh;
+  background:#0b0f16;
+  overflow:hidden;
+}
+#video,#overlay{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
 #video{z-index:1;background:#111}
 #overlay{z-index:2;pointer-events:none}
-.panel{position:absolute;z-index:5;background:var(--panel);border:1px solid var(--line);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 8px 30px rgba(0,0,0,.28)}
-#topBar{top:max(8px,env(safe-area-inset-top));left:8px;right:8px;border-radius:16px;padding:8px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
-#controls{display:flex;min-width:0;gap:8px;align-items:center}
-#exerciseSelect,#startBtn{min-height:42px;border:0;border-radius:11px;padding:8px 11px;color:#fff}
-#exerciseSelect{min-width:0;max-width:190px;flex:1;background:#1a2230;font-size:clamp(13px,3.4vw,15px)}
-#startBtn{background:#158957;font-weight:800;white-space:nowrap;font-size:clamp(12px,3.2vw,14px)}
+.panel{
+  position:absolute;
+  z-index:5;
+  background:var(--panel);
+  border:1px solid var(--line);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  box-shadow:0 8px 30px rgba(0,0,0,.28);
+}
+#topBar{
+  top:max(8px,env(safe-area-inset-top));
+  left:8px;
+  right:8px;
+  border-radius:16px;
+  padding:8px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+  align-items:center;
+}
+#controls{
+  display:flex;
+  min-width:0;
+  gap:6px;
+  align-items:center;
+}
+#exerciseSelect,#startBtn{
+  min-height:42px;
+  border:0;
+  border-radius:11px;
+  padding:8px;
+  color:#fff;
+  font-size:14px;
+}
+#exerciseSelect{
+  min-width:0;
+  max-width:190px;
+  flex:1;
+  background:#1a2230;
+}
+#startBtn{
+  background:#158957;
+  font-weight:800;
+}
 #startBtn:disabled{opacity:.55}
-#counter{min-width:84px;padding:6px 10px;border-radius:12px;text-align:center;background:rgba(0,0,0,.42)}
-#counter .num{display:block;font-size:clamp(25px,7vw,34px);line-height:.95;font-weight:900}
-#counter .label{display:block;margin-top:3px;font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase}
-#metrics{left:8px;top:calc(max(8px,env(safe-area-inset-top)) + 70px);border-radius:14px;padding:8px 10px;max-width:min(54vw,240px);font-size:clamp(10px,2.7vw,12px);line-height:1.45}
-.metricRow{display:flex;gap:8px;justify-content:space-between}.metricRow span:first-child{color:var(--muted)}
-#guide{right:8px;top:calc(max(8px,env(safe-area-inset-top)) + 70px);border-radius:14px;padding:8px 10px;max-width:min(42vw,210px);font-size:clamp(10px,2.7vw,12px);line-height:1.35}
-#progressCard{left:8px;right:8px;bottom:calc(max(8px,env(safe-area-inset-bottom)) + 57px);border-radius:14px;padding:8px 10px}
-#progressText{display:flex;justify-content:space-between;gap:8px;font-size:11px;font-weight:800;margin-bottom:6px}
+#counter{
+  min-width:64px;
+  padding:6px 8px;
+  border-radius:12px;
+  text-align:center;
+  background:rgba(0,0,0,.42);
+}
+#counter .num{
+  display:block;
+  font-size:32px;
+  line-height:1;
+  font-weight:900;
+}
+#counter .label{
+  display:block;
+  margin-top:3px;
+  font-size:12px;
+  color:var(--muted);
+}
+#metrics{
+  left:8px;
+  top:calc(max(8px,env(safe-area-inset-top)) + 76px);
+  border-radius:14px;
+  padding:8px 10px;
+  width:min(48vw,220px);
+  font-size:12px;
+  line-height:1.4;
+}
+.metricRow{
+  display:flex;
+  gap:8px;
+  justify-content:space-between;
+}
+.metricRow span:first-child{color:var(--muted)}
+#guide{
+  right:8px;
+  top:calc(max(8px,env(safe-area-inset-top)) + 76px);
+  border-radius:14px;
+  padding:8px 10px;
+  max-width:min(44vw,210px);
+  font-size:12px;
+  line-height:1.4;
+}
+#cameraTools{
+  position:absolute;
+  z-index:8;
+  top:calc(max(8px,env(safe-area-inset-top)) + 190px);
+  left:8px;
+  right:8px;
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  align-items:center;
+  background:#070a0fee;
+  padding:8px;
+  border-radius:12px;
+  font-size:13px;
+}
+#cameraTools button{
+  font-size:13px;
+  padding:7px 9px;
+}
+#linkState{
+  flex:1;
+  min-width:120px;
+  color:var(--yellow);
+}
+#sessionCode{
+  font-weight:900;
+  letter-spacing:2px;
+  color:#fff;
+  font-size:17px;
+}
+#progressCard{
+  left:8px;
+  right:8px;
+  bottom:calc(max(8px,env(safe-area-inset-bottom)) + 86px);
+  border-radius:14px;
+  padding:8px 10px;
+}
+#progressText{
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  font-size:12px;
+  font-weight:800;
+  margin-bottom:6px;
+}
 #progressText span:last-child{color:var(--muted)}
-#progressTrack{height:8px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden}
-#progressFill{height:100%;width:0%;border-radius:999px;background:linear-gradient(90deg,var(--blue),var(--green));transition:width .08s linear}
-#status{left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));border-radius:16px;padding:10px 12px;text-align:center;font-size:clamp(13px,3.5vw,16px);font-weight:800;line-height:1.25;min-height:43px;display:flex;align-items:center;justify-content:center}
+#progressTrack{
+  height:8px;
+  border-radius:999px;
+  background:rgba(255,255,255,.12);
+  overflow:hidden;
+}
+#progressFill{
+  height:100%;
+  width:0%;
+  border-radius:999px;
+  background:linear-gradient(90deg,var(--blue),var(--green));
+  transition:width .08s linear;
+}
+#status{
+  left:8px;
+  right:8px;
+  bottom:max(8px,env(safe-area-inset-bottom));
+  border-radius:16px;
+  padding:10px 12px;
+  text-align:center;
+  font-size:14px;
+  font-weight:800;
+  line-height:1.3;
+  height:76px;
+  overflow:auto;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
 .ok{color:var(--green)!important}
 .bad{color:var(--red)!important}
 .warn{color:var(--yellow)!important}
@@ -44,998 +223,542 @@ button,select{font:inherit}
 .pulse{animation:pulse .35s ease}
 @keyframes pulse{50%{transform:scale(1.04)}}
 
-@media(max-width:430px){
-  #topBar{grid-template-columns:1fr auto}
-  #controls{gap:6px}
-  #exerciseSelect,#startBtn{min-height:39px;padding:7px 8px}
-  #counter{min-width:72px;padding:5px 8px}
-  #metrics,#guide{top:calc(max(8px,env(safe-area-inset-top)) + 64px)}
+#stationSetup,#scoreboard{
+  position:fixed;
+  inset:0;
+  z-index:20;
+  background:var(--bg);
+  overflow:auto;
+  padding:max(20px,env(safe-area-inset-top))
+          20px
+          max(20px,env(safe-area-inset-bottom));
 }
+.stationBox{
+  max-width:540px;
+  margin:5vh auto;
+  line-height:1.5;
+}
+.stationBox h1{font-size:28px;line-height:1.15}
+.stationBox p{color:var(--muted)}
+.stationBox button,
+.stationBox input,
+#cameraTools button,
+#scoreboard button{
+  border-radius:12px;
+  border:1px solid #394353;
+  background:#1a2230;
+  color:white;
+  min-height:44px;
+}
+.stationBox button{
+  width:100%;
+  padding:12px;
+  margin:8px 0;
+  font-weight:700;
+}
+.stationBox .primary{background:#158957}
+.stationBox label{display:block;margin-top:20px}
+.stationBox input{
+  width:100%;
+  padding:12px;
+  font-size:22px;
+  text-transform:uppercase;
+  letter-spacing:2px;
+}
+#setupMessage{color:var(--yellow);min-height:24px}
+#scoreboard{
+  display:flex;
+  flex-direction:column;
+  text-align:center;
+  justify-content:space-between;
+  transition:background-color .12s;
+}
+#scoreboard[data-signal="valid"]{background:#063d27}
+#scoreboard[data-signal="invalid"]{background:#4c1220}
+#scoreboard[data-signal="warning"]{background:#382b0c}
+#scoreExercise{
+  font-size:clamp(22px,5vw,42px);
+  margin:10px;
+}
+#scoreCount{
+  font-size:clamp(110px,30vmin,280px);
+  font-weight:900;
+  line-height:1.1;
+  font-variant-numeric:tabular-nums;
+}
+#scoreMessage{
+  font-size:clamp(20px,4vw,36px);
+  overflow-wrap:anywhere;
+  min-height:3em;
+}
+#scoreConnection{font-size:16px;color:var(--yellow)}
+#scoreboard footer{
+  display:flex;
+  gap:12px;
+  justify-content:center;
+  flex-wrap:wrap;
+}
+#scoreboard button{padding:12px}
 
 @media(max-height:650px){
   #guide{display:none}
-  #metrics{font-size:10px}
-  #status{font-size:12px;padding:8px}
-  #progressCard{bottom:52px}
+  #metrics{font-size:12px}
+  #cameraTools{
+    top:calc(max(8px,env(safe-area-inset-top)) + 185px);
+  }
+  #scoreCount{font-size:26vmin}
+}
+@media(max-height:450px){
+  #metrics,#guide{display:none}
+  #cameraTools{
+    top:calc(max(8px,env(safe-area-inset-top)) + 76px);
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  #scoreboard{transition:none}
+  .pulse{animation:none}
 }
 </style>
 </head>
 
 <body>
-
 <div id="app">
-
   <video id="video" playsinline autoplay muted></video>
   <canvas id="overlay"></canvas>
 
   <div id="topBar" class="panel">
-
     <div id="controls">
-
-      <select id="exerciseSelect">
+      <select id="exerciseSelect" aria-label="Ejercicio">
         <option value="pushup">Push-ups</option>
         <option value="dip">Fondos</option>
         <option value="pullup">Pull-ups</option>
         <option value="squat">Squats</option>
       </select>
-
       <button id="startBtn">Activar cámara</button>
-
     </div>
-
     <div id="counter">
       <span class="num" id="repNum">0</span>
       <span class="label">reps</span>
     </div>
-
   </div>
 
-
   <div id="metrics" class="panel">
-
     <div class="metricRow">
-      <span>Detector</span>
-      <b id="mDetector">—</b>
+      <span>Detector</span><b id="mDetector">—</b>
     </div>
-
     <div class="metricRow">
-      <span>Confianza</span>
-      <b id="mConfidence">—</b>
+      <span>Confianza</span><b id="mConfidence">—</b>
     </div>
-
     <div class="metricRow">
-      <span>Ángulo</span>
-      <b id="mAngle">—</b>
+      <span>Ángulo</span><b id="mAngle">—</b>
     </div>
-
     <div class="metricRow">
-      <span>Mínimo</span>
-      <b id="mMinAngle">—</b>
+      <span>Mínimo</span><b id="mMinAngle">—</b>
     </div>
-
     <div class="metricRow">
       <span id="mAuxLabel">Alineación</span>
       <b id="mAlign">—</b>
     </div>
-
   </div>
-
 
   <div id="guide" class="panel">
-    Coloca el teléfono de lado y procura mostrar el cuerpo completo.
+    Coloca el teléfono de lado y muestra el cuerpo completo.
   </div>
 
+  <div id="cameraTools" hidden>
+    <span id="linkState">Sin marcador</span>
+    <b id="sessionCode"></b>
+    <button id="pairCamera">Conectar tablet</button>
+    <button id="resetCount">Reiniciar</button>
+    <button id="exitCamera">Salir</button>
+  </div>
 
   <div id="progressCard" class="panel">
-
     <div id="progressText">
       <span id="mProgress">Recorrido 0%</span>
       <span id="mPhase">Esperando</span>
     </div>
-
     <div id="progressTrack">
       <div id="progressFill"></div>
     </div>
-
   </div>
 
-
-  <div id="status" class="panel warn">
+  <div id="status" class="panel warn" role="status">
     Selecciona un ejercicio y activa la cámara.
   </div>
-
 </div>
 
+<section id="stationSetup">
+  <div class="stationBox">
+    <p>JUECEO CALISTENIA · ESTACIÓN V4</p>
+    <h1>Conecta tu estación</h1>
+    <p>
+      Usa el teléfono como cámara y la tablet como marcador.
+      Mantén ambas páginas abiertas y con internet.
+    </p>
+
+    <button id="chooseCamera" class="primary">
+      Este dispositivo es la cámara
+    </button>
+
+    <label for="joinCode">
+      En la tablet, escribe el código del teléfono
+    </label>
+    <input
+      id="joinCode"
+      maxlength="8"
+      autocomplete="off"
+      autocapitalize="characters"
+      spellcheck="false"
+      placeholder="Código de 8 caracteres"
+    >
+    <button id="chooseScore">Conectar marcador</button>
+    <p id="setupMessage" role="status"></p>
+
+    <p>
+      Se comparten el contador y los avisos; el video permanece
+      en el teléfono. No cierres ni bloquees la cámara durante
+      la tanda.
+    </p>
+  </div>
+</section>
+
+<section id="scoreboard" hidden aria-label="Marcador de repeticiones">
+  <header>
+    <div id="scoreConnection" role="status">Conectando…</div>
+    <h1 id="scoreExercise">Push-ups</h1>
+  </header>
+  <main>
+    <div id="scoreCount">0</div>
+    <div>REPETICIONES</div>
+    <p id="scoreMessage" aria-live="polite">Esperando cámara…</p>
+  </main>
+  <footer>
+    <button id="fullScreen">Pantalla completa</button>
+    <button id="reconnectScore">Reconectar</button>
+    <button id="exitScore">Salir</button>
+  </footer>
+</section>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
-
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js"></script>
-
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
 
 <script>
+const $ = id => document.getElementById(id);
 
-const video=document.getElementById('video');
+const video = $('video');
+const canvas = $('overlay');
+const ctx = canvas.getContext('2d');
+const startBtn = $('startBtn');
+const exerciseSelect = $('exerciseSelect');
+const repNum = $('repNum');
+const statusEl = $('status');
+const guideEl = $('guide');
+const mDetector = $('mDetector');
+const mConfidence = $('mConfidence');
+const mAngle = $('mAngle');
+const mMinAngle = $('mMinAngle');
+const mAlign = $('mAlign');
+const mAuxLabel = $('mAuxLabel');
+const mProgress = $('mProgress');
+const mPhase = $('mPhase');
+const progressFill = $('progressFill');
 
-const canvas=document.getElementById('overlay');
+/* CONFIGURACIÓN DEL DETECTOR */
 
-const ctx=canvas.getContext('2d');
+const CONF = 0.28;
+const DRAW_CONF = 0.20;
+const KEYPOINT_HOLD_MS = 300;
+const MAX_HISTORY = 5;
+const TARGET_FPS_MS = 38;
+const MISSING_FRAMES_BEFORE_WARNING = 5;
 
-const startBtn=document.getElementById('startBtn');
+let detector = null;
+let stream = null;
+let running = false;
+let busy = false;
+let lastFrameAt = 0;
 
-const exerciseSelect=document.getElementById('exerciseSelect');
+let reps = 0;
+let phase = 'WAITING';
+let lockedSide = null;
 
-const repNum=document.getElementById('repNum');
+let histories = {};
+let keypointMemory = {};
+let stableCounters = {};
 
-const statusEl=document.getElementById('status');
+let missingPoseFrames = 0;
+let noRepCooldown = 0;
+let attemptMinAngle = null;
+let attemptMaxProgress = 0;
 
-const guideEl=document.getElementById('guide');
+/* CONEXIÓN Y MARCADOR */
 
-const mDetector=document.getElementById('mDetector');
+const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+let mode = '';
+let peer = null;
+let connection = null;
+let generation = 0;
+let lastReceived = 0;
+let lastEvent = 0;
+let eventId = 0;
+let latestEvent = null;
+let session = '';
+let wakeLock = null;
+let pairingTimer = null;
+let flashTimer = null;
 
-const mConfidence=document.getElementById('mConfidence');
-
-const mAngle=document.getElementById('mAngle');
-
-const mMinAngle=document.getElementById('mMinAngle');
-
-const mAlign=document.getElementById('mAlign');
-
-const mAuxLabel=document.getElementById('mAuxLabel');
-
-const mProgress=document.getElementById('mProgress');
-
-const mPhase=document.getElementById('mPhase');
-
-const progressFill=document.getElementById('progressFill');
-
-
-/* =========================================
-   CONFIGURACIÓN
-========================================= */
-
-const CONF=0.28;
-
-const DRAW_CONF=0.20;
-
-const KEYPOINT_HOLD_MS=300;
-
-const MAX_HISTORY=5;
-
-const TARGET_FPS_MS=38;
-
-const MISSING_FRAMES_BEFORE_WARNING=5;
-
-
-
-let detector=null;
-
-let stream=null;
-
-let running=false;
-
-let busy=false;
-
-let lastFrameAt=0;
-
-
-let reps=0;
-
-let phase='WAITING';
-
-let lockedSide=null;
-
-
-let histories={};
-
-let keypointMemory={};
-
-let stableCounters={};
-
-
-let missingPoseFrames=0;
-
-let noRepCooldown=0;
-
-
-let attemptMinAngle=null;
-
-let attemptMaxProgress=0;
-
-
-
-/* =========================================
-   ÍNDICES MOVENET
-========================================= */
-
-const IDX={
-
+const IDX = {
   nose:0,
-
   leftEye:1,
-
   rightEye:2,
-
   leftEar:3,
-
   rightEar:4,
-
   leftShoulder:5,
-
   rightShoulder:6,
-
   leftElbow:7,
-
   rightElbow:8,
-
   leftWrist:9,
-
   rightWrist:10,
-
   leftHip:11,
-
   rightHip:12,
-
   leftKnee:13,
-
   rightKnee:14,
-
   leftAnkle:15,
-
   rightAnkle:16
-
 };
 
-
-
-const EXERCISES={
-
+const EXERCISES = {
   pushup:{
     name:'Push-up',
     guide:'Vista lateral · cuerpo completo · manos y pies visibles.'
   },
-
   dip:{
     name:'Fondo',
     guide:'Vista lateral · hombro, codo y muñeca claramente visibles.'
   },
-
   pullup:{
     name:'Pull-up',
     guide:'Cuerpo completo · brazos, manos y cara visibles durante todo el recorrido.'
   },
-
   squat:{
     name:'Squat',
-    guide:'Vista lateral · cadera, rodilla y tobillo visibles. Cámara cerca de la altura de la cadera.'
+    guide:'Vista lateral · cadera, rodilla y tobillo visibles. Cámara a la altura de la cadera.'
   }
-
 };
 
-
-
-/* =========================================
-   UTILIDADES
-========================================= */
+/* UTILIDADES */
 
 function clamp(v,min,max){
-
-  return Math.max(
-    min,
-    Math.min(
-      max,
-      v
-    )
-  );
-
+  return Math.max(min,Math.min(max,v));
 }
-
 
 function distance(a,b){
-
-  return (!a||!b)
-    ?null
-    :Math.hypot(
-      a.x-b.x,
-      a.y-b.y
-    );
-
+  return (!a || !b) ? null : Math.hypot(a.x-b.x,a.y-b.y);
 }
 
-
-function setStatus(
-  text,
-  type='info'
-){
-
-  statusEl.className=
-    `panel ${type}`;
-
-  statusEl.textContent=
-    text;
-
+function setStatus(text,type='info'){
+  statusEl.className = `panel ${type}`;
+  statusEl.textContent = text;
 }
-
 
 function flashCounter(){
-
-  const box=
-    document.getElementById(
-      'counter'
-    );
-
-  box.classList.remove(
-    'pulse'
-  );
-
+  const box = $('counter');
+  box.classList.remove('pulse');
   void box.offsetWidth;
-
-  box.classList.add(
-    'pulse'
-  );
-
+  box.classList.add('pulse');
 }
-
-
-function setProgress(
-  value,
-  label
-){
-
-  const v=
-    clamp(
-      Math.round(
-        value||0
-      ),
-      0,
-      100
-    );
-
-  attemptMaxProgress=
-    Math.max(
-      attemptMaxProgress,
-      v
-    );
-
-  mProgress.textContent=
-    `Recorrido ${v}%`;
-
-  progressFill.style.width=
-    `${v}%`;
-
-  mPhase.textContent=
-    label||
-    phaseLabel();
-
-}
-
 
 function phaseLabel(){
-
-  return({
-
+  return {
     WAITING:'Esperando',
-
     TOP:'Arriba',
-
     DOWN:'Bajando',
-
     BOTTOM:'Abajo',
-
     UP:'Subiendo'
-
-  })[phase]||phase;
-
+  }[phase] || phase;
 }
 
+function setProgress(value,label){
+  const v = clamp(Math.round(value || 0),0,100);
+  attemptMaxProgress = Math.max(attemptMaxProgress,v);
+  mProgress.textContent = `Recorrido ${v}%`;
+  progressFill.style.width = `${v}%`;
+  mPhase.textContent = label || phaseLabel();
+}
 
 function resetAttemptMetrics(){
-
-  attemptMinAngle=null;
-
-  attemptMaxProgress=0;
-
-  mMinAngle.textContent='—';
-
-  setProgress(
-    0,
-    phaseLabel()
-  );
-
+  attemptMinAngle = null;
+  attemptMaxProgress = 0;
+  mMinAngle.textContent = '—';
+  setProgress(0,phaseLabel());
 }
-
 
 function startAttempt(side){
-
-  lockedSide=side;
-
+  lockedSide = side;
   resetAttemptMetrics();
-
 }
-
 
 function trackMinAngle(v){
-
-  if(v==null)
-    return;
-
-  attemptMinAngle=
-    attemptMinAngle==null
-    ?v
-    :Math.min(
-      attemptMinAngle,
-      v
-    );
-
-  mMinAngle.textContent=
-    `${Math.round(
-      attemptMinAngle
-    )}°`;
-
+  if(v == null) return;
+  attemptMinAngle = attemptMinAngle == null
+    ? v
+    : Math.min(attemptMinAngle,v);
+  mMinAngle.textContent = `${Math.round(attemptMinAngle)}°`;
 }
 
+function clearStable(prefix=''){
+  Object.keys(stableCounters).forEach(k=>{
+    if(!prefix || k.startsWith(prefix)){
+      delete stableCounters[k];
+    }
+  });
+}
 
-
-/* =========================================
-   RESET
-========================================= */
+function loseAttempt(){
+  phase = 'WAITING';
+  lockedSide = null;
+  histories = {};
+  keypointMemory = {};
+  clearStable();
+  resetAttemptMetrics();
+}
 
 function resetJudge(){
+  reps = 0;
+  repNum.textContent = '0';
+  missingPoseFrames = 0;
+  noRepCooldown = 0;
+  latestEvent = null;
+  loseAttempt();
 
-  reps=0;
-
-  repNum.textContent='0';
-
-  phase='WAITING';
-
-  lockedSide=null;
-
-  histories={};
-
-  keypointMemory={};
-
-  stableCounters={};
-
-  missingPoseFrames=0;
-
-  noRepCooldown=0;
-
-  resetAttemptMetrics();
-
-
-  const ex=
-    EXERCISES[
-      exerciseSelect.value
-    ];
-
-
-  guideEl.textContent=
-    ex.guide;
-
-
-  setStatus(
-    `Colócate en posición inicial para ${ex.name}.`,
-    'warn'
-  );
-
+  const ex = EXERCISES[exerciseSelect.value];
+  guideEl.textContent = ex.guide;
+  setStatus(`Colócate en posición inicial para ${ex.name}.`,'warn');
+  broadcast();
 }
 
+/* PUNTOS Y ÁNGULOS */
 
-exerciseSelect.addEventListener(
-  'change',
-  resetJudge
-);
+function point(pose,index){
+  const p = pose.keypoints[index];
+  const now = performance.now();
 
-
-
-/* =========================================
-   PUNTOS
-========================================= */
-
-function point(
-  pose,
-  index
-){
-
-  const p=
-    pose.keypoints[index];
-
-  const now=
-    performance.now();
-
-
-  /*
-  Si el punto tiene confianza suficiente
-  lo guardamos.
-  */
-
-  if(
-    p &&
-    (p.score??0)>=CONF
-  ){
-
-    keypointMemory[index]={
-
+  if(p && (p.score ?? 0) >= CONF){
+    keypointMemory[index] = {
       x:p.x,
-
       y:p.y,
-
       score:p.score,
-
       time:now
-
     };
-
     return p;
-
   }
 
+  const old = keypointMemory[index];
 
-  /*
-  Si MoveNet pierde el punto un instante
-  conservamos su última posición válida.
-  */
-
-  const old=
-    keypointMemory[index];
-
-
-  if(
-    old &&
-    now-old.time<=KEYPOINT_HOLD_MS
-  ){
-
-    return{
-
+  if(old && now-old.time <= KEYPOINT_HOLD_MS){
+    return {
       x:old.x,
-
       y:old.y,
-
-      score:
-        Math.max(
-          CONF,
-          old.score*.85
-        ),
-
+      score:Math.max(CONF,old.score*.85),
       cached:true
-
     };
-
   }
-
 
   return null;
-
 }
 
+function angle(a,b,c){
+  if(!a || !b || !c) return null;
 
+  const v1 = {x:a.x-b.x,y:a.y-b.y};
+  const v2 = {x:c.x-b.x,y:c.y-b.y};
 
-/* =========================================
-   ÁNGULOS
-========================================= */
+  const den = Math.hypot(v1.x,v1.y)*Math.hypot(v2.x,v2.y);
+  if(!den) return null;
 
-function angle(
-  a,
-  b,
-  c
-){
-
-  if(
-    !a||
-    !b||
-    !c
-  )
-    return null;
-
-
-  const v1={
-
-    x:a.x-b.x,
-
-    y:a.y-b.y
-
-  };
-
-
-  const v2={
-
-    x:c.x-b.x,
-
-    y:c.y-b.y
-
-  };
-
-
-  const den=
-    Math.hypot(
-      v1.x,
-      v1.y
-    )*
-    Math.hypot(
-      v2.x,
-      v2.y
-    );
-
-
-  if(!den)
-    return null;
-
-
-  const cos=
-    clamp(
-
-      (
-        v1.x*v2.x+
-        v1.y*v2.y
-      )/den,
-
-      -1,
-
-      1
-
-    );
-
-
-  return(
-    Math.acos(cos)*
-    180/
-    Math.PI
-  );
-
+  const cos = clamp((v1.x*v2.x+v1.y*v2.y)/den,-1,1);
+  return Math.acos(cos)*180/Math.PI;
 }
-
-
-
-/* =========================================
-   FILTRO
-========================================= */
 
 function median(values){
-
-  if(!values.length)
-    return null;
-
-
-  const a=
-    [...values]
-    .sort(
-      (x,y)=>x-y
-    );
-
-
-  const mid=
-    Math.floor(
-      a.length/2
-    );
-
-
-  return a.length%2
-    ?a[mid]
-    :(a[mid-1]+a[mid])/2;
-
+  if(!values.length) return null;
+  const a = [...values].sort((x,y)=>x-y);
+  const mid = Math.floor(a.length/2);
+  return a.length%2 ? a[mid] : (a[mid-1]+a[mid])/2;
 }
 
-
-function filtered(
-  key,
-  value
-){
-
-  if(
-    value==null||
-    Number.isNaN(value)
-  )
-    return null;
-
-
-  if(
-    !histories[key]
-  )
-    histories[key]=[];
-
-
-  histories[key].push(
-    value
-  );
-
-
-  if(
-    histories[key].length>
-    MAX_HISTORY
-  )
+function filtered(key,value){
+  if(value == null || Number.isNaN(value)) return null;
+  if(!histories[key]) histories[key] = [];
+  histories[key].push(value);
+  if(histories[key].length > MAX_HISTORY){
     histories[key].shift();
-
-
-  return median(
-    histories[key]
-  );
-
+  }
+  return median(histories[key]);
 }
 
-
-
-/* =========================================
-   ESTABILIDAD
-========================================= */
-
-/*
-Cada condición tiene su propio contador.
-*/
-
-function stable(
-  tag,
-  condition,
-  frames=3
-){
-
-  if(
-    !condition
-  ){
-
-    stableCounters[tag]=0;
-
+function stable(tag,condition,frames=3){
+  if(!condition){
+    stableCounters[tag] = 0;
     return false;
-
   }
 
+  stableCounters[tag] = (stableCounters[tag] || 0)+1;
 
-  stableCounters[tag]=
-    (stableCounters[tag]||0)+1;
-
-
-  if(
-    stableCounters[tag]>=frames
-  ){
-
-    stableCounters[tag]=0;
-
+  if(stableCounters[tag] >= frames){
+    stableCounters[tag] = 0;
     return true;
-
   }
-
 
   return false;
-
 }
 
-
-function clearStable(
-  prefix=''
-){
-
-  Object.keys(
-    stableCounters
-  )
-  .forEach(
-    k=>{
-
-      if(
-        !prefix||
-        k.startsWith(prefix)
-      )
-        delete stableCounters[k];
-
-    }
-  );
-
+function confidenceOf(...pts){
+  const arr = pts.filter(Boolean);
+  return arr.length ? Math.min(...arr.map(p=>p.score ?? 0)) : 0;
 }
 
-
-
-/* =========================================
-   CONFIANZA
-========================================= */
-
-function confidenceOf(
-  ...pts
-){
-
-  const arr=
-    pts.filter(Boolean);
-
-
-  return arr.length
-    ?Math.min(
-      ...arr.map(
-        p=>p.score??0
-      )
-    )
-    :0;
-
+function rawScore(pose,i){
+  return pose.keypoints[i]?.score || 0;
 }
-
-
-function rawScore(
-  pose,
-  i
-){
-
-  return(
-    pose.keypoints[i]?.score||
-    0
-  );
-
-}
-
-
-
-/* =========================================
-   LADO MEJOR DETECTADO
-========================================= */
 
 function bestArmSide(pose){
-
-  const l=
-    rawScore(pose,5)+
-    rawScore(pose,7)+
-    rawScore(pose,9);
-
-
-  const r=
-    rawScore(pose,6)+
-    rawScore(pose,8)+
-    rawScore(pose,10);
-
-
-  return l>=r
-    ?'L'
-    :'R';
-
+  const l = rawScore(pose,5)+rawScore(pose,7)+rawScore(pose,9);
+  const r = rawScore(pose,6)+rawScore(pose,8)+rawScore(pose,10);
+  return l >= r ? 'L' : 'R';
 }
-
 
 function bestLegSide(pose){
-
-  const l=
-    rawScore(pose,11)+
-    rawScore(pose,13)+
-    rawScore(pose,15);
-
-
-  const r=
-    rawScore(pose,12)+
-    rawScore(pose,14)+
-    rawScore(pose,16);
-
-
-  return l>=r
-    ?'L'
-    :'R';
-
+  const l = rawScore(pose,11)+rawScore(pose,13)+rawScore(pose,15);
+  const r = rawScore(pose,12)+rawScore(pose,14)+rawScore(pose,16);
+  return l >= r ? 'L' : 'R';
 }
-
 
 function bestBodySide(pose){
-
-  const l=
-    rawScore(pose,5)+
-    rawScore(pose,7)+
-    rawScore(pose,9)+
-    rawScore(pose,11)+
-    rawScore(pose,15);
-
-
-  const r=
-    rawScore(pose,6)+
-    rawScore(pose,8)+
-    rawScore(pose,10)+
-    rawScore(pose,12)+
-    rawScore(pose,16);
-
-
-  return l>=r
-    ?'L'
-    :'R';
-
+  const l = [5,7,9,11,15].reduce((s,i)=>s+rawScore(pose,i),0);
+  const r = [6,8,10,12,16].reduce((s,i)=>s+rawScore(pose,i),0);
+  return l >= r ? 'L' : 'R';
 }
 
-
-
-/* =========================================
-   PUNTOS DE UN LADO
-========================================= */
-
-function sidePoints(
-  pose,
-  side
-){
-
-  const L=
-    side==='L';
-
-
-  return{
-
-    shoulder:
-      point(
-        pose,
-        L
-        ?IDX.leftShoulder
-        :IDX.rightShoulder
-      ),
-
-    elbow:
-      point(
-        pose,
-        L
-        ?IDX.leftElbow
-        :IDX.rightElbow
-      ),
-
-    wrist:
-      point(
-        pose,
-        L
-        ?IDX.leftWrist
-        :IDX.rightWrist
-      ),
-
-    hip:
-      point(
-        pose,
-        L
-        ?IDX.leftHip
-        :IDX.rightHip
-      ),
-
-    knee:
-      point(
-        pose,
-        L
-        ?IDX.leftKnee
-        :IDX.rightKnee
-      ),
-
-    ankle:
-      point(
-        pose,
-        L
-        ?IDX.leftAnkle
-        :IDX.rightAnkle
-      ),
-
-    nose:
-      point(
-        pose,
-        IDX.nose
-      )
-
+function sidePoints(pose,side){
+  const L = side === 'L';
+  return {
+    shoulder:point(pose,L ? IDX.leftShoulder : IDX.rightShoulder),
+    elbow:point(pose,L ? IDX.leftElbow : IDX.rightElbow),
+    wrist:point(pose,L ? IDX.leftWrist : IDX.rightWrist),
+    hip:point(pose,L ? IDX.leftHip : IDX.rightHip),
+    knee:point(pose,L ? IDX.leftKnee : IDX.rightKnee),
+    ankle:point(pose,L ? IDX.leftAnkle : IDX.rightAnkle),
+    nose:point(pose,IDX.nose)
   };
-
 }
 
-
-
-/* =========================================
-   ALINEACIÓN CORPORAL
-========================================= */
-
-function bodyLineError(
-  shoulder,
-  hip,
-  ankle
-){
-
-  const a=
-    angle(
-      shoulder,
-      hip,
-      ankle
-    );
-
-
-  return a==null
-    ?null
-    :Math.abs(
-      180-a
-    );
-
+function bodyLineError(shoulder,hip,ankle){
+  const a = angle(shoulder,hip,ankle);
+  return a == null ? null : Math.abs(180-a);
 }
-
-
-
-/* =========================================
-   MÉTRICAS
-========================================= */
 
 function updateMetrics(
   conf,
@@ -1044,2544 +767,1052 @@ function updateMetrics(
   auxLabel='Alineación',
   auxSuffix='°'
 ){
-
-  mDetector.textContent=
-    'MoveNet';
-
-
-  mConfidence.textContent=
-    conf
-    ?`${Math.round(
-        conf*100
-      )}%`
-    :'—';
-
-
-  mAngle.textContent=
-    primaryAngle==null
-    ?'—'
-    :`${Math.round(
-        primaryAngle
-      )}°`;
-
-
-  mAuxLabel.textContent=
-    auxLabel;
-
-
-  mAlign.textContent=
-    aux==null
-    ?'—'
-    :`${Math.round(
-        aux
-      )}${auxSuffix}`;
-
-
-  mPhase.textContent=
-    phaseLabel();
-
+  mDetector.textContent = 'MoveNet';
+  mConfidence.textContent = conf ? `${Math.round(conf*100)}%` : '—';
+  mAngle.textContent = primaryAngle == null
+    ? '—'
+    : `${Math.round(primaryAngle)}°`;
+  mAuxLabel.textContent = auxLabel;
+  mAlign.textContent = aux == null
+    ? '—'
+    : `${Math.round(aux)}${auxSuffix}`;
+  mPhase.textContent = phaseLabel();
 }
-
-
-
-/* =========================================
-   LANDMARKS PERDIDOS
-========================================= */
 
 function markVisible(){
-
-  missingPoseFrames=0;
-
+  missingPoseFrames = 0;
 }
-
 
 function missingWarning(parts){
-
   missingPoseFrames++;
 
-
-  if(
-    missingPoseFrames>=
-    MISSING_FRAMES_BEFORE_WARNING
-  ){
-
+  if(missingPoseFrames >= MISSING_FRAMES_BEFORE_WARNING){
+    loseAttempt();
     setStatus(
-
       `🟡 Ajusta la posición. Falta detectar: ${parts.join(', ')}.`,
-
       'warn'
-
     );
-
   }
-
 }
 
-
-
-/* =========================================
-   REP VÁLIDA
-========================================= */
+/* RESULTADOS */
 
 function validRep(){
-
   reps++;
-
-  repNum.textContent=
-    String(reps);
-
+  repNum.textContent = String(reps);
   flashCounter();
+  setProgress(100,'Válida');
 
-  setProgress(
-    100,
-    'Válida'
-  );
+  const min = attemptMinAngle == null
+    ? ''
+    : ` · mínimo ${Math.round(attemptMinAngle)}°`;
 
-
-  const min=
-    attemptMinAngle==null
-    ?''
-    :` · mínimo ${Math.round(
-        attemptMinAngle
-      )}°`;
-
-
-  setStatus(
-    `✅ REP VÁLIDA${min}`,
-    'ok'
-  );
-
-
-  lockedSide=null;
-
+  setStatus(`✅ REP VÁLIDA${min}`,'ok');
+  lockedSide = null;
   clearStable();
 
+  latestEvent = {
+    id:++eventId,
+    type:'valid',
+    message:'REP VÁLIDA',
+    at:Date.now()
+  };
+  broadcast();
 
-  setTimeout(
-    ()=>{
-
-      if(
-        running &&
-        statusEl.textContent.startsWith(
-          '✅'
-        )
-      )
-        mPhase.textContent=
-          phaseLabel();
-
-    },
-    350
-  );
-
+  setTimeout(()=>{
+    if(running && statusEl.textContent.startsWith('✅')){
+      mPhase.textContent = phaseLabel();
+    }
+  },350);
 }
-
-
-
-/* =========================================
-   NO REP
-========================================= */
 
 function noRep(reason){
+  if(Date.now() < noRepCooldown) return;
+  noRepCooldown = Date.now()+650;
 
-  if(
-    Date.now()<
-    noRepCooldown
-  )
-    return;
+  const min = attemptMinAngle == null
+    ? ''
+    : ` · mínimo ${Math.round(attemptMinAngle)}°`;
 
-
-  noRepCooldown=
-    Date.now()+650;
-
-
-  const min=
-    attemptMinAngle==null
-    ?''
-    :` · mínimo ${Math.round(
-        attemptMinAngle
-      )}°`;
-
-
-  setStatus(
-
-    `❌ NO REP — ${reason}${min}`,
-
-    'bad'
-
-  );
-
-
-  mPhase.textContent=
-    'No rep';
-
-
-  lockedSide=null;
-
+  setStatus(`❌ NO REP — ${reason}${min}`,'bad');
+  mPhase.textContent = 'No rep';
+  lockedSide = null;
   clearStable();
 
+  latestEvent = {
+    id:++eventId,
+    type:'invalid',
+    message:'NO REP: '+reason,
+    at:Date.now()
+  };
+  broadcast();
 }
 
-
-
-/* =========================================================
-                    JUEZ PUSH-UPS
-========================================================= */
+/* JUEZ PUSH-UPS */
 
 function judgePushup(pose){
+  const side = lockedSide || bestBodySide(pose);
+  const p = sidePoints(pose,side);
+  const missing = [];
 
-  const side=
-    lockedSide||
-    bestBodySide(pose);
+  if(!p.shoulder) missing.push('hombro');
+  if(!p.elbow) missing.push('codo');
+  if(!p.wrist) missing.push('muñeca');
+  if(!p.hip) missing.push('cadera');
+  if(!p.ankle) missing.push('tobillo');
 
-
-  const p=
-    sidePoints(
-      pose,
-      side
-    );
-
-
-  const missing=[];
-
-
-  if(!p.shoulder)
-    missing.push('hombro');
-
-  if(!p.elbow)
-    missing.push('codo');
-
-  if(!p.wrist)
-    missing.push('muñeca');
-
-  if(!p.hip)
-    missing.push('cadera');
-
-  if(!p.ankle)
-    missing.push('tobillo');
-
-
-  if(
-    missing.length
-  ){
-
-    missingWarning(
-      missing
-    );
-
+  if(missing.length){
+    missingWarning(missing);
     return;
-
   }
-
 
   markVisible();
 
-
-
-  const elbow=
-    filtered(
-
-      'push_elbow',
-
-      angle(
-        p.shoulder,
-        p.elbow,
-        p.wrist
-      )
-
-    );
-
-
-  const align=
-    filtered(
-
-      'push_align',
-
-      bodyLineError(
-        p.shoulder,
-        p.hip,
-        p.ankle
-      )
-
-    );
-
-
-  if(
-    elbow==null||
-    align==null
-  )
-    return;
-
-
-
-  const conf=
-    confidenceOf(
-
-      p.shoulder,
-
-      p.elbow,
-
-      p.wrist,
-
-      p.hip,
-
-      p.ankle
-
-    );
-
-
-  updateMetrics(
-
-    conf,
-
-    elbow,
-
-    align,
-
-    'Alineación',
-
-    '°'
-
+  const elbow = filtered(
+    'push_elbow',
+    angle(p.shoulder,p.elbow,p.wrist)
+  );
+  const align = filtered(
+    'push_align',
+    bodyLineError(p.shoulder,p.hip,p.ankle)
   );
 
+  if(elbow == null || align == null) return;
 
-  trackMinAngle(
-    elbow
+  const conf = confidenceOf(
+    p.shoulder,p.elbow,p.wrist,p.hip,p.ankle
   );
 
+  updateMetrics(conf,elbow,align,'Alineación','°');
+  trackMinAngle(elbow);
 
+  const top = elbow >= 150 && align <= 34;
+  const bottom =
+    (elbow <= 102 && align <= 40) ||
+    (elbow <= 94 && align <= 46);
 
-  /*
-  Posición superior
-  */
+  const progress = clamp((155-elbow)/(155-100)*100,0,100);
 
-  const top=
+  if(phase !== 'WAITING'){
+    setProgress(progress,phaseLabel());
+  }
 
-    elbow>=150 &&
-
-    align<=34;
-
-
-
-  /*
-  Profundidad válida
-  */
-
-  const bottom=
-
-    (
-      elbow<=102 &&
-      align<=40
-    )
-
-    ||
-
-    (
-      elbow<=94 &&
-      align<=46
-    );
-
-
-
-  const progress=
-    clamp(
-
-      (
-        155-elbow
-      )/
-      (
-        155-100
-      )*
-      100,
-
-      0,
-
-      100
-
-    );
-
-
-  if(
-    phase!=='WAITING'
-  )
-    setProgress(
-      progress,
-      phaseLabel()
-    );
-
-
-
-  /*
-  Esperando
-  */
-
-  if(
-    phase==='WAITING'
-  ){
-
+  if(phase === 'WAITING'){
     resetAttemptMetrics();
+    trackMinAngle(elbow);
 
-    trackMinAngle(
-      elbow
-    );
-
-
-    if(
-      stable(
-        'push_ready',
-        top,
-        3
-      )
-    ){
-
-      phase='TOP';
-
-      startAttempt(
-        side
-      );
-
-
+    if(stable('push_ready',top,3)){
+      phase = 'TOP';
+      startAttempt(side);
       setStatus(
         '🟢 Posición inicial correcta. Baja controladamente.',
         'ok'
       );
-
-    }
-
-    else if(
-      align>42
-    ){
-
+    }else if(align > 42){
       setStatus(
         '🟡 Mantén hombros, cadera y tobillos más alineados.',
         'warn'
       );
-
+    }else{
+      setStatus('🟡 Extiende los codos para iniciar.','warn');
     }
-
-    else{
-
-      setStatus(
-        '🟡 Extiende los codos para iniciar.',
-        'warn'
-      );
-
-    }
-
-
     return;
-
   }
 
-
-
-  /*
-  Arriba
-  */
-
-  if(
-    phase==='TOP'
-  ){
-
-    if(
-      stable(
-        'push_leave',
-        elbow<140,
-        2
-      )
-    ){
-
-      if(
-        !lockedSide
-      )
-        startAttempt(
-          side
-        );
-
-
-      phase='DOWN';
-
-
-      setStatus(
-        '🔵 Bajando…',
-        'info'
-      );
-
+  if(phase === 'TOP'){
+    if(stable('push_leave',elbow < 140,2)){
+      if(!lockedSide) startAttempt(side);
+      phase = 'DOWN';
+      setStatus('🔵 Bajando…','info');
     }
-
-
     return;
-
   }
 
-
-
-  /*
-  Bajando
-  */
-
-  if(
-    phase==='DOWN'
-  ){
-
-    if(
-      stable(
-        'push_bottom',
-        bottom,
-        2
-      )
-    ){
-
-      phase='BOTTOM';
-
-
-      setProgress(
-        100,
-        'Profundidad OK'
-      );
-
-
-      setStatus(
-        '🟢 Profundidad válida. Ahora sube.',
-        'ok'
-      );
-
-
+  if(phase === 'DOWN'){
+    if(stable('push_bottom',bottom,2)){
+      phase = 'BOTTOM';
+      setProgress(100,'Profundidad OK');
+      setStatus('🟢 Profundidad válida. Ahora sube.','ok');
       return;
-
     }
 
-
-    if(
-      align>46
-    ){
-
-      setStatus(
-        '🟡 Evita quebrar la cadera.',
-        'warn'
-      );
-
+    if(align > 46){
+      setStatus('🟡 Evita quebrar la cadera.','warn');
     }
 
-
-    if(
-      stable(
-        'push_abort',
-        elbow>=148,
-        3
-      )
-    ){
-
-      phase='TOP';
-
-
-      noRep(
-        'bajada insuficiente'
-      );
-
+    if(stable('push_abort',elbow >= 148,3)){
+      phase = 'TOP';
+      noRep('bajada insuficiente');
     }
-
-
     return;
-
   }
 
-
-
-  /*
-  Abajo
-  */
-
-  if(
-    phase==='BOTTOM'
-  ){
-
-    if(
-      stable(
-        'push_up',
-        elbow>118,
-        2
-      )
-    ){
-
-      phase='UP';
-
-
-      setStatus(
-        '🔵 Subiendo…',
-        'info'
-      );
-
+  if(phase === 'BOTTOM'){
+    if(stable('push_up',elbow > 118,2)){
+      phase = 'UP';
+      setStatus('🔵 Subiendo…','info');
     }
-
-
     return;
-
   }
 
-
-
-  /*
-  Subiendo
-  */
-
-  if(
-    phase==='UP'
-  ){
-
-    if(
-      stable(
-        'push_finish',
-        top,
-        3
-      )
-    ){
-
-      phase='TOP';
-
+  if(phase === 'UP'){
+    if(stable('push_finish',top,3)){
+      phase = 'TOP';
       validRep();
-
       return;
-
     }
 
-
-    if(
-      align>46
-    ){
-
-      setStatus(
-        '🟡 Mantén el cuerpo alineado al subir.',
-        'warn'
-      );
-
+    if(align > 46){
+      setStatus('🟡 Mantén el cuerpo alineado al subir.','warn');
     }
-
   }
-
 }
 
-
-
-/* =========================================================
-                    JUEZ FONDOS
-========================================================= */
+/* JUEZ FONDOS */
 
 function judgeDip(pose){
+  const side = lockedSide || bestArmSide(pose);
+  const p = sidePoints(pose,side);
+  const missing = [];
 
-  const side=
-    lockedSide||
-    bestArmSide(pose);
+  if(!p.shoulder) missing.push('hombro');
+  if(!p.elbow) missing.push('codo');
+  if(!p.wrist) missing.push('muñeca');
 
-
-  const p=
-    sidePoints(
-      pose,
-      side
-    );
-
-
-  const missing=[];
-
-
-  if(!p.shoulder)
-    missing.push('hombro');
-
-  if(!p.elbow)
-    missing.push('codo');
-
-  if(!p.wrist)
-    missing.push('muñeca');
-
-
-  if(
-    missing.length
-  ){
-
-    missingWarning(
-      missing
-    );
-
+  if(missing.length){
+    missingWarning(missing);
     return;
-
   }
-
 
   markVisible();
 
-
-
-  const elbow=
-    filtered(
-
-      'dip_elbow',
-
-      angle(
-        p.shoulder,
-        p.elbow,
-        p.wrist
-      )
-
-    );
-
-
-  if(
-    elbow==null
-  )
-    return;
-
-
-
-  const upperArm=
-    distance(
-      p.shoulder,
-      p.elbow
-    )||1;
-
-
-  /*
-  Posición vertical del hombro
-  relativa a la longitud del brazo.
-  */
-
-  const shoulderDepth=
-
-    (
-      p.shoulder.y-
-      p.elbow.y
-    )/
-
-    upperArm;
-
-
-
-  const conf=
-    confidenceOf(
-
-      p.shoulder,
-
-      p.elbow,
-
-      p.wrist
-
-    );
-
-
-  updateMetrics(
-
-    conf,
-
-    elbow,
-
-    shoulderDepth*100,
-
-    'Hombro',
-
-    '%'
-
+  const elbow = filtered(
+    'dip_elbow',
+    angle(p.shoulder,p.elbow,p.wrist)
   );
+  if(elbow == null) return;
 
+  const upperArm = distance(p.shoulder,p.elbow) || 1;
+  const shoulderDepth = (p.shoulder.y-p.elbow.y)/upperArm;
+  const conf = confidenceOf(p.shoulder,p.elbow,p.wrist);
 
-  trackMinAngle(
-    elbow
-  );
+  updateMetrics(conf,elbow,shoulderDepth*100,'Hombro','%');
+  trackMinAngle(elbow);
 
+  const top = elbow >= 150;
+  const bottom =
+    (elbow <= 105 && shoulderDepth >= -0.15) ||
+    elbow <= 92;
 
+  const progress = clamp((155-elbow)/(155-100)*100,0,100);
 
-  const top=
-    elbow>=150;
+  if(phase !== 'WAITING'){
+    setProgress(progress,phaseLabel());
+  }
 
-
-
-  const bottom=
-
-    (
-      elbow<=105 &&
-      shoulderDepth>=-0.15
-    )
-
-    ||
-
-    elbow<=92;
-
-
-
-  const progress=
-    clamp(
-
-      (
-        155-elbow
-      )/
-      (
-        155-100
-      )*
-      100,
-
-      0,
-
-      100
-
-    );
-
-
-  if(
-    phase!=='WAITING'
-  )
-    setProgress(
-      progress,
-      phaseLabel()
-    );
-
-
-
-  if(
-    phase==='WAITING'
-  ){
-
+  if(phase === 'WAITING'){
     resetAttemptMetrics();
+    trackMinAngle(elbow);
 
-    trackMinAngle(
-      elbow
-    );
-
-
-    if(
-      stable(
-        'dip_ready',
-        top,
-        3
-      )
-    ){
-
-      phase='TOP';
-
-      startAttempt(
-        side
-      );
-
-
-      setStatus(
-        '🟢 Posición inicial correcta. Desciende.',
-        'ok'
-      );
-
+    if(stable('dip_ready',top,3)){
+      phase = 'TOP';
+      startAttempt(side);
+      setStatus('🟢 Posición inicial correcta. Desciende.','ok');
+    }else{
+      setStatus('🟡 Estira los codos para iniciar.','warn');
     }
-
-    else{
-
-      setStatus(
-        '🟡 Estira los codos para iniciar.',
-        'warn'
-      );
-
-    }
-
-
     return;
-
   }
 
-
-
-  if(
-    phase==='TOP'
-  ){
-
-    if(
-      stable(
-        'dip_leave',
-        elbow<140,
-        2
-      )
-    ){
-
-      if(
-        !lockedSide
-      )
-        startAttempt(
-          side
-        );
-
-
-      phase='DOWN';
-
-
-      setStatus(
-        '🔵 Bajando…',
-        'info'
-      );
-
+  if(phase === 'TOP'){
+    if(stable('dip_leave',elbow < 140,2)){
+      if(!lockedSide) startAttempt(side);
+      phase = 'DOWN';
+      setStatus('🔵 Bajando…','info');
     }
-
-
     return;
-
   }
 
-
-
-  if(
-    phase==='DOWN'
-  ){
-
-    if(
-      stable(
-        'dip_bottom',
-        bottom,
-        2
-      )
-    ){
-
-      phase='BOTTOM';
-
-
-      setProgress(
-        100,
-        'Profundidad OK'
-      );
-
-
-      setStatus(
-        '🟢 Profundidad válida. Sube.',
-        'ok'
-      );
-
-
+  if(phase === 'DOWN'){
+    if(stable('dip_bottom',bottom,2)){
+      phase = 'BOTTOM';
+      setProgress(100,'Profundidad OK');
+      setStatus('🟢 Profundidad válida. Sube.','ok');
       return;
-
     }
 
-
-    if(
-      elbow<=112 &&
-      shoulderDepth<-0.15
-    ){
-
-      setStatus(
-        '🟡 Baja un poco más el hombro.',
-        'warn'
-      );
-
+    if(elbow <= 112 && shoulderDepth < -0.15){
+      setStatus('🟡 Baja un poco más el hombro.','warn');
     }
 
-
-    if(
-      stable(
-        'dip_abort',
-        elbow>=148,
-        3
-      )
-    ){
-
-      phase='TOP';
-
-
-      noRep(
-        'faltó profundidad'
-      );
-
+    if(stable('dip_abort',elbow >= 148,3)){
+      phase = 'TOP';
+      noRep('faltó profundidad');
     }
-
-
     return;
-
   }
 
-
-
-  if(
-    phase==='BOTTOM'
-  ){
-
-    if(
-      stable(
-        'dip_up',
-        elbow>118,
-        2
-      )
-    ){
-
-      phase='UP';
-
-
-      setStatus(
-        '🔵 Subiendo…',
-        'info'
-      );
-
+  if(phase === 'BOTTOM'){
+    if(stable('dip_up',elbow > 118,2)){
+      phase = 'UP';
+      setStatus('🔵 Subiendo…','info');
     }
-
-
     return;
-
   }
 
-
-
-  if(
-    phase==='UP' &&
-    stable(
-      'dip_finish',
-      top,
-      3
-    )
-  ){
-
-    phase='TOP';
-
+  if(phase === 'UP' && stable('dip_finish',top,3)){
+    phase = 'TOP';
     validRep();
-
   }
-
 }
 
-
-
-/* =========================================================
-                    JUEZ SQUATS
-========================================================= */
+/* JUEZ SQUATS */
 
 function judgeSquat(pose){
+  const side = lockedSide || bestLegSide(pose);
+  const p = sidePoints(pose,side);
+  const missing = [];
 
-  const side=
-    lockedSide||
-    bestLegSide(pose);
+  if(!p.hip) missing.push('cadera');
+  if(!p.knee) missing.push('rodilla');
+  if(!p.ankle) missing.push('tobillo');
 
-
-  const p=
-    sidePoints(
-      pose,
-      side
-    );
-
-
-  const missing=[];
-
-
-  if(!p.hip)
-    missing.push('cadera');
-
-  if(!p.knee)
-    missing.push('rodilla');
-
-  if(!p.ankle)
-    missing.push('tobillo');
-
-
-  if(
-    missing.length
-  ){
-
-    missingWarning(
-      missing
-    );
-
+  if(missing.length){
+    missingWarning(missing);
     return;
-
   }
-
 
   markVisible();
 
+  const knee = filtered('sq_knee',angle(p.hip,p.knee,p.ankle));
+  if(knee == null) return;
 
+  const thigh = distance(p.hip,p.knee) || 1;
+  const hipDepth = (p.hip.y-p.knee.y)/thigh;
+  const conf = confidenceOf(p.hip,p.knee,p.ankle);
 
-  const knee=
-    filtered(
+  updateMetrics(conf,knee,hipDepth*100,'Cadera','%');
+  trackMinAngle(knee);
 
-      'sq_knee',
+  const top = knee >= 155;
+  const hipNearOrBelow = hipDepth >= -0.18;
+  const bottom = knee <= 95 || (knee <= 110 && hipNearOrBelow);
+  const progress = clamp((160-knee)/(160-105)*100,0,100);
 
-      angle(
-        p.hip,
-        p.knee,
-        p.ankle
-      )
-
-    );
-
-
-  if(
-    knee==null
-  )
-    return;
-
-
-
-  const thigh=
-    distance(
-      p.hip,
-      p.knee
-    )||1;
-
-
-
-  /*
-  Profundidad normalizada.
-
-  Positivo:
-  cadera debajo de rodilla.
-
-  0:
-  misma altura.
-
-  Negativo:
-  cadera encima.
-  */
-
-  const hipDepth=
-
-    (
-      p.hip.y-
-      p.knee.y
-    )/
-
-    thigh;
-
-
-
-  let torso=null;
-
-
-  if(
-    p.shoulder
-  ){
-
-    const raw=
-
-      Math.abs(
-
-        90-
-
-        Math.abs(
-
-          Math.atan2(
-
-            p.shoulder.y-
-            p.hip.y,
-
-            p.shoulder.x-
-            p.hip.x
-
-          )*
-
-          180/
-
-          Math.PI
-
-        )
-
-      );
-
-
-    torso=
-      filtered(
-        'sq_torso',
-        raw
-      );
-
+  if(phase !== 'WAITING'){
+    setProgress(progress,phaseLabel());
   }
 
-
-
-  const conf=
-    confidenceOf(
-
-      p.hip,
-
-      p.knee,
-
-      p.ankle
-
-    );
-
-
-  updateMetrics(
-
-    conf,
-
-    knee,
-
-    hipDepth*100,
-
-    'Cadera',
-
-    '%'
-
-  );
-
-
-  trackMinAngle(
-    knee
-  );
-
-
-
-  /*
-  Posición inicial
-  */
-
-  const top=
-    knee>=155;
-
-
-
-  /*
-  Permitimos ligera tolerancia
-  por perspectiva 2D.
-  */
-
-  const hipNearOrBelow=
-    hipDepth>=-0.18;
-
-
-
-  /*
-  Profundidad válida.
-
-  Si llega a <=95°
-  se considera suficientemente
-  profundo incluso si existe
-  pequeño error vertical.
-  */
-
-  const bottom=
-
-    knee<=95
-
-    ||
-
-    (
-      knee<=110 &&
-      hipNearOrBelow
-    );
-
-
-
-  const progress=
-    clamp(
-
-      (
-        160-knee
-      )/
-      (
-        160-105
-      )*
-      100,
-
-      0,
-
-      100
-
-    );
-
-
-  if(
-    phase!=='WAITING'
-  )
-    setProgress(
-      progress,
-      phaseLabel()
-    );
-
-
-
-  if(
-    phase==='WAITING'
-  ){
-
+  if(phase === 'WAITING'){
     resetAttemptMetrics();
+    trackMinAngle(knee);
 
-    trackMinAngle(
-      knee
-    );
-
-
-    if(
-      stable(
-        'sq_ready',
-        top,
-        3
-      )
-    ){
-
-      phase='TOP';
-
-      startAttempt(
-        side
-      );
-
-
-      setStatus(
-        '🟢 Posición inicial correcta. Baja la cadera.',
-        'ok'
-      );
-
+    if(stable('sq_ready',top,3)){
+      phase = 'TOP';
+      startAttempt(side);
+      setStatus('🟢 Posición inicial correcta. Baja la cadera.','ok');
+    }else{
+      setStatus('🟡 Estira las piernas para iniciar.','warn');
     }
-
-    else{
-
-      setStatus(
-        '🟡 Estira las piernas para iniciar.',
-        'warn'
-      );
-
-    }
-
-
     return;
-
   }
 
-
-
-  if(
-    phase==='TOP'
-  ){
-
-    if(
-      stable(
-        'sq_leave',
-        knee<145,
-        2
-      )
-    ){
-
-      if(
-        !lockedSide
-      )
-        startAttempt(
-          side
-        );
-
-
-      phase='DOWN';
-
-
-      setStatus(
-        '🔵 Bajando…',
-        'info'
-      );
-
+  if(phase === 'TOP'){
+    if(stable('sq_leave',knee < 145,2)){
+      if(!lockedSide) startAttempt(side);
+      phase = 'DOWN';
+      setStatus('🔵 Bajando…','info');
     }
-
-
     return;
-
   }
 
-
-
-  if(
-    phase==='DOWN'
-  ){
-
-    if(
-      stable(
-        'sq_bottom',
-        bottom,
-        2
-      )
-    ){
-
-      phase='BOTTOM';
-
-
-      setProgress(
-        100,
-        'Profundidad OK'
-      );
-
-
-      setStatus(
-        '🟢 Profundidad válida. Sube.',
-        'ok'
-      );
-
-
+  if(phase === 'DOWN'){
+    if(stable('sq_bottom',bottom,2)){
+      phase = 'BOTTOM';
+      setProgress(100,'Profundidad OK');
+      setStatus('🟢 Profundidad válida. Sube.','ok');
       return;
-
     }
 
-
-    if(
-      knee<=115 &&
-      !hipNearOrBelow
-    ){
-
-      setStatus(
-        '🟡 Un poco más abajo con la cadera.',
-        'warn'
-      );
-
+    if(knee <= 115 && !hipNearOrBelow){
+      setStatus('🟡 Un poco más abajo con la cadera.','warn');
     }
 
-
-    if(
-      stable(
-        'sq_abort',
-        knee>=150,
-        3
-      )
-    ){
-
-      phase='TOP';
-
-
-      noRep(
-        'faltó profundidad'
-      );
-
+    if(stable('sq_abort',knee >= 150,3)){
+      phase = 'TOP';
+      noRep('faltó profundidad');
     }
-
-
     return;
-
   }
 
-
-
-  if(
-    phase==='BOTTOM'
-  ){
-
-    if(
-      stable(
-        'sq_up',
-        knee>120,
-        2
-      )
-    ){
-
-      phase='UP';
-
-
-      setStatus(
-        '🔵 Subiendo…',
-        'info'
-      );
-
+  if(phase === 'BOTTOM'){
+    if(stable('sq_up',knee > 120,2)){
+      phase = 'UP';
+      setStatus('🔵 Subiendo…','info');
     }
-
-
     return;
-
   }
 
-
-
-  if(
-    phase==='UP' &&
-    stable(
-      'sq_finish',
-      top,
-      3
-    )
-  ){
-
-    phase='TOP';
-
+  if(phase === 'UP' && stable('sq_finish',top,3)){
+    phase = 'TOP';
     validRep();
-
   }
-
 }
 
-
-
-/* =========================================================
-                    JUEZ PULL-UPS
-========================================================= */
+/* JUEZ PULL-UPS */
 
 function judgePullup(pose){
+  const side = lockedSide || bestArmSide(pose);
+  const p = sidePoints(pose,side);
+  const missing = [];
 
-  const side=
-    lockedSide||
-    bestArmSide(pose);
+  if(!p.shoulder) missing.push('hombro');
+  if(!p.elbow) missing.push('codo');
+  if(!p.wrist) missing.push('mano');
+  if(!p.nose) missing.push('cara');
 
-
-  const p=
-    sidePoints(
-      pose,
-      side
-    );
-
-
-  const missing=[];
-
-
-  if(!p.shoulder)
-    missing.push('hombro');
-
-  if(!p.elbow)
-    missing.push('codo');
-
-  if(!p.wrist)
-    missing.push('mano');
-
-  if(!p.nose)
-    missing.push('cara');
-
-
-  if(
-    missing.length
-  ){
-
-    missingWarning(
-      missing
-    );
-
+  if(missing.length){
+    missingWarning(missing);
     return;
-
   }
-
 
   markVisible();
 
-
-
-  const elbow=
-    filtered(
-
-      'pu_elbow',
-
-      angle(
-        p.shoulder,
-        p.elbow,
-        p.wrist
-      )
-
-    );
-
-
-  if(
-    elbow==null
-  )
-    return;
-
-
-
-  /*
-  Ancho de hombros para normalizar
-  la estimación de la barbilla.
-  */
-
-  const ls=
-    point(
-      pose,
-      IDX.leftShoulder
-    );
-
-
-  const rs=
-    point(
-      pose,
-      IDX.rightShoulder
-    );
-
-
-  const shoulderWidth=
-
-    (
-      ls&&rs
-    )
-
-    ?
-
-    distance(
-      ls,
-      rs
-    )
-
-    :
-
-    Math.max(
-
-      60,
-
-      distance(
-        p.shoulder,
-        p.elbow
-      )||80
-
-    );
-
-
-
-  /*
-  MoveNet no tiene landmark
-  específico de barbilla.
-
-  Estimamos su posición usando
-  nariz + proporción corporal.
-  */
-
-  const chinY=
-
-    p.nose.y+
-
-    shoulderWidth*
-    0.18;
-
-
-
-  const lw=
-    point(
-      pose,
-      IDX.leftWrist
-    );
-
-
-  const rw=
-    point(
-      pose,
-      IDX.rightWrist
-    );
-
-
-  const barY=
-
-    (
-      lw&&rw
-    )
-
-    ?
-
-    (
-      lw.y+
-      rw.y
-    )/2
-
-    :
-
-    p.wrist.y;
-
-
-
-  const chinClearance=
-
-    (
-      barY-
-      chinY
-    )/
-
-    shoulderWidth;
-
-
-
-  const chinAboveBar=
-    chinClearance>=-0.08;
-
-
-
-  const conf=
-    confidenceOf(
-
-      p.shoulder,
-
-      p.elbow,
-
-      p.wrist,
-
-      p.nose
-
-    );
-
-
-  updateMetrics(
-
-    conf,
-
-    elbow,
-
-    chinClearance*100,
-
-    'Barbilla',
-
-    '%'
-
+  const elbow = filtered(
+    'pu_elbow',
+    angle(p.shoulder,p.elbow,p.wrist)
+  );
+  if(elbow == null) return;
+
+  const ls = point(pose,IDX.leftShoulder);
+  const rs = point(pose,IDX.rightShoulder);
+
+  const shoulderWidth = Math.max(
+    1,
+    ls && rs
+      ? distance(ls,rs)
+      : Math.max(60,distance(p.shoulder,p.elbow) || 80)
   );
 
+  // MoveNet no detecta la barbilla directamente.
+  // Se mantiene la estimación de la versión anterior.
+  const chinY = p.nose.y+shoulderWidth*0.18;
+  const lw = point(pose,IDX.leftWrist);
+  const rw = point(pose,IDX.rightWrist);
+  const barY = lw && rw ? (lw.y+rw.y)/2 : p.wrist.y;
+  const chinClearance = (barY-chinY)/shoulderWidth;
+  const chinAboveBar = chinClearance >= -0.08;
 
-  trackMinAngle(
-    elbow
+  const conf = confidenceOf(
+    p.shoulder,p.elbow,p.wrist,p.nose
   );
 
+  updateMetrics(conf,elbow,chinClearance*100,'Barbilla','%');
+  trackMinAngle(elbow);
 
+  const bottom = elbow >= 160;
+  const top = elbow <= 120 && chinAboveBar;
 
-  /*
-  Extensión completa abajo
-  */
+  const armProgress = clamp((165-elbow)/(165-115)*100,0,100);
+  const chinProgress = clamp((chinClearance+0.30)/0.22*100,0,100);
+  const progress = Math.min(armProgress,chinProgress);
 
-  const bottom=
-    elbow>=160;
+  if(phase !== 'WAITING'){
+    setProgress(progress,phaseLabel());
+  }
 
-
-
-  /*
-  Arriba:
-  brazo suficientemente flexionado
-  + barbilla sobre manos/barra.
-  */
-
-  const top=
-
-    elbow<=120 &&
-
-    chinAboveBar;
-
-
-
-  const armProgress=
-    clamp(
-
-      (
-        165-elbow
-      )/
-      (
-        165-115
-      )*
-      100,
-
-      0,
-
-      100
-
-    );
-
-
-  const chinProgress=
-    clamp(
-
-      (
-        chinClearance+
-        0.30
-      )/
-
-      0.22*
-
-      100,
-
-      0,
-
-      100
-
-    );
-
-
-  const progress=
-    Math.min(
-      armProgress,
-      chinProgress
-    );
-
-
-  if(
-    phase!=='WAITING'
-  )
-    setProgress(
-      progress,
-      phaseLabel()
-    );
-
-
-
-  /*
-  Esperando abajo
-  */
-
-  if(
-    phase==='WAITING'
-  ){
-
+  if(phase === 'WAITING'){
     resetAttemptMetrics();
+    trackMinAngle(elbow);
 
-    trackMinAngle(
-      elbow
-    );
-
-
-    if(
-      stable(
-        'pu_ready',
-        bottom,
-        3
-      )
-    ){
-
-      phase='BOTTOM';
-
-      startAttempt(
-        side
-      );
-
-
-      setStatus(
-        '🟢 Extensión completa. Puedes subir.',
-        'ok'
-      );
-
-    }
-
-    else{
-
+    if(stable('pu_ready',bottom,3)){
+      phase = 'BOTTOM';
+      startAttempt(side);
+      setStatus('🟢 Extensión completa. Puedes subir.','ok');
+    }else{
       setStatus(
         '🟡 Estira completamente los codos para iniciar.',
         'warn'
       );
-
     }
-
-
     return;
-
   }
 
-
-
-  /*
-  Empieza subida
-  */
-
-  if(
-    phase==='BOTTOM'
-  ){
-
-    if(
-      stable(
-        'pu_leave',
-        elbow<150,
-        2
-      )
-    ){
-
-      if(
-        !lockedSide
-      )
-        startAttempt(
-          side
-        );
-
-
-      phase='UP';
-
-
-      setStatus(
-        '🔵 Subiendo…',
-        'info'
-      );
-
+  if(phase === 'BOTTOM'){
+    if(stable('pu_leave',elbow < 150,2)){
+      if(!lockedSide) startAttempt(side);
+      phase = 'UP';
+      setStatus('🔵 Subiendo…','info');
     }
-
-
     return;
-
   }
 
-
-
-  /*
-  Subiendo
-  */
-
-  if(
-    phase==='UP'
-  ){
-
-    if(
-      stable(
-        'pu_top',
-        top,
-        2
-      )
-    ){
-
-      phase='TOP';
-
-
-      setProgress(
-        100,
-        'Altura OK'
-      );
-
-
+  if(phase === 'UP'){
+    if(stable('pu_top',top,2)){
+      phase = 'TOP';
+      setProgress(100,'Altura OK');
       setStatus(
         '🟢 Altura válida. Baja hasta extensión completa.',
         'ok'
       );
-
-
       return;
-
     }
 
-
-    if(
-      elbow<=125 &&
-      !chinAboveBar
-    ){
-
+    if(elbow <= 125 && !chinAboveBar){
       setStatus(
         '🟡 Sube un poco más: barbilla sobre la altura de las manos.',
         'warn'
       );
-
     }
 
-
-    if(
-      stable(
-        'pu_abort',
-        elbow>=158,
-        3
-      )
-    ){
-
-      phase='BOTTOM';
-
-
-      noRep(
-        'la barbilla no alcanzó la altura requerida'
-      );
-
+    if(stable('pu_abort',elbow >= 158,3)){
+      phase = 'BOTTOM';
+      noRep('la barbilla no alcanzó la altura requerida');
     }
-
-
     return;
-
   }
 
-
-
-  /*
-  Inicia descenso
-  */
-
-  if(
-    phase==='TOP'
-  ){
-
-    if(
-      stable(
-        'pu_down',
-        elbow>130,
-        2
-      )
-    ){
-
-      phase='DOWN';
-
-
-      setStatus(
-        '🔵 Bajando…',
-        'info'
-      );
-
+  if(phase === 'TOP'){
+    if(stable('pu_down',elbow > 130,2)){
+      phase = 'DOWN';
+      setStatus('🔵 Bajando…','info');
     }
-
-
     return;
-
   }
 
-
-
-  /*
-  Descendiendo
-  */
-
-  if(
-    phase==='DOWN'
-  ){
-
-    if(
-      stable(
-        'pu_finish',
-        bottom,
-        3
-      )
-    ){
-
-      phase='BOTTOM';
-
+  if(phase === 'DOWN'){
+    if(stable('pu_finish',bottom,3)){
+      phase = 'BOTTOM';
       validRep();
-
       return;
-
     }
 
-
-    if(
-      elbow>150
-    ){
-
+    if(elbow > 150){
       setStatus(
         '🟡 Completa el descenso hasta extender totalmente los codos.',
         'warn'
       );
-
     }
-
   }
-
 }
-
-
-
-/* =========================================
-   ELEGIR JUEZ
-========================================= */
 
 function judge(pose){
-
-  switch(
-    exerciseSelect.value
-  ){
-
-    case'pushup':
-      return judgePushup(
-        pose
-      );
-
-    case'dip':
-      return judgeDip(
-        pose
-      );
-
-    case'pullup':
-      return judgePullup(
-        pose
-      );
-
-    case'squat':
-      return judgeSquat(
-        pose
-      );
-
+  switch(exerciseSelect.value){
+    case 'pushup': return judgePushup(pose);
+    case 'dip': return judgeDip(pose);
+    case 'pullup': return judgePullup(pose);
+    case 'squat': return judgeSquat(pose);
   }
-
 }
 
-
-
-/* =========================================
-   CANVAS
-========================================= */
+/* CÁMARA Y DIBUJO */
 
 function resizeCanvas(){
+  if(!video.videoWidth || !video.videoHeight) return;
 
   if(
-    !video.videoWidth||
-    !video.videoHeight
-  )
-    return;
-
-
-  if(
-    canvas.width!==
-    video.videoWidth
-    ||
-    canvas.height!==
-    video.videoHeight
+    canvas.width !== video.videoWidth ||
+    canvas.height !== video.videoHeight
   ){
-
-    canvas.width=
-      video.videoWidth;
-
-    canvas.height=
-      video.videoHeight;
-
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
   }
-
 }
-
-
-
-/* =========================================
-   DIBUJAR ESQUELETO
-========================================= */
 
 function drawPose(pose){
-
   resizeCanvas();
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-
-  ctx.clearRect(
-    0,
-    0,
-    canvas.width,
-    canvas.height
+  const pairs = poseDetection.util.getAdjacentPairs(
+    poseDetection.SupportedModels.MoveNet
   );
 
+  ctx.lineWidth = Math.max(3,canvas.width/300);
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#46f59a';
+  ctx.fillStyle = '#46f59a';
 
-  const pairs=
+  pairs.forEach(([i,j])=>{
+    const a = pose.keypoints[i];
+    const b = pose.keypoints[j];
 
-    poseDetection.util
-    .getAdjacentPairs(
-
-      poseDetection
-      .SupportedModels
-      .MoveNet
-
-    );
-
-
-  ctx.lineWidth=
-    Math.max(
-      3,
-      canvas.width/300
-    );
-
-
-  ctx.lineCap='round';
-
-  ctx.strokeStyle='#46f59a';
-
-  ctx.fillStyle='#46f59a';
-
-
-
-  pairs.forEach(
-
-    ([i,j])=>{
-
-      const a=
-        pose.keypoints[i];
-
-      const b=
-        pose.keypoints[j];
-
-
-      if(
-        (a?.score||0)>=DRAW_CONF
-        &&
-        (b?.score||0)>=DRAW_CONF
-      ){
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-          a.x,
-          a.y
-        );
-
-        ctx.lineTo(
-          b.x,
-          b.y
-        );
-
-        ctx.stroke();
-
-      }
-
+    if(
+      (a?.score || 0) >= DRAW_CONF &&
+      (b?.score || 0) >= DRAW_CONF
+    ){
+      ctx.beginPath();
+      ctx.moveTo(a.x,a.y);
+      ctx.lineTo(b.x,b.y);
+      ctx.stroke();
     }
+  });
 
-  );
+  const r = Math.max(4,canvas.width/220);
 
-
-
-  const r=
-    Math.max(
-      4,
-      canvas.width/220
-    );
-
-
-  pose.keypoints.forEach(
-
-    p=>{
-
-      if(
-        (p?.score||0)>=
-        DRAW_CONF
-      ){
-
-        ctx.beginPath();
-
-        ctx.arc(
-          p.x,
-          p.y,
-          r,
-          0,
-          Math.PI*2
-        );
-
-        ctx.fill();
-
-      }
-
+  pose.keypoints.forEach(p=>{
+    if((p?.score || 0) >= DRAW_CONF){
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,r,0,Math.PI*2);
+      ctx.fill();
     }
-
-  );
-
+  });
 }
-
-
-
-/* =========================================
-   INICIAR CÁMARA
-========================================= */
 
 async function start(){
-
   try{
+    startBtn.disabled = true;
+    setStatus('Solicitando acceso a la cámara…','warn');
 
-    startBtn.disabled=true;
-
-
-    setStatus(
-      'Solicitando acceso a la cámara…',
-      'warn'
-    );
-
-
-    if(
-      stream
-    )
-      stream
-      .getTracks()
-      .forEach(
-        t=>t.stop()
-      );
-
-
-
-    /*
-    Intentamos cámara trasera.
-    */
+    if(stream){
+      stream.getTracks().forEach(t=>t.stop());
+    }
 
     try{
-
-      stream=
-
-        await navigator
-        .mediaDevices
-        .getUserMedia({
-
-          audio:false,
-
-          video:{
-
-            facingMode:{
-              ideal:'environment'
-            },
-
-            width:{
-              ideal:1280
-            },
-
-            height:{
-              ideal:720
-            }
-
-          }
-
-        });
-
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio:false,
+        video:{
+          facingMode:{ideal:'environment'},
+          width:{ideal:1280},
+          height:{ideal:720}
+        }
+      });
+    }catch(_){
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio:false,
+        video:true
+      });
     }
 
-
-    catch(_){
-
-      stream=
-
-        await navigator
-        .mediaDevices
-        .getUserMedia({
-
-          audio:false,
-
-          video:true
-
-        });
-
-    }
-
-
-
-    video.srcObject=
-      stream;
-
-
+    video.srcObject = stream;
     await video.play();
-
-
     resizeCanvas();
 
-
-
-    setStatus(
-      'Cargando detector de pose…',
-      'warn'
-    );
-
-
+    setStatus('Cargando detector de pose…','warn');
     await tf.ready();
 
+    detector = await poseDetection.createDetector(
+      poseDetection.SupportedModels.MoveNet,
+      {
+        modelType:poseDetection.movenet.modelType.SINGLEPOSE_THUNDER,
+        enableSmoothing:true
+      }
+    );
 
-
-    detector=
-
-      await poseDetection
-      .createDetector(
-
-        poseDetection
-        .SupportedModels
-        .MoveNet,
-
-        {
-
-          modelType:
-
-            poseDetection
-            .movenet
-            .modelType
-            .SINGLEPOSE_THUNDER,
-
-          enableSmoothing:true
-
-        }
-
-      );
-
-
-
-    mDetector.textContent=
-      'MoveNet Thunder';
-
-
-    running=true;
-
-
+    mDetector.textContent = 'MoveNet Thunder';
+    running = true;
     resetJudge();
+    startBtn.textContent = 'Cámara activa';
 
+    requestAnimationFrame(loop);
+  }catch(err){
+    console.error(err);
 
-    startBtn.textContent=
-      'Cámara activa';
-
-
-    requestAnimationFrame(
-      loop
-    );
-
-  }
-
-
-  catch(err){
-
-    console.error(
-      err
-    );
-
-
-    setStatus(
-      '❌ No se pudo iniciar. Revisa permisos de cámara y abre el sitio con HTTPS.',
-      'bad'
-    );
-
-
-    startBtn.disabled=false;
-
-
-    startBtn.textContent=
-      'Reintentar';
-
-  }
-
-}
-
-
-
-startBtn.addEventListener(
-
-  'click',
-
-  ()=>{
-
-    if(
-      !running
-    )
-      start();
-
-  }
-
-);
-
-
-
-/* =========================================
-   LOOP PRINCIPAL
-========================================= */
-
-async function loop(ts){
-
-  if(
-    !running
-  )
-    return;
-
-
-  requestAnimationFrame(
-    loop
-  );
-
-
-  if(
-
-    busy
-
-    ||
-
-    !detector
-
-    ||
-
-    video.readyState<2
-
-    ||
-
-    ts-lastFrameAt<
-    TARGET_FPS_MS
-
-  )
-    return;
-
-
-
-  lastFrameAt=
-    ts;
-
-
-  busy=true;
-
-
-
-  try{
-
-    const poses=
-
-      await detector
-      .estimatePoses(
-
-        video,
-
-        {
-
-          maxPoses:1,
-
-          flipHorizontal:false
-
-        }
-
-      );
-
-
-
-    if(
-      poses.length
-    ){
-
-      drawPose(
-        poses[0]
-      );
-
-
-      judge(
-        poses[0]
-      );
-
+    if(stream){
+      stream.getTracks().forEach(t=>t.stop());
     }
 
+    setStatus(
+      '❌ No se pudo iniciar. Revisa internet, permisos de cámara y abre el sitio con HTTPS.',
+      'bad'
+    );
+    startBtn.disabled = false;
+    startBtn.textContent = 'Reintentar';
+  }
+}
 
-    else{
+async function loop(ts){
+  if(!running) return;
+  requestAnimationFrame(loop);
 
-      ctx.clearRect(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      );
+  if(
+    busy ||
+    !detector ||
+    document.hidden ||
+    video.readyState < 2 ||
+    ts-lastFrameAt < TARGET_FPS_MS
+  ){
+    return;
+  }
 
+  lastFrameAt = ts;
+  busy = true;
 
-      updateMetrics(
-        0,
-        null,
-        null
-      );
+  try{
+    const poses = await detector.estimatePoses(video,{
+      maxPoses:1,
+      flipHorizontal:false
+    });
 
+    if(document.hidden) return;
 
+    if(poses.length){
+      drawPose(poses[0]);
+      judge(poses[0]);
+    }else{
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      updateMetrics(0,null,null);
       missingPoseFrames++;
 
-
-      if(
-        missingPoseFrames>=
-        MISSING_FRAMES_BEFORE_WARNING
-      ){
-
+      if(missingPoseFrames >= MISSING_FRAMES_BEFORE_WARNING){
+        loseAttempt();
         setStatus(
           '🟡 No detecto una persona. Aléjate y muestra el cuerpo completo.',
           'warn'
         );
-
       }
-
     }
-
+  }catch(err){
+    console.error(err);
+    loseAttempt();
+    setStatus('🟡 Error de detección. Retoma la posición inicial.','warn');
+  }finally{
+    busy = false;
   }
-
-
-  catch(err){
-
-    console.error(
-      err
-    );
-
-  }
-
-
-  finally{
-
-    busy=false;
-
-  }
-
 }
 
+/* SINCRONIZACIÓN ENTRE DISPOSITIVOS */
 
+function newCode(){
+  return Array.from(
+    crypto.getRandomValues(new Uint8Array(8)),
+    v=>alphabet[v%32]
+  ).join('');
+}
 
-/* =========================================
-   EVENTOS
-========================================= */
-
-window.addEventListener(
-  'resize',
-  resizeCanvas
-);
-
-
-document.addEventListener(
-
-  'visibilitychange',
-
-  ()=>{
-
-    if(
-      document.hidden
-    ){
-
-      histories={};
-
-      keypointMemory={};
-
-      stableCounters={};
-
+async function stayAwake(){
+  try{
+    if(navigator.wakeLock && !document.hidden){
+      wakeLock = await navigator.wakeLock.request('screen');
     }
+  }catch(_){}
+}
 
+function disconnect(){
+  generation++;
+  clearTimeout(pairingTimer);
+  if(connection) connection.close();
+  if(peer) peer.destroy();
+  connection = null;
+  peer = null;
+}
+
+function linkMessage(text){
+  if(mode === 'camera'){
+    $('linkState').textContent = text;
+  }else{
+    $('scoreConnection').textContent = text;
+  }
+}
+
+function snapshot(){
+  return {
+    version:1,
+    kind:'state',
+    session,
+    reps,
+    exercise:exerciseSelect.selectedOptions[0].textContent,
+    status:document.hidden
+      ? 'Cámara en pausa: vuelve al teléfono.'
+      : statusEl.textContent,
+    warning:document.hidden || statusEl.classList.contains('warn'),
+    event:latestEvent,
+    active:running && !document.hidden
+  };
+}
+
+function broadcast(){
+  if(mode !== 'camera' || !connection?.open) return;
+
+  try{
+    connection.send(snapshot());
+  }catch(_){
+    linkMessage('Conexión perdida. Vuelve a conectar.');
+  }
+}
+
+function showState(s){
+  if(
+    !s ||
+    s.version !== 1 ||
+    s.kind !== 'state' ||
+    s.session !== session ||
+    !Number.isSafeInteger(s.reps) ||
+    s.reps < 0 ||
+    typeof s.status !== 'string' ||
+    typeof s.exercise !== 'string'
+  ){
+    return;
   }
 
-);
+  const board = $('scoreboard');
+  lastReceived = Date.now();
 
+  $('scoreCount').textContent = String(s.reps);
+  $('scoreExercise').textContent = s.exercise.slice(0,80);
+  $('scoreConnection').textContent = s.active
+    ? 'Conectado · '+session
+    : 'Conectado · cámara en pausa';
+
+  const e = s.event;
+
+  if(!e){
+    clearTimeout(flashTimer);
+    flashTimer = null;
+  }
+
+  if(e && Number.isSafeInteger(e.id) && e.id > lastEvent){
+    lastEvent = e.id;
+
+    if(
+      Date.now()-e.at < 1500 &&
+      Date.now() >= e.at-5000 &&
+      ['valid','invalid'].includes(e.type)
+    ){
+      clearTimeout(flashTimer);
+      board.dataset.signal = e.type;
+      $('scoreMessage').textContent = String(e.message).slice(0,200);
+
+      flashTimer = setTimeout(()=>{
+        flashTimer = null;
+        board.dataset.signal = '';
+      },900);
+      return;
+    }
+  }
+
+  if(!flashTimer){
+    board.dataset.signal = s.warning || !s.active ? 'warning' : '';
+    $('scoreMessage').textContent = s.status.slice(0,200);
+  }
+}
+
+function connect(role,code){
+  disconnect();
+  mode = role;
+  session = code;
+  lastReceived = 0;
+  lastEvent = 0;
+
+  if(typeof Peer === 'undefined'){
+    const msg = 'No cargó la conexión. Recarga con internet.';
+    linkMessage(msg);
+    $('setupMessage').textContent = msg;
+    return;
+  }
+
+  const ticket = generation;
+  linkMessage('Conectando…');
+
+  peer = role === 'camera'
+    ? new Peer('calistenia-v4-'+code)
+    : new Peer();
+
+  pairingTimer = setTimeout(()=>{
+    if(ticket === generation && !connection?.open){
+      linkMessage(
+        'No se pudo conectar. Reintenta con ambos equipos en el mismo Wi-Fi.'
+      );
+    }
+  },15000);
+
+  function attach(c){
+    if(ticket !== generation){
+      c.close();
+      return;
+    }
+
+    if(role === 'camera' && connection){
+      c.on('open',()=>c.close());
+      return;
+    }
+
+    connection = c;
+
+    c.on('open',()=>{
+      if(ticket !== generation) return;
+      clearTimeout(pairingTimer);
+      linkMessage('Marcador conectado');
+      broadcast();
+    });
+
+    c.on('data',s=>{
+      if(ticket === generation && role === 'score'){
+        showState(s);
+      }
+    });
+
+    c.on('close',()=>{
+      if(ticket !== generation || connection !== c) return;
+      connection = null;
+      linkMessage('Desconectado. Conservamos el último conteo.');
+    });
+
+    c.on('error',()=>{
+      if(ticket === generation){
+        linkMessage('Error de conexión. Pulsa reconectar.');
+      }
+    });
+  }
+
+  peer.on('open',()=>{
+    if(ticket !== generation) return;
+
+    if(role === 'camera'){
+      $('sessionCode').textContent = code;
+      linkMessage('Código para tu tablet:');
+    }else{
+      attach(peer.connect('calistenia-v4-'+code,{reliable:true}));
+    }
+  });
+
+  peer.on('connection',c=>{
+    if(role === 'camera'){
+      attach(c);
+    }else{
+      c.on('open',()=>c.close());
+    }
+  });
+
+  peer.on('error',err=>{
+    if(ticket !== generation) return;
+
+    linkMessage(
+      err.type === 'peer-unavailable'
+        ? 'Código no disponible. Comprueba el teléfono y reconecta.'
+        : 'No se pudo conectar. Pulsa conectar de nuevo.'
+    );
+  });
+
+  peer.on('disconnected',()=>{
+    if(ticket === generation && !connection?.open){
+      linkMessage('Sin conexión de sesión. Vuelve a conectar.');
+    }
+  });
+}
+
+/* BOTONES */
+
+$('chooseCamera').onclick = ()=>{
+  mode = 'camera';
+  document.body.dataset.mode = 'camera';
+  $('stationSetup').hidden = true;
+  $('scoreboard').hidden = true;
+  $('cameraTools').hidden = false;
+
+  stayAwake();
+  session = newCode();
+  connect('camera',session);
+};
+
+$('chooseScore').onclick = ()=>{
+  const code = $('joinCode').value.trim().toUpperCase();
+
+  if(!/^[A-HJ-NP-Z2-9]{8}$/.test(code)){
+    $('setupMessage').textContent =
+      'Escribe los 8 caracteres que aparecen en el teléfono.';
+    return;
+  }
+
+  mode = 'score';
+  document.body.dataset.mode = 'score';
+  $('stationSetup').hidden = true;
+  $('scoreboard').hidden = false;
+
+  stayAwake();
+  connect('score',code);
+};
+
+$('pairCamera').onclick = ()=>{
+  session = newCode();
+  $('sessionCode').textContent = '';
+  connect('camera',session);
+};
+
+$('reconnectScore').onclick = ()=>{
+  connect('score',session);
+};
+
+$('resetCount').onclick = ()=>{
+  if(confirm('¿Reiniciar el contador a cero?')){
+    resetJudge();
+  }
+};
+
+function exitStation(){
+  disconnect();
+  running = false;
+
+  if(stream){
+    stream.getTracks().forEach(t=>t.stop());
+  }
+  if(detector){
+    detector.dispose();
+  }
+  location.reload();
+}
+
+$('exitCamera').onclick = exitStation;
+$('exitScore').onclick = exitStation;
+
+$('fullScreen').onclick = async()=>{
+  try{
+    if(!document.fullscreenElement){
+      await $('scoreboard').requestFullscreen();
+    }else{
+      await document.exitFullscreen();
+    }
+  }catch(_){
+    $('scoreConnection').textContent =
+      'Pantalla completa no disponible; gira la tablet para ampliar.';
+  }
+  stayAwake();
+};
+
+startBtn.addEventListener('click',()=>{
+  if(!running) start();
+});
+
+exerciseSelect.addEventListener('change',resetJudge);
+
+window.addEventListener('resize',resizeCanvas);
+
+document.addEventListener('visibilitychange',()=>{
+  if(mode === 'camera'){
+    loseAttempt();
+
+    if(!document.hidden){
+      setStatus('Retoma la posición inicial.','warn');
+    }
+    broadcast();
+  }
+
+  if(!document.hidden){
+    stayAwake();
+  }
+});
+
+setInterval(()=>{
+  if(mode === 'camera'){
+    broadcast();
+  }
+
+  if(
+    mode === 'score' &&
+    lastReceived &&
+    Date.now()-lastReceived > 3500
+  ){
+    clearTimeout(flashTimer);
+    flashTimer = null;
+
+    $('scoreboard').dataset.signal = 'warning';
+    $('scoreConnection').textContent =
+      'Sin señal · último conteo recibido';
+    $('scoreMessage').textContent =
+      'Vuelve al teléfono y comprueba la conexión.';
+  }
+},500);
 
 resetJudge();
-
 </script>
-
 </body>
 </html>
