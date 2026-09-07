@@ -390,7 +390,7 @@ body:not([data-mode="camera"]) #app{display:none}
 
 <section id="stationSetup">
   <div class="stationBox">
-    <p>JUECEO CALISTENIA · ESTACIÓN V4</p>
+    <p>JUECEO CALISTENIA · ESTACIÓN V4.1 · CÁMARA</p>
     <h1>Conecta tu estación</h1>
     <p>
       Usa el teléfono como cámara y la tablet como marcador.
@@ -1358,65 +1358,177 @@ function drawPose(pose){
   });
 }
 
+function startupError(name,message){
+  const error = new Error(message);
+  error.name = name;
+  return error;
+}
+
+// A timed-out permission request cannot be cancelled by the browser.
+// Release any stream/model that arrives late instead of attaching it.
+function startupTimeout(promise,ms,name,message,release=()=>{}){
+  return new Promise((resolve,reject)=>{
+    let settled = false;
+    const timer = setTimeout(()=>{
+      settled = true;
+      reject(startupError(name,message));
+    },ms);
+    Promise.resolve(promise).then(value=>{
+      if(settled){ release(value); return; }
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    },error=>{
+      if(settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
+}
+
+function stopCameraStream(value){
+  if(value) value.getTracks().forEach(track=>track.stop());
+}
+
+function waitForCameraFrame(){
+  return new Promise((resolve,reject)=>{
+    let timer;
+    const cleanup = ()=>{
+      clearTimeout(timer);
+      ['loadeddata','canplay','resize'].forEach(type=>
+        video.removeEventListener(type,check));
+      video.removeEventListener('error',failed);
+    };
+    const check = ()=>{
+      if(video.readyState >= 2 && video.videoWidth > 0){
+        cleanup();
+        resolve();
+      }
+    };
+    const failed = ()=>{
+      cleanup();
+      reject(startupError('VideoError','No se pudo leer el video. Cierra otras apps que usen la cámara y reintenta.'));
+    };
+    ['loadeddata','canplay','resize'].forEach(type=>
+      video.addEventListener(type,check));
+    video.addEventListener('error',failed);
+    timer = setTimeout(()=>{
+      cleanup();
+      reject(startupError('VideoTimeout','La cámara no entrega imagen. Cierra otras apps que la usen y pulsa Reintentar.'));
+    },12000);
+    check();
+  });
+}
+
+function cameraErrorMessage(error,stage){
+  const messages = {
+    NotAllowedError: stage === 'permission'
+      ? 'Permiso de cámara bloqueado. Abre los permisos del sitio junto a la dirección y permite Cámara. Revisa también el permiso de cámara de Chrome en Android.'
+      : 'Chrome bloqueó la reproducción. Mantén esta pestaña visible y pulsa Reintentar.',
+    SecurityError:'El navegador bloqueó la cámara. Revisa los permisos del sitio y de Chrome.',
+    NotFoundError:'No se encontró una cámara disponible en este dispositivo.',
+    NotReadableError:'No se puede abrir la cámara. Cierra otras apps o pestañas que la usen y revisa que el acceso a cámara esté habilitado en Android.',
+    AbortError:'Se interrumpió el inicio de la cámara. Pulsa Reintentar.',
+    OverconstrainedError:'La cámara no admite la configuración solicitada. Pulsa Reintentar.'
+  };
+  return messages[error.name] || (
+    ['PermissionTimeout','VideoTimeout','VideoError','DetectorTimeout','SetupError'].includes(error.name)
+      ? error.message
+      : 'No se pudo completar el inicio. Comprueba internet y pulsa Reintentar.'
+  );
+}
+
+let startingCamera = false;
+
 async function start(){
+  if(startingCamera || running) return;
+  startingCamera = true;
+  let stage = 'permission';
   try{
     startBtn.disabled = true;
-    setStatus('Solicitando acceso a la cámara…','warn');
-
-    if(stream){
-      stream.getTracks().forEach(t=>t.stop());
+    if(!window.isSecureContext || !navigator.mediaDevices?.getUserMedia){
+      throw startupError('SetupError','Abre la página HTTPS en Chrome para usar la cámara.');
     }
+    stopCameraStream(stream);
+    stream = null;
+    video.srcObject = null;
 
+    setStatus('Solicitando permiso de cámara… Pulsa Permitir si aparece el aviso.','warn');
+    const requestCamera = constraints => startupTimeout(
+      navigator.mediaDevices.getUserMedia(constraints),
+      20000,
+      'PermissionTimeout',
+      'La solicitud de cámara no respondió. Revisa el aviso y los permisos del sitio junto a la dirección; después pulsa Reintentar.',
+      stopCameraStream
+    );
     try{
-      stream = await navigator.mediaDevices.getUserMedia({
+      stream = await requestCamera({
         audio:false,
         video:{
           facingMode:{ideal:'environment'},
-          width:{ideal:1280},
-          height:{ideal:720}
+          width:{ideal:640},
+          height:{ideal:480},
+          frameRate:{ideal:30,max:30}
         }
       });
-    }catch(_){
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio:false,
-        video:true
-      });
+    }catch(error){
+      // Do not open a second permission request on denial or timeout.
+      if(error.name !== 'OverconstrainedError') throw error;
+      stream = await requestCamera({audio:false,video:true});
     }
 
+    stage = 'video';
+    setStatus('Permiso concedido. Iniciando imagen de la cámara…','warn');
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
     video.srcObject = stream;
-    await video.play();
+    await startupTimeout(
+      video.play(),12000,'VideoTimeout',
+      'El video no arrancó. Mantén Chrome visible, cierra otras apps que usen la cámara y pulsa Reintentar.'
+    );
+    await waitForCameraFrame();
     resizeCanvas();
 
-    setStatus('Cargando detector de pose…','warn');
-    await tf.ready();
-
-    detector = await poseDetection.createDetector(
-      poseDetection.SupportedModels.MoveNet,
-      {
-        modelType:poseDetection.movenet.modelType.SINGLEPOSE_THUNDER,
-        enableSmoothing:true
-      }
+    stage = 'detector';
+    setStatus('Cámara lista. Cargando detector de pose…','warn');
+    if(typeof tf === 'undefined' || typeof poseDetection === 'undefined'){
+      throw startupError('SetupError','No cargaron los archivos del detector. Revisa internet y recarga la página.');
+    }
+    await startupTimeout(tf.ready(),30000,'DetectorTimeout','No inició el detector. Revisa internet y pulsa Reintentar.');
+    detector = await startupTimeout(
+      poseDetection.createDetector(
+        poseDetection.SupportedModels.MoveNet,
+        {
+          modelType:poseDetection.movenet.modelType.SINGLEPOSE_THUNDER,
+          enableSmoothing:true
+        }
+      ),
+      60000,'DetectorTimeout',
+      'La descarga del detector tardó demasiado. Revisa internet y pulsa Reintentar.',
+      model=>model.dispose()
     );
-
     mDetector.textContent = 'MoveNet Thunder';
     running = true;
     resetJudge();
+    setStatus('Cámara lista. Adopta la posición inicial.','info');
     startBtn.textContent = 'Cámara activa';
-
     requestAnimationFrame(loop);
-  }catch(err){
-    console.error(err);
-
-    if(stream){
-      stream.getTracks().forEach(t=>t.stop());
-    }
-
-    setStatus(
-      '❌ No se pudo iniciar. Revisa internet, permisos de cámara y abre el sitio con HTTPS.',
-      'bad'
-    );
+  }catch(error){
+    console.error(error);
+    running = false;
+    video.pause();
+    stopCameraStream(stream);
+    stream = null;
+    video.srcObject = null;
+    if(detector){ detector.dispose(); detector = null; }
+    setStatus('❌ '+cameraErrorMessage(error,stage),'bad');
     startBtn.disabled = false;
     startBtn.textContent = 'Reintentar';
+  }finally{
+    startingCamera = false;
+    broadcast();
   }
 }
 
@@ -1816,3 +1928,4 @@ resetJudge();
 </script>
 </body>
 </html>
+
