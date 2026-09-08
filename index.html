@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#070a0f">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Jueceo Calistenia AI</title>
 <style>
 :root{--bg:#070a0f;--panel:rgba(7,10,15,.9);--line:rgba(255,255,255,.13);--text:#f6f7f9;--muted:#aeb7c4;--green:#46f59a;--red:#ff6577;--yellow:#ffd166;--blue:#62a8ff}
@@ -31,7 +34,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
   <div id="progressCard" class="panel"><div id="progressText"><span id="mProgress">Recorrido 0%</span><span id="mPhase">Esperando</span></div><div id="progressTrack"><div id="progressFill"></div></div></div>
   <div id="status" class="panel warn" role="status">Selecciona un ejercicio y activa la cámara.</div>
 </div>
-<section id="stationSetup"><div class="stationBox"><p>JUECEO CALISTENIA · ESTACIÓN V6</p><h1>Conecta tu estación</h1><p>Usa el teléfono como cámara y la tablet como marcador. Ambos dispositivos necesitan internet; no es obligatorio que estén en la misma red Wi-Fi.</p>
+<section id="stationSetup"><div class="stationBox"><p>JUECEO CALISTENIA · ESTACIÓN V7.2</p><h1>Conecta tu estación</h1><p>Usa el teléfono como cámara y la tablet como marcador. Ambos dispositivos necesitan internet. Compatible con Apple y Android. Para la primera prueba, usa la misma red Wi-Fi o el mismo hotspot. Versión de conexión: V7.2.</p>
   <fieldset id="workoutChoice"><legend>En el teléfono, elige la rutina</legend><label><input type="radio" name="workoutMode" value="free" checked> Ejercicio libre</label><label><input type="radio" name="workoutMode" value="circuit"> Circuito</label></fieldset>
   <section id="circuitBuilder" hidden><p>Completa cada meta en orden. El cambio de estación se confirma desde el teléfono o la tablet.</p><div id="circuitRows"></div><button id="addStage" type="button">+ Agregar ejercicio</button><label for="roundsInput">Rondas</label><input id="roundsInput" type="number" min="1" max="20" step="1" value="1" inputmode="numeric"><strong id="builderTotal"></strong></section>
   <button id="chooseCamera" class="primary">Este dispositivo es la cámara</button><label for="joinCode">En la tablet, escribe el código del teléfono</label><input id="joinCode" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Código de 8 caracteres"><button id="chooseScore">Conectar marcador</button><p id="setupMessage" role="status"></p><p>El video permanece en el teléfono. El marcador recibe solo contador, ejercicio, estado y avisos.</p></div></section>
@@ -42,8 +45,12 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 <script>
 const $=id=>document.getElementById(id);const video=$('video'),canvas=$('overlay'),ctx=canvas.getContext('2d'),startBtn=$('startBtn'),exerciseSelect=$('exerciseSelect'),repNum=$('repNum'),statusEl=$('status'),guideEl=$('guide'),mDetector=$('mDetector'),mConfidence=$('mConfidence'),mAngle=$('mAngle'),mMinAngle=$('mMinAngle'),mAlign=$('mAlign'),mAuxLabel=$('mAuxLabel'),mProgress=$('mProgress'),mPhase=$('mPhase'),progressFill=$('progressFill');
 
-/* V6: stricter judging, low-latency state machine, automatic marker reconnection. */
-const CONF=.30,DRAW_CONF=.20,JUDGE_CONF=.38,MISSING_FRAMES_BEFORE_WARNING=6,PAIR_PREFIX='calistenia-v6-';
+/* V7.2: strict judging + backward-compatible pairing + Apple/Android camera tuning. */
+const CONF=.30,DRAW_CONF=.20,JUDGE_CONF=.38,MISSING_FRAMES_BEFORE_WARNING=6;
+const BUILD_ID='V7.2';
+const PAIR_PREFIXES=['calistenia-v5-','calistenia-v6-','calistenia-'];
+const PEER_PROTOCOLS=[2,3];
+const PEER_OPTIONS={debug:1,pingInterval:5000,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}]}};
 const RULES={
  pushup:{home:165,depart:153,away:92,alignHome:22,alignAway:27,maxTilt:38,minExcursion:62},
  dip:{home:165,depart:153,away:92,minDepth:-.02,minExcursion:62},
@@ -53,8 +60,30 @@ const RULES={
 const EXERCISES={pushup:{name:'Push-up',guide:'Vista lateral · cuerpo completo · manos y pies visibles. Inicio: codos ≥165°. Fondo: codos ≤92° y cuerpo alineado.'},dip:{name:'Fondo',guide:'Vista lateral · hombro, codo y muñeca visibles. Inicio: codos ≥165°. Fondo: codos ≤92° y hombro al nivel o debajo del codo.'},pullup:{name:'Pull-up',guide:'Vista lateral/oblicua suave · cara, mano, hombro y codo visibles. Inicio: codos ≥168°. Arriba: barbilla sobre la línea de la mano/barra. Calibra si es necesario.'},squat:{name:'Squat',guide:'Vista lateral · cadera, rodilla y tobillo visibles. Inicio: rodillas ≥165°. Fondo: rodillas ≤92° y cadera al nivel o debajo de la rodilla.'}};
 const IDX={nose:0,leftEye:1,rightEye:2,leftEar:3,rightEar:4,leftShoulder:5,rightShoulder:6,leftElbow:7,rightElbow:8,leftWrist:9,rightWrist:10,leftHip:11,rightHip:12,leftKnee:13,rightKnee:14,leftAnkle:15,rightAnkle:16};
 let detector=null,stream=null,running=false,busy=false,lastVideoTime=-1,lastJudgedAt=0,fpsTimes=[],startingCamera=false,poseEpoch=0;let reps=0,phase='WAITING',lockedSide=null,histories={},missingPoseFrames=0,noRepCooldown=0,attemptMinAngle=null,attemptMaxProgress=0,cycle=null,pullReference=null,pullSample=null;
-let mode='',peer=null,connection=null,generation=0,lastReceived=0,lastEvent=0,eventId=0,latestEvent=null,session='',wakeLock=null,pairingTimer=null,reconnectTimer=null,flashTimer=null;
+let mode='',peer=null,peerAliases=[],pendingConnections=[],connection=null,generation=0,lastReceived=0,lastEvent=0,eventId=0,latestEvent=null,session='',wakeLock=null,pairingTimer=null,reconnectTimer=null,flashTimer=null,lastPeerError='';
 const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function isIOSDevice(){
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+}
+function isSafariBrowser(){
+  const ua=navigator.userAgent;
+  return /Safari/.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS|OPiOS|Android/.test(ua);
+}
+function preferredCameraConstraints(){
+  const apple=isIOSDevice();
+  return {
+    audio:false,
+    video:{
+      facingMode:{ideal:'environment'},
+      width:{ideal:640},
+      height:{ideal:480},
+      frameRate:apple ? {ideal:30,max:30} : {ideal:60,max:60}
+    }
+  };
+}
+
 
 function clamp(v,min,max){return Math.max(min,Math.min(max,v))}function distance(a,b){return(!a||!b)?null:Math.hypot(a.x-b.x,a.y-b.y)}function angle(a,b,c){if(!a||!b||!c)return null;const v1={x:a.x-b.x,y:a.y-b.y},v2={x:c.x-b.x,y:c.y-b.y},den=Math.hypot(v1.x,v1.y)*Math.hypot(v2.x,v2.y);if(!den)return null;return Math.acos(clamp((v1.x*v2.x+v1.y*v2.y)/den,-1,1))*180/Math.PI}function lineTilt(a,b){if(!a||!b)return null;return Math.atan2(Math.abs(a.y-b.y),Math.abs(a.x-b.x))*180/Math.PI}
 function setStatus(text,type='info'){statusEl.className=`panel ${type}`;statusEl.textContent=text}function flashCounter(){const box=$('counter');box.classList.remove('pulse');void box.offsetWidth;box.classList.add('pulse')}function phaseLabel(){return{WAITING:'Esperando',TOP:'Arriba',DOWN:'Bajando',BOTTOM:'Abajo',UP:'Subiendo'}[phase]||phase}function setProgress(value,label){const v=clamp(Math.round(value||0),0,100);attemptMaxProgress=Math.max(attemptMaxProgress,v);mProgress.textContent=`Recorrido ${v}%`;progressFill.style.width=`${v}%`;mPhase.textContent=label||phaseLabel()}function resetAttemptMetrics(){attemptMinAngle=null;attemptMaxProgress=0;mMinAngle.textContent='—';setProgress(0,phaseLabel())}function startAttempt(side){lockedSide=side;resetAttemptMetrics()}function trackMinAngle(v){if(v==null)return;attemptMinAngle=attemptMinAngle==null?v:Math.min(attemptMinAngle,v);mMinAngle.textContent=`${Math.round(attemptMinAngle)}°`}
@@ -85,30 +114,280 @@ function validCircuitPlan(plan,rounds){return Array.isArray(plan)&&plan.length>=
 function renderPhoneCircuit(){const v=circuitView();$('phoneCircuit').hidden=!v;exerciseSelect.disabled=!!v;$('repLabel').textContent=v?'de '+v.target+' reps':'reps';$('resetCount').textContent=v?'Reiniciar circuito':'Reiniciar';if(!v)return;$('phoneRound').textContent=`Ronda ${v.round}/${v.rounds} · Estación ${v.index+1}/${v.steps.length}`;$('phoneTotal').textContent=v.state==='complete'?'Circuito completado':`${v.total} / ${v.goal} reps totales`;$('phoneProgress').max=v.goal;$('phoneProgress').value=v.total;$('phoneNext').textContent=v.state==='complete'?'Todas las metas alcanzadas':'Siguiente: '+v.next;$('phoneAction').textContent=actionLabel(v);$('phoneAction').hidden=['active','complete'].includes(v.state);$('phoneAction').disabled=!v.canStart;$('phonePause').hidden=v.state!=='active'}
 function createCircuit(plan,rounds){if(!validCircuitPlan(plan,rounds))return false;circuit={plan:plan.map(x=>({...x})),rounds,round:1,index:0,state:'ready',completed:[]};controlRevision++;exerciseSelect.value=circuit.plan[0].exercise;resetJudge();return true}function circuitControl(action,revision=controlRevision){if(!circuit||revision!==controlRevision)return false;if(action==='pause'&&circuit.state==='active')circuit.state='paused';else if(action==='advance'&&circuit.state==='transition'){if(circuit.index+1<circuit.plan.length)circuit.index++;else{circuit.index=0;circuit.round++}circuit.state='ready';exerciseSelect.value=circuit.plan[circuit.index].exercise;resetJudge()}else if(action==='start'&&['ready','paused'].includes(circuit.state)&&running&&!document.hidden)circuit.state='active';else return false;controlRevision++;poseEpoch++;loseAttempt();latestEvent=null;renderPhoneCircuit();setStatus(circuitMessage(circuitView())||'🟢 Retoma la posición inicial.','info');broadcast();return true}function circuitRepAccepted(){if(!circuit)return;if(reps>=circuitGoal()){reps=circuitGoal();repNum.textContent=String(reps);circuit.completed.push({round:circuit.round,index:circuit.index,exercise:exerciseSelect.value,reps});circuit.state=circuit.index===circuit.plan.length-1&&circuit.round===circuit.rounds?'complete':'transition';controlRevision++;poseEpoch++;setStatus(circuitMessage(circuitView()),'ok');if(latestEvent)latestEvent.message=circuit.state==='complete'?'CIRCUITO COMPLETADO':'META COMPLETADA'}renderPhoneCircuit();broadcast()}
 function renderScoreCircuit(v){remoteCircuit=v;$('scoreCircuit').hidden=!v;$('scoreAction').hidden=!v||['active','complete'].includes(v.state);$('scorePause').hidden=!v||v.state!=='active';$('scoreRound').textContent=v?`Ronda ${v.round}/${v.rounds} · Estación ${v.index+1}/${v.steps.length}`:'';$('scoreTarget').textContent=v?(v.state==='complete'?'REPETICIONES TOTALES':'DE '+v.target+' REPETICIONES'):'REPETICIONES';if(!v)return;$('scoreAction').textContent=actionLabel(v);$('scoreAction').disabled=!v.canStart;$('scorePause').disabled=false;$('scoreTotal').textContent=`${v.total} / ${v.goal} reps totales`;$('scoreNext').textContent=v.state==='complete'?'Todas las metas alcanzadas':'Siguiente: '+v.next;$('scoreProgress').max=v.goal;$('scoreProgress').value=v.total;$('scoreStages').replaceChildren();v.steps.forEach(x=>{const li=document.createElement('li');li.textContent=(x.count===x.target?'✓ ':x.current?'Actual · ':'')+x.name+' · '+x.count+'/'+x.target;if(x.current)li.className='current';$('scoreStages').append(li)});if(v.state==='complete'){$('scoreCount').textContent=String(v.total);$('scoreExercise').textContent='Circuito completado'}}function validRemoteCircuit(v){return v===null||(v&&['ready','active','paused','transition','complete'].includes(v.state)&&Number.isSafeInteger(v.revision)&&Number.isSafeInteger(v.round)&&Number.isSafeInteger(v.rounds)&&v.round>=1&&v.round<=v.rounds&&v.rounds<=20&&Number.isSafeInteger(v.index)&&Array.isArray(v.steps)&&v.steps.length>=1&&v.steps.length<=8&&v.index>=0&&v.index<v.steps.length&&Number.isSafeInteger(v.target)&&v.target>=1&&v.target<=500&&Number.isSafeInteger(v.goal)&&v.goal>=1&&v.goal<=80000&&Number.isSafeInteger(v.total)&&v.total>=0&&v.total<=v.goal&&typeof v.next==='string'&&typeof v.canStart==='boolean'&&v.steps.every(x=>typeof x.name==='string'&&Number.isSafeInteger(x.target)&&Number.isSafeInteger(x.count)))}
-function sendCircuitCommand(action){if(!remoteCircuit||!connection?.open)return;connection.send({kind:'control',version:3,session,action,revision:remoteCircuit.revision})}function receiveCircuitCommand(s){if(!s||s.version!==3||s.kind!=='control'||s.session!==session||!Number.isSafeInteger(s.revision)||!['start','pause','advance'].includes(s.action))return;circuitControl(s.action,s.revision)}
+function sendCircuitCommand(action){if(!remoteCircuit||!connection?.open)return;PEER_PROTOCOLS.forEach(version=>{try{connection.send({kind:'control',version,session,action,revision:remoteCircuit.revision})}catch(_){}})}function receiveCircuitCommand(s){if(!s||!PEER_PROTOCOLS.includes(s.version)||s.kind!=='control'||s.session!==session||!Number.isSafeInteger(s.revision)||!['start','pause','advance'].includes(s.action))return;circuitControl(s.action,s.revision)}
 function resetJudge(){poseEpoch++;pullReference=null;pullSample=null;$('calibratePull').hidden=exerciseSelect.value!=='pullup';$('calibratePull').textContent='Calibrar altura pull-up';reps=0;repNum.textContent='0';missingPoseFrames=0;noRepCooldown=0;latestEvent=null;loseAttempt();renderPhoneCircuit();const ex=EXERCISES[exerciseSelect.value];guideEl.textContent=ex.guide;setStatus(`Colócate en posición inicial para ${ex.name}.`,'warn');broadcast()}
 
 /* Camera */
 function resizeCanvas(){if(!video.videoWidth||!video.videoHeight)return;if(canvas.width!==video.videoWidth||canvas.height!==video.videoHeight){canvas.width=video.videoWidth;canvas.height=video.videoHeight}}function drawPose(pose){resizeCanvas();ctx.clearRect(0,0,canvas.width,canvas.height);const pairs=poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);ctx.lineWidth=Math.max(3,canvas.width/300);ctx.lineCap='round';ctx.strokeStyle='#46f59a';ctx.fillStyle='#46f59a';pairs.forEach(([i,j])=>{const a=pose.keypoints[i],b=pose.keypoints[j];if((a?.score||0)>=DRAW_CONF&&(b?.score||0)>=DRAW_CONF){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}});const r=Math.max(4,canvas.width/220);pose.keypoints.forEach(p=>{if((p?.score||0)>=DRAW_CONF){ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill()}})}
 function startupError(name,message){const e=new Error(message);e.name=name;return e}function startupTimeout(promise,ms,name,message,release=()=>{}){return new Promise((resolve,reject)=>{let settled=false;const timer=setTimeout(()=>{settled=true;reject(startupError(name,message))},ms);Promise.resolve(promise).then(value=>{if(settled){release(value);return}settled=true;clearTimeout(timer);resolve(value)},error=>{if(settled)return;settled=true;clearTimeout(timer);reject(error)})})}function stopCameraStream(s){if(s)s.getTracks().forEach(t=>t.stop())}function waitForCameraFrame(){return new Promise((resolve,reject)=>{let timer;const clean=()=>{clearTimeout(timer);['loadeddata','canplay','resize'].forEach(t=>video.removeEventListener(t,check));video.removeEventListener('error',fail)},check=()=>{if(video.readyState>=2&&video.videoWidth>0){clean();resolve()}},fail=()=>{clean();reject(startupError('VideoError','No se pudo leer el video. Cierra otras apps que usen la cámara.'))};['loadeddata','canplay','resize'].forEach(t=>video.addEventListener(t,check));video.addEventListener('error',fail);timer=setTimeout(()=>{clean();reject(startupError('VideoTimeout','La cámara no entrega imagen. Pulsa Reintentar.'))},12000);check()})}
 function cameraErrorMessage(e,stage){const m={NotAllowedError:stage==='permission'?'Permiso de cámara bloqueado. Permite Cámara en los permisos del sitio y de Chrome.':'Chrome bloqueó la reproducción. Mantén esta pestaña visible y pulsa Reintentar.',SecurityError:'El navegador bloqueó la cámara.',NotFoundError:'No se encontró cámara.',NotReadableError:'No se puede abrir la cámara. Cierra otras apps que la usen.',AbortError:'Se interrumpió el inicio de la cámara.',OverconstrainedError:'La cámara no admite la configuración solicitada.'};return m[e.name]||e.message||'No se pudo completar el inicio.'}
-async function start(){if(startingCamera||running)return;startingCamera=true;let stage='permission';try{startBtn.disabled=true;if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia)throw startupError('SetupError','Abre la página HTTPS en Chrome para usar la cámara.');stopCameraStream(stream);stream=null;video.srcObject=null;setStatus('Solicitando acceso a la cámara… Pulsa Permitir si aparece el aviso.','warn');const request=c=>startupTimeout(navigator.mediaDevices.getUserMedia(c),20000,'PermissionTimeout','La solicitud de cámara no respondió. Revisa los permisos y pulsa Reintentar.',stopCameraStream);try{stream=await request({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:640},height:{ideal:480},frameRate:{ideal:60,max:60}}})}catch(e){if(e.name!=='OverconstrainedError')throw e;stream=await request({audio:false,video:true})}stage='video';setStatus('Permiso concedido. Iniciando imagen…','warn');video.muted=true;video.defaultMuted=true;video.playsInline=true;video.srcObject=stream;await startupTimeout(video.play(),12000,'VideoTimeout','El video no arrancó. Pulsa Reintentar.');await waitForCameraFrame();resizeCanvas();stage='detector';setStatus('Cámara lista. Cargando detector…','warn');if(typeof tf==='undefined'||typeof poseDetection==='undefined')throw startupError('SetupError','No cargó el detector. Revisa internet y recarga.');try{if(tf.getBackend()!=='webgl')await tf.setBackend('webgl')}catch(_){}await startupTimeout(tf.ready(),30000,'DetectorTimeout','No inició el detector.');detector=await startupTimeout(poseDetection.createDetector(poseDetection.SupportedModels.MoveNet,{modelType:poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,enableSmoothing:true}),60000,'DetectorTimeout','La descarga del detector tardó demasiado.',m=>m.dispose());mDetector.textContent='MoveNet Lightning';running=true;poseEpoch++;loseAttempt();renderPhoneCircuit();setStatus(circuit?circuitMessage(circuitView()):'Cámara lista. Adopta la posición inicial.','info');startBtn.textContent='Cámara activa';requestAnimationFrame(loop)}catch(e){console.error(e);running=false;video.pause();stopCameraStream(stream);stream=null;video.srcObject=null;if(detector){detector.dispose();detector=null}setStatus('❌ '+cameraErrorMessage(e,stage),'bad');startBtn.disabled=false;startBtn.textContent='Reintentar'}finally{startingCamera=false;broadcast()}}
+async function start(){if(startingCamera||running)return;startingCamera=true;let stage='permission';try{startBtn.disabled=true;if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia)throw startupError('SetupError','Abre la página HTTPS en Chrome para usar la cámara.');stopCameraStream(stream);stream=null;video.srcObject=null;setStatus('Solicitando acceso a la cámara… Pulsa Permitir si aparece el aviso.','warn');const request=c=>startupTimeout(navigator.mediaDevices.getUserMedia(c),20000,'PermissionTimeout','La solicitud de cámara no respondió. Revisa los permisos y pulsa Reintentar.',stopCameraStream);try{stream=await request(preferredCameraConstraints())}catch(e){if(e.name!=='OverconstrainedError')throw e;stream=await request({audio:false,video:true})}stage='video';setStatus('Permiso concedido. Iniciando imagen…','warn');video.muted=true;video.defaultMuted=true;video.playsInline=true;video.srcObject=stream;await startupTimeout(video.play(),12000,'VideoTimeout','El video no arrancó. Pulsa Reintentar.');await waitForCameraFrame();resizeCanvas();stage='detector';setStatus('Cámara lista. Cargando detector…','warn');if(typeof tf==='undefined'||typeof poseDetection==='undefined')throw startupError('SetupError','No cargó el detector. Revisa internet y recarga.');try{if(tf.getBackend()!=='webgl')await tf.setBackend('webgl')}catch(_){}await startupTimeout(tf.ready(),30000,'DetectorTimeout','No inició el detector.');detector=await startupTimeout(poseDetection.createDetector(poseDetection.SupportedModels.MoveNet,{modelType:poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,enableSmoothing:true}),60000,'DetectorTimeout','La descarga del detector tardó demasiado.',m=>m.dispose());mDetector.textContent='MoveNet Lightning';if(isIOSDevice()){$('mFps').title='Apple/iOS: cámara optimizada a 30 FPS para estabilidad';}else{$('mFps').title='Android/desktop: intenta hasta 60 FPS cuando el dispositivo lo permite';}running=true;poseEpoch++;loseAttempt();renderPhoneCircuit();setStatus(circuit?circuitMessage(circuitView()):'Cámara lista. Adopta la posición inicial.','info');startBtn.textContent='Cámara activa';requestAnimationFrame(loop)}catch(e){console.error(e);running=false;video.pause();stopCameraStream(stream);stream=null;video.srcObject=null;if(detector){detector.dispose();detector=null}setStatus('❌ '+cameraErrorMessage(e,stage),'bad');startBtn.disabled=false;startBtn.textContent='Reintentar'}finally{startingCamera=false;broadcast()}}
 async function loop(){if(!running)return;requestAnimationFrame(loop);if(busy||!detector||document.hidden||video.readyState<2||video.currentTime===lastVideoTime)return;lastVideoTime=video.currentTime;busy=true;const epoch=poseEpoch;try{const poses=await detector.estimatePoses(video,{maxPoses:1,flipHorizontal:false});if(document.hidden||epoch!==poseEpoch)return;const now=performance.now();if(lastJudgedAt&&now-lastJudgedAt>550)loseAttempt();lastJudgedAt=now;fpsTimes.push(now);fpsTimes=fpsTimes.filter(t=>now-t<1000);$('mFps').textContent=String(fpsTimes.length);if(poses.length){drawPose(poses[0]);judge(poses[0])}else{ctx.clearRect(0,0,canvas.width,canvas.height);updateMetrics(0,null,null);missingPoseFrames++;if(missingPoseFrames>=MISSING_FRAMES_BEFORE_WARNING){loseAttempt();setStatus('🟡 No detecto una persona. Muestra el cuerpo completo.','warn')}}}catch(e){console.error(e);loseAttempt();setStatus('🟡 Error de detección. Retoma la posición inicial.','warn')}finally{busy=false}}
 
 /* Pairing / scoreboard */
-function newCode(){return Array.from(crypto.getRandomValues(new Uint8Array(8)),v=>alphabet[v%32]).join('')}async function stayAwake(){try{if(navigator.wakeLock&&!document.hidden)wakeLock=await navigator.wakeLock.request('screen')}catch(_){}}function clearReconnect(){clearTimeout(reconnectTimer);reconnectTimer=null}function disconnect(destroy=true){generation++;clearTimeout(pairingTimer);clearReconnect();if(connection){try{connection.close()}catch(_){}}connection=null;if(destroy&&peer){try{peer.destroy()}catch(_){}}if(destroy)peer=null}
-function linkMessage(text){if(mode==='camera'){$('linkState').textContent=text;$('linkState').title=text}else $('scoreConnection').textContent=text}function snapshot(){return{version:3,kind:'state',circuit:circuitView(),session,reps,exercise:exerciseSelect.selectedOptions[0].textContent,status:document.hidden?'Cámara en pausa: vuelve al teléfono.':circuit&&circuit.state!=='active'?circuitMessage(circuitView()):statusEl.textContent,warning:document.hidden||statusEl.classList.contains('warn'),event:latestEvent,active:running&&!document.hidden,at:Date.now()}}function broadcast(){if(mode!=='camera'||!connection?.open)return;try{connection.send(snapshot())}catch(_){linkMessage('Conexión inestable. Intentando recuperar…')}}
-function showState(s){if(!s||s.version!==3||s.kind!=='state'||s.session!==session||!validRemoteCircuit(s.circuit)||!Number.isSafeInteger(s.reps)||s.reps<0||typeof s.status!=='string'||typeof s.exercise!=='string')return;const board=$('scoreboard');lastReceived=Date.now();$('scoreCount').textContent=String(s.reps);$('scoreExercise').textContent=s.exercise.slice(0,80);$('scoreConnection').textContent=s.active?'Conectado · '+session:'Conectado · cámara en pausa';renderScoreCircuit(s.circuit);const e=s.event;if(e&&Number.isSafeInteger(e.id)&&e.id>lastEvent){lastEvent=e.id;if(Date.now()-e.at<2200&&['valid','invalid'].includes(e.type)){clearTimeout(flashTimer);board.dataset.signal=e.type;$('scoreMessage').textContent=String(e.message).slice(0,200);flashTimer=setTimeout(()=>{flashTimer=null;board.dataset.signal=''},900);return}}if(!flashTimer){board.dataset.signal=s.warning||!s.active?'warning':'';$('scoreMessage').textContent=s.status.slice(0,200)}}
-function scheduleScoreReconnect(delay=1200){if(mode!=='score'||reconnectTimer)return;linkMessage('Reconectando marcador…');reconnectTimer=setTimeout(()=>{reconnectTimer=null;if(mode==='score')connect('score',session)},delay)}
-function connect(role,code){disconnect();mode=role;session=code;lastReceived=0;lastEvent=0;if(typeof Peer==='undefined'){linkMessage('No cargó la conexión. Recarga con internet.');$('setupMessage').textContent='No cargó PeerJS. Recarga con internet.';return}const ticket=generation;linkMessage('Conectando…');peer=role==='camera'?new Peer(PAIR_PREFIX+code):new Peer();pairingTimer=setTimeout(()=>{if(ticket!==generation||connection?.open)return;if(role==='camera')linkMessage('Código listo, esperando tablet…');else{linkMessage('Aún no encuentro la cámara. Reintentando…');scheduleScoreReconnect(200)}},9000);
- const attach=c=>{if(ticket!==generation){c.close();return}if(role==='camera'&&connection?.open){c.on('open',()=>c.close());return}connection=c;c.on('open',()=>{if(ticket!==generation)return;clearTimeout(pairingTimer);clearReconnect();linkMessage(role==='camera'?'Marcador conectado':'Conectado · '+session);if(role==='camera')broadcast();else try{c.send({kind:'hello',version:3,session})}catch(_){}});c.on('data',s=>{if(ticket!==generation||connection!==c)return;if(role==='score')showState(s);else if(s?.kind==='hello'&&s.version===3&&s.session===session)broadcast();else receiveCircuitCommand(s)});c.on('close',()=>{if(ticket!==generation||connection!==c)return;connection=null;if(role==='score')scheduleScoreReconnect(700);else linkMessage('Tablet desconectada · esperando reconexión')});c.on('error',()=>{if(ticket!==generation)return;if(role==='score')scheduleScoreReconnect(1000);else linkMessage('Conexión inestable · esperando reconexión')})};
- peer.on('open',()=>{if(ticket!==generation)return;if(role==='camera'){$('sessionCode').textContent=code;linkMessage('Código para tu tablet:')}else attach(peer.connect(PAIR_PREFIX+code,{reliable:true}))});peer.on('connection',c=>{if(role==='camera')attach(c);else c.on('open',()=>c.close())});peer.on('error',err=>{if(ticket!==generation)return;if(role==='camera'&&err.type==='unavailable-id'){const replacement=newCode();session=replacement;$('sessionCode').textContent=replacement;linkMessage('Generando un código nuevo…');setTimeout(()=>{if(mode==='camera')connect('camera',replacement)},350);return}if(role==='score'&&['peer-unavailable','network','server-error','socket-error','socket-closed'].includes(err.type)){scheduleScoreReconnect(err.type==='peer-unavailable'?900:1500);return}linkMessage('Error de conexión. Pulsa Reconectar.')});peer.on('disconnected',()=>{if(ticket!==generation)return;try{if(peer&&!peer.destroyed)peer.reconnect()}catch(_){if(role==='score')scheduleScoreReconnect(1200)}})}
+function newCode(){return Array.from(crypto.getRandomValues(new Uint8Array(8)),v=>alphabet[v%32]).join('')}
+async function stayAwake(){try{if(navigator.wakeLock&&!document.hidden)wakeLock=await navigator.wakeLock.request('screen')}catch(_){}}
+function clearReconnect(){clearTimeout(reconnectTimer);reconnectTimer=null}
+function safeClose(c){try{c?.close()}catch(_){}}
+function safeDestroy(p){try{p?.destroy()}catch(_){}}
+function disconnect(){
+ generation++;
+ clearTimeout(pairingTimer);
+ clearReconnect();
+ pendingConnections.forEach(safeClose);
+ pendingConnections=[];
+ safeClose(connection);
+ connection=null;
+ const all=[peer,...peerAliases].filter(Boolean);
+ [...new Set(all)].forEach(safeDestroy);
+ peer=null;
+ peerAliases=[];
+}
+function linkMessage(text){
+ if(mode==='camera'){
+   $('linkState').textContent=text;
+   $('linkState').title=text;
+ }else{
+   $('scoreConnection').textContent=text;
+ }
+}
+function snapshot(version=2){
+ return{
+   version,
+   kind:'state',
+   circuit:circuitView(),
+   session,
+   reps,
+   exercise:exerciseSelect.selectedOptions[0].textContent,
+   status:document.hidden
+     ? 'Cámara en pausa: vuelve al teléfono.'
+     : circuit&&circuit.state!=='active'
+       ? circuitMessage(circuitView())
+       : statusEl.textContent,
+   warning:document.hidden||statusEl.classList.contains('warn'),
+   event:latestEvent,
+   active:running&&!document.hidden,
+   at:Date.now(),
+   build:BUILD_ID
+ };
+}
+function broadcast(){
+ if(mode!=='camera'||!connection?.open)return;
+ for(const version of PEER_PROTOCOLS){
+   try{connection.send(snapshot(version))}catch(_){}
+ }
+}
+function showState(s){
+ if(!s||!PEER_PROTOCOLS.includes(s.version)||s.kind!=='state'||s.session!==session||
+    !validRemoteCircuit(s.circuit)||!Number.isSafeInteger(s.reps)||s.reps<0||
+    typeof s.status!=='string'||typeof s.exercise!=='string')return;
+ const board=$('scoreboard');
+ lastReceived=Date.now();
+ $('scoreCount').textContent=String(s.reps);
+ $('scoreExercise').textContent=s.exercise.slice(0,80);
+ $('scoreConnection').textContent=s.active
+   ? 'Conectado · '+session+(s.build?' · '+s.build:'')
+   : 'Conectado · cámara en pausa';
+ renderScoreCircuit(s.circuit);
+ const e=s.event;
+ if(e&&Number.isSafeInteger(e.id)&&e.id>lastEvent){
+   lastEvent=e.id;
+   if(Date.now()-e.at<2200&&['valid','invalid'].includes(e.type)){
+     clearTimeout(flashTimer);
+     board.dataset.signal=e.type;
+     $('scoreMessage').textContent=String(e.message).slice(0,200);
+     flashTimer=setTimeout(()=>{flashTimer=null;board.dataset.signal=''},900);
+     return;
+   }
+ }
+ if(!flashTimer){
+   board.dataset.signal=s.warning||!s.active?'warning':'';
+   $('scoreMessage').textContent=s.status.slice(0,200);
+ }
+}
+function sendHello(){
+ if(!connection?.open)return;
+ for(const version of PEER_PROTOCOLS){
+   try{connection.send({kind:'hello',version,session,build:BUILD_ID})}catch(_){}
+ }
+}
+function scheduleScoreReconnect(delay=1600){
+ if(mode!=='score'||reconnectTimer)return;
+ linkMessage('Reconectando marcador…'+(lastPeerError?' · '+lastPeerError:''));
+ reconnectTimer=setTimeout(()=>{
+   reconnectTimer=null;
+   if(mode==='score')connect('score',session);
+ },delay);
+}
+function attachCameraConnection(c,ticket){
+ if(ticket!==generation){safeClose(c);return}
+ c.on('open',()=>{
+   if(ticket!==generation){safeClose(c);return}
+   if(connection?.open&&connection!==c){safeClose(c);return}
+   connection=c;
+   clearTimeout(pairingTimer);
+   linkMessage('Marcador conectado · '+BUILD_ID);
+   broadcast();
+ });
+ c.on('data',s=>{
+   if(ticket!==generation||connection!==c)return;
+   if(s?.kind==='hello'&&PEER_PROTOCOLS.includes(s.version)&&s.session===session)broadcast();
+   else receiveCircuitCommand(s);
+ });
+ c.on('close',()=>{
+   if(ticket!==generation||connection!==c)return;
+   connection=null;
+   linkMessage('Tablet desconectada · esperando reconexión');
+ });
+ c.on('error',err=>{
+   if(ticket!==generation)return;
+   lastPeerError=err?.type||'webrtc';
+   if(connection===c)linkMessage('Conexión inestable · '+lastPeerError);
+ });
+}
+function createCameraPeer(prefix,code,ticket,index){
+ const p=new Peer(prefix+code,PEER_OPTIONS);
+ peerAliases.push(p);
+ if(index===0)peer=p;
+ p.on('open',()=>{
+   if(ticket!==generation)return;
+   $('sessionCode').textContent=code;
+   if(!connection?.open)linkMessage('Código listo · esperando tablet · '+BUILD_ID);
+ });
+ p.on('connection',c=>attachCameraConnection(c,ticket));
+ p.on('error',err=>{
+   if(ticket!==generation)return;
+   lastPeerError=err?.type||'peer-error';
+   if(err?.type==='unavailable-id'&&index===0){
+     const replacement=newCode();
+     session=replacement;
+     $('sessionCode').textContent=replacement;
+     linkMessage('Código ocupado. Generando uno nuevo…');
+     setTimeout(()=>{if(mode==='camera'&&ticket===generation)connect('camera',replacement)},250);
+     return;
+   }
+   if(err?.type==='unavailable-id')return; // Alias legacy ocupado; el ID principal sigue funcionando.
+   if(['network','server-error','socket-error','socket-closed'].includes(err?.type)){
+     linkMessage('Problema de red PeerJS · '+err.type);
+   }
+ });
+ p.on('disconnected',()=>{
+   if(ticket!==generation)return;
+   try{if(!p.destroyed)p.reconnect()}catch(_){}
+ });
+}
+function startScoreCandidates(code,ticket){
+ const targets=PAIR_PREFIXES.map(prefix=>prefix+code);
+ let launched=0;
+ const launch=()=>{
+   if(ticket!==generation||mode!=='score'||connection?.open||launched>=targets.length)return;
+   const target=targets[launched++];
+   let c;
+   try{
+     c=peer.connect(target,{
+       reliable:true,
+       metadata:{app:'jueceo-calistenia',session,build:BUILD_ID,protocols:PEER_PROTOCOLS}
+     });
+   }catch(err){
+     lastPeerError=err?.type||'connect-error';
+     setTimeout(launch,900);
+     return;
+   }
+   pendingConnections.push(c);
+   c.on('open',()=>{
+     if(ticket!==generation){safeClose(c);return}
+     if(connection?.open&&connection!==c){safeClose(c);return}
+     connection=c;
+     pendingConnections.filter(x=>x!==c).forEach(safeClose);
+     pendingConnections=[c];
+     clearTimeout(pairingTimer);
+     clearReconnect();
+     lastPeerError='';
+     linkMessage('Conectado · '+session+' · '+BUILD_ID);
+     sendHello();
+   });
+   c.on('data',s=>{
+     if(ticket!==generation||connection!==c)return;
+     showState(s);
+   });
+   c.on('close',()=>{
+     if(ticket!==generation)return;
+     if(connection===c){
+       connection=null;
+       scheduleScoreReconnect(900);
+     }
+   });
+   c.on('error',err=>{
+     if(ticket!==generation)return;
+     lastPeerError=err?.type||'data-error';
+     if(connection===c){
+       connection=null;
+       scheduleScoreReconnect(1000);
+     }
+   });
+   // Intenta el siguiente prefijo sin cancelar el handshake actual.
+   setTimeout(launch,1400);
+ };
+ launch();
+ pairingTimer=setTimeout(()=>{
+   if(ticket!==generation||connection?.open)return;
+   lastPeerError=lastPeerError||'sin respuesta';
+   linkMessage('No encuentro la cámara · reintentando · '+lastPeerError);
+   scheduleScoreReconnect(1200);
+ },12000);
+}
+function connect(role,code){
+ disconnect();
+ mode=role;
+ session=code;
+ lastReceived=0;
+ lastEvent=0;
+ lastPeerError='';
+ if(typeof Peer==='undefined'){
+   linkMessage('No cargó PeerJS. Recarga con internet.');
+   $('setupMessage').textContent='No cargó PeerJS. Recarga con internet.';
+   return;
+ }
+ const ticket=generation;
+ linkMessage('Conectando · '+BUILD_ID+'…');
+ if(role==='camera'){
+   PAIR_PREFIXES.forEach((prefix,index)=>createCameraPeer(prefix,code,ticket,index));
+   pairingTimer=setTimeout(()=>{
+     if(ticket===generation&&!connection?.open){
+       linkMessage('Código listo · esperando tablet · '+BUILD_ID);
+     }
+   },12000);
+   return;
+ }
+ peer=new Peer(PEER_OPTIONS);
+ peerAliases=[peer];
+ peer.on('open',()=>{
+   if(ticket!==generation)return;
+   startScoreCandidates(code,ticket);
+ });
+ peer.on('error',err=>{
+   if(ticket!==generation)return;
+   lastPeerError=err?.type||'peer-error';
+   // peer-unavailable es normal mientras probamos prefijos V5/V6.
+   if(err?.type==='peer-unavailable'&&!connection?.open)return;
+   if(['network','server-error','socket-error','socket-closed','webrtc'].includes(err?.type)){
+     if(!connection?.open)scheduleScoreReconnect(1400);
+   }else if(!connection?.open){
+     linkMessage('Error de conexión · '+lastPeerError);
+   }
+ });
+ peer.on('disconnected',()=>{
+   if(ticket!==generation)return;
+   try{if(!peer.destroyed)peer.reconnect()}catch(_){scheduleScoreReconnect(1200)}
+ });
+}
+
 
 /* Controls */
 $('toggleTools').onclick=()=>{const opened=document.body.classList.toggle('tools-open');$('toggleTools').setAttribute('aria-expanded',String(opened));$('toggleTools').textContent=opened?'Cerrar ajustes':'Ajustes y conexión'};document.querySelectorAll('input[name="workoutMode"]').forEach(i=>i.onchange=()=>{$('circuitBuilder').hidden=i.value!=='circuit'});$('addStage').onclick=()=>{if(circuitDraft.length<8){circuitDraft.push({exercise:'squat',target:20});renderBuilder()}};$('roundsInput').oninput=updateBuilderTotal;$('phoneAction').onclick=()=>circuitControl(circuit?.state==='transition'?'advance':'start');$('phonePause').onclick=()=>circuitControl('pause');$('scoreAction').onclick=()=>sendCircuitCommand(remoteCircuit?.state==='transition'?'advance':'start');$('scorePause').onclick=()=>sendCircuitCommand('pause');
 $('calibratePull').onclick=()=>{if(circuit?.state==='active'){setStatus('Pausa la estación antes de calibrar.','warn');return}if(!pullSample||performance.now()-pullSample.at>700||pullSample.elbow>RULES.pullup.away||!pullSample.wristAboveShoulder){setStatus('🟡 Mantén la barbilla justo sobre la barra y pulsa Calibrar altura.','warn');return}pullReference=pullSample.chinHeight;loseAttempt();$('calibratePull').textContent='Altura calibrada · recalibrar';setStatus('🟢 Altura calibrada. Baja a extensión completa para iniciar.','ok')};
 $('chooseCamera').onclick=()=>{const isCircuit=document.querySelector('input[name="workoutMode"]:checked').value==='circuit';if(isCircuit&&!createCircuit(circuitDraft,Number($('roundsInput').value))){$('setupMessage').textContent='Revisa las metas del circuito.';return}if(!isCircuit){circuit=null;resetJudge()}mode='camera';document.body.dataset.mode='camera';$('stationSetup').hidden=true;$('scoreboard').hidden=true;$('cameraTools').hidden=false;stayAwake();session=newCode();connect('camera',session)};$('chooseScore').onclick=()=>{const code=$('joinCode').value.trim().toUpperCase();if(!/^[A-HJ-NP-Z2-9]{8}$/.test(code)){$('setupMessage').textContent='Escribe los 8 caracteres que aparecen en el teléfono.';return}mode='score';document.body.dataset.mode='score';$('stationSetup').hidden=true;$('scoreboard').hidden=false;stayAwake();connect('score',code)};$('pairCamera').onclick=()=>{session=newCode();$('sessionCode').textContent='';connect('camera',session)};$('reconnectScore').onclick=()=>connect('score',session);$('resetCount').onclick=()=>{if(confirm(circuit?'¿Reiniciar TODO el circuito?':'¿Reiniciar el contador?')){if(circuit)createCircuit(circuit.plan,circuit.rounds);else resetJudge();broadcast()}};
-function exitStation(){if(mode==='camera'&&circuit&&!confirm('¿Salir del circuito? Se perderá el progreso.'))return;disconnect();running=false;stopCameraStream(stream);if(detector)detector.dispose();location.reload()}$('exitCamera').onclick=exitStation;$('exitScore').onclick=exitStation;$('fullScreen').onclick=async()=>{try{if(!document.fullscreenElement)await $('scoreboard').requestFullscreen();else await document.exitFullscreen()}catch(_){$('scoreConnection').textContent='Pantalla completa no disponible.'}stayAwake()};startBtn.addEventListener('click',()=>{if(!running)start()});exerciseSelect.addEventListener('change',()=>{if(!circuit)resetJudge()});window.addEventListener('resize',resizeCanvas);window.addEventListener('online',()=>{if(mode==='score')scheduleScoreReconnect(100);else if(mode==='camera'&&!peer?.open)connect('camera',session)});document.addEventListener('visibilitychange',()=>{if(mode==='camera'){poseEpoch++;loseAttempt();if(document.hidden&&circuit?.state==='active')circuitControl('pause');if(!document.hidden)setStatus('Retoma la posición inicial.','warn');broadcast()}if(!document.hidden)stayAwake()});setInterval(()=>{if(mode==='camera')broadcast();if(mode==='score'){if(connection?.open&&lastReceived&&Date.now()-lastReceived>2500){try{connection.send({kind:'hello',version:3,session})}catch(_){}}if(lastReceived&&Date.now()-lastReceived>6000){$('scoreboard').dataset.signal='warning';$('scoreConnection').textContent='Sin señal · reconectando…';$('scoreMessage').textContent='Comprueba que el teléfono siga con la cámara abierta.';scheduleScoreReconnect(500)}}},500);
+function exitStation(){if(mode==='camera'&&circuit&&!confirm('¿Salir del circuito? Se perderá el progreso.'))return;disconnect();running=false;stopCameraStream(stream);if(detector)detector.dispose();location.reload()}$('exitCamera').onclick=exitStation;$('exitScore').onclick=exitStation;$('fullScreen').onclick=async()=>{try{if(!document.fullscreenElement)await $('scoreboard').requestFullscreen();else await document.exitFullscreen()}catch(_){$('scoreConnection').textContent='Pantalla completa no disponible.'}stayAwake()};startBtn.addEventListener('click',()=>{if(!running)start()});exerciseSelect.addEventListener('change',()=>{if(!circuit)resetJudge()});window.addEventListener('resize',resizeCanvas);window.addEventListener('online',()=>{if(mode==='score')scheduleScoreReconnect(100);else if(mode==='camera'&&!peerAliases.some(p=>p&&!p.destroyed&&!p.disconnected))connect('camera',session)});document.addEventListener('visibilitychange',()=>{if(mode==='camera'){poseEpoch++;loseAttempt();if(document.hidden&&circuit?.state==='active')circuitControl('pause');if(!document.hidden)setStatus('Retoma la posición inicial.','warn');broadcast()}if(mode==='score'&&!document.hidden&&!connection?.open)scheduleScoreReconnect(150);if(!document.hidden)stayAwake()});setInterval(()=>{if(mode==='camera')broadcast();if(mode==='score'){if(connection?.open&&(!lastReceived||Date.now()-lastReceived>2500))sendHello();if(lastReceived&&Date.now()-lastReceived>7000){$('scoreboard').dataset.signal='warning';$('scoreConnection').textContent='Sin señal · reconectando…';$('scoreMessage').textContent='Comprueba que el teléfono siga con la cámara abierta.';scheduleScoreReconnect(700)}}},500);
 renderBuilder();resetJudge();
 </script>
 </body>
