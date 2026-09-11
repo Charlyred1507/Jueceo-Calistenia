@@ -31,6 +31,13 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 #capChoice{display:flex;align-items:center;gap:10px}#capChoice input{width:20px;min-height:20px;accent-color:var(--green)}
 #capMinutes{max-width:120px;letter-spacing:normal}#capHelp{font-size:13px}
 @media(max-height:540px){#phoneCircuit{max-height:calc(100dvh - 225px)}}
+
+#guideDialog{width:min(520px,calc(100vw - 24px));max-height:calc(100dvh - 32px);box-sizing:border-box;overflow:auto;margin:auto;padding:16px;border:1px solid var(--line);border-radius:18px;background:#101722;color:var(--text);font-size:14px;line-height:1.5}
+#guideDialog::backdrop{background:rgba(0,0,0,.65)}
+#guideDialog header{display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:-16px;background:#101722;padding:8px 0;z-index:1}
+#guideDialog h2{font-size:18px;margin:0}#guideDialog button{min-height:44px;border:1px solid #596679;border-radius:10px;padding:8px 12px;background:#1a2230;color:white;margin:4px 0}
+#guideDialog label{display:flex;align-items:center;gap:10px;min-height:44px}#guideDialog input{width:20px;height:20px;flex-shrink:0}
+#advancedPanel #openGuide{margin:0;min-height:44px}#advancedPanel{font-size:13px}
 </style>
 </head>
 <body>
@@ -39,12 +46,12 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
   <div id="topBar" class="panel"><div id="controls"><select id="exerciseSelect" aria-label="Ejercicio"><option value="pushup">Push-ups</option><option value="dip">Fondos</option><option value="pullup">Pull-ups</option><option value="squat">Squats</option></select><button id="startBtn">Activar cámara</button></div><div id="counter"><span class="num" id="repNum">0</span><span class="label" id="repLabel">reps</span></div></div>
   <section id="phoneCircuit" class="panel" hidden><div id="phoneRound"></div><div id="phoneClock" class="timerCard" hidden><div><span id="phoneClockLabel">Tiempo restante</span><small id="phoneClockNote"></small></div><strong id="phoneClockValue">07:00</strong></div><strong id="phoneTotal"></strong><progress id="phoneProgress" value="0" max="60"></progress><div id="phoneNext"></div><div class="circuitActions"><button id="phoneAction" class="primary">Iniciar estación</button><button id="phonePause">Pausar</button></div></section>
   <div id="pairSummary"><span id="linkState">Sin marcador</span><b id="sessionCode"></b></div><button id="toggleTools" aria-expanded="false">Ajustes y conexión</button>
-  <div id="metrics" class="panel"><div class="metricRow"><span>Detector</span><b id="mDetector">—</b></div><div class="metricRow"><span>Imágenes/s</span><b id="mFps">—</b></div><div class="metricRow"><span>Confianza</span><b id="mConfidence">—</b></div><div class="metricRow"><span>Ángulo</span><b id="mAngle">—</b></div><div class="metricRow"><span>Mínimo</span><b id="mMinAngle">—</b></div><div class="metricRow"><span id="mAuxLabel">Alineación</span><b id="mAlign">—</b></div></div>
+  <div id="metrics" class="panel"><div class="metricRow"><span>Ángulo</span><b id="mAngle">—</b></div><div class="metricRow"><span>Mínimo</span><b id="mMinAngle">—</b></div><div class="metricRow"><span id="mAuxLabel">Alineación</span><b id="mAlign">—</b></div></div>
   <div id="cameraTools" hidden><button id="pairCamera">Nuevo código</button><button id="calibratePull" hidden>Calibrar altura pull-up</button><button id="resetCount">Reiniciar</button><button id="exitCamera">Salir</button><p id="guide">Coloca el teléfono de lado y muestra el cuerpo completo.</p></div>
   <div id="progressCard" class="panel"><div id="progressText"><span id="mProgress">Recorrido 0%</span><span id="mPhase">Esperando</span></div><div id="progressTrack"><div id="progressFill"></div></div></div>
   <div id="status" class="panel warn" role="status">Selecciona un ejercicio y activa la cámara.</div>
 </div>
-<section id="stationSetup"><div class="stationBox"><p>JUECEO CALISTENIA · ESTACIÓN V8.1 BETA</p><h1>Elige cómo entrenar</h1><p id="modeHelp">Ejercicio libre: cámara, contador y validación en este dispositivo.</p>
+<section id="stationSetup"><div class="stationBox"><p>JUECEO CALISTENIA · ESTACIÓN V8.3 BETA</p><h1>Elige cómo entrenar</h1><p id="modeHelp">Ejercicio libre: cámara, contador y validación en este dispositivo.</p>
   <fieldset id="workoutChoice"><legend>Modo de entrenamiento</legend><label><input type="radio" name="workoutMode" value="free" checked> Ejercicio libre</label><label><input type="radio" name="workoutMode" value="circuit"> Circuito</label></fieldset>
   <section id="circuitBuilder" hidden><p>Completa cada meta en orden. El cambio de estación se confirma desde el teléfono o la tablet.</p><div id="circuitRows"></div><button id="addStage" type="button">+ Agregar ejercicio</button><label for="roundsInput">Rondas</label><input id="roundsInput" type="number" min="1" max="20" step="1" value="1" inputmode="numeric"><strong id="builderTotal"></strong><label id="capChoice"><input id="capEnabled" type="checkbox">Límite de tiempo (timecap)</label><div id="capFields" hidden><label for="capMinutes">Minutos para toda la rutina</label><input id="capMinutes" type="number" min="1" max="180" step="1" value="7" inputmode="numeric" aria-describedby="capHelp"><p id="capHelp">Empieza al iniciar la primera estación. Incluye pausas y cambios de ejercicio. Al llegar a cero, se cierra el resultado.</p></div></section>
   <button id="chooseCamera" class="primary">Abrir ejercicio libre</button><section id="scoreSetup" hidden><h2>En la tablet · marcador</h2><label for="joinCode">En la tablet, escribe el código del teléfono</label><input id="joinCode" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Código de 8 caracteres"><button id="chooseScore">Conectar marcador del circuito</button></section><p id="setupMessage" role="status"></p><p id="connectionHelp" hidden>Para el circuito, usa el teléfono como cámara y la tablet como marcador. Conecta ambos a la misma red Wi-Fi o al hotspot del teléfono. El video permanece en el teléfono.</p></div></section>
@@ -53,11 +60,11 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
 <script>
-const $=id=>document.getElementById(id);const video=$('video'),canvas=$('overlay'),ctx=canvas.getContext('2d'),startBtn=$('startBtn'),exerciseSelect=$('exerciseSelect'),repNum=$('repNum'),statusEl=$('status'),guideEl=$('guide'),mDetector=$('mDetector'),mConfidence=$('mConfidence'),mAngle=$('mAngle'),mMinAngle=$('mMinAngle'),mAlign=$('mAlign'),mAuxLabel=$('mAuxLabel'),mProgress=$('mProgress'),mPhase=$('mPhase'),progressFill=$('progressFill');
+const $=id=>document.getElementById(id);const video=$('video'),canvas=$('overlay'),ctx=canvas.getContext('2d'),startBtn=$('startBtn'),exerciseSelect=$('exerciseSelect'),repNum=$('repNum'),statusEl=$('status'),guideEl=$('guide'),mAngle=$('mAngle'),mMinAngle=$('mMinAngle'),mAlign=$('mAlign'),mAuxLabel=$('mAuxLabel'),mProgress=$('mProgress'),mPhase=$('mPhase'),progressFill=$('progressFill');
 
 /* V7.4: strict judging + backward-compatible pairing + Apple/Android camera tuning. */
-const CONF=.30,DRAW_CONF=.20,JUDGE_CONF=.38,MISSING_FRAMES_BEFORE_WARNING=6;
-const BUILD_ID='V8.1-beta';
+const CONF=.22,DRAW_CONF=.20,JUDGE_CONF=.30,MISSING_FRAMES_BEFORE_WARNING=6;
+const BUILD_ID='V8.3-beta';
 const PAIR_PREFIXES=['calistenia-v5-','calistenia-v6-','calistenia-'];
 const PEER_PROTOCOLS=[2,3];
 const PEER_OPTIONS={debug:1,pingInterval:5000,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}]}};
@@ -99,24 +106,32 @@ function preferredCameraConstraints(){
 function clamp(v,min,max){return Math.max(min,Math.min(max,v))}function distance(a,b){return(!a||!b)?null:Math.hypot(a.x-b.x,a.y-b.y)}function angle(a,b,c){if(!a||!b||!c)return null;const v1={x:a.x-b.x,y:a.y-b.y},v2={x:c.x-b.x,y:c.y-b.y},den=Math.hypot(v1.x,v1.y)*Math.hypot(v2.x,v2.y);if(!den)return null;return Math.acos(clamp((v1.x*v2.x+v1.y*v2.y)/den,-1,1))*180/Math.PI}function lineTilt(a,b){if(!a||!b)return null;return Math.atan2(Math.abs(a.y-b.y),Math.abs(a.x-b.x))*180/Math.PI}
 function setStatus(text,type='info'){statusEl.className=`panel ${type}`;statusEl.textContent=text}function flashCounter(){const box=$('counter');box.classList.remove('pulse');void box.offsetWidth;box.classList.add('pulse')}function phaseLabel(){return{WAITING:'Esperando',TOP:'Arriba',DOWN:'Bajando',BOTTOM:'Abajo',UP:'Subiendo'}[phase]||phase}function setProgress(value,label){const v=clamp(Math.round(value||0),0,100);attemptMaxProgress=Math.max(attemptMaxProgress,v);mProgress.textContent=`Recorrido ${v}%`;progressFill.style.width=`${v}%`;mPhase.textContent=label||phaseLabel()}function resetAttemptMetrics(){attemptMinAngle=null;attemptMaxProgress=0;mMinAngle.textContent='—';setProgress(0,phaseLabel())}function startAttempt(side){lockedSide=side;resetAttemptMetrics()}function trackMinAngle(v){if(v==null)return;attemptMinAngle=attemptMinAngle==null?v:Math.min(attemptMinAngle,v);mMinAngle.textContent=`${Math.round(attemptMinAngle)}°`}
 function filtered(key,value){if(value==null||!Number.isFinite(value))return null;const now=performance.now(),prev=histories[key];if(!prev){histories[key]={value,time:now};return value}const dt=Math.max(1,now-prev.time),delta=value-prev.value;if(Math.abs(delta)>75&&dt<90)return prev.value;const gain=Math.abs(delta)>18?.86:.62;const out=prev.value+gain*delta;histories[key]={value:out,time:now};return out}
-function loseAttempt(){cycle=null;phase='WAITING';lockedSide=null;histories={};resetAttemptMetrics()}function confidenceOf(...pts){const arr=pts.filter(Boolean);return arr.length?Math.min(...arr.map(p=>p.score??0)):0}function rawScore(pose,i){return pose.keypoints[i]?.score||0}function bestArmSide(pose){const l=rawScore(pose,5)+rawScore(pose,7)+rawScore(pose,9),r=rawScore(pose,6)+rawScore(pose,8)+rawScore(pose,10);return l>=r?'L':'R'}function bestLegSide(pose){const l=rawScore(pose,11)+rawScore(pose,13)+rawScore(pose,15),r=rawScore(pose,12)+rawScore(pose,14)+rawScore(pose,16);return l>=r?'L':'R'}function bestBodySide(pose){const l=[5,7,9,11,15].reduce((s,i)=>s+rawScore(pose,i),0),r=[6,8,10,12,16].reduce((s,i)=>s+rawScore(pose,i),0);return l>=r?'L':'R'}
-function point(pose,index){const p=pose.keypoints[index];return p&&(p.score??0)>=CONF?p:null}function sidePoints(pose,side){const L=side==='L';return{shoulder:point(pose,L?IDX.leftShoulder:IDX.rightShoulder),elbow:point(pose,L?IDX.leftElbow:IDX.rightElbow),wrist:point(pose,L?IDX.leftWrist:IDX.rightWrist),hip:point(pose,L?IDX.leftHip:IDX.rightHip),knee:point(pose,L?IDX.leftKnee:IDX.rightKnee),ankle:point(pose,L?IDX.leftAnkle:IDX.rightAnkle),nose:point(pose,IDX.nose)}}function bodyLineError(shoulder,hip,ankle){const a=angle(shoulder,hip,ankle);return a==null?null:Math.abs(180-a)}
-function updateMetrics(conf,primaryAngle,aux,auxLabel='Alineación',auxSuffix='°'){mDetector.textContent='MoveNet';mConfidence.textContent=conf?`${Math.round(conf*100)}%`:'—';mAngle.textContent=primaryAngle==null?'—':`${Math.round(primaryAngle)}°`;mAuxLabel.textContent=auxLabel;mAlign.textContent=aux==null?'—':`${Math.round(aux)}${auxSuffix}`;mPhase.textContent=phaseLabel()}function markVisible(){missingPoseFrames=0}function missingWarning(parts){loseAttempt();missingPoseFrames++;if(missingPoseFrames>=MISSING_FRAMES_BEFORE_WARNING){loseAttempt();setStatus(`🟡 Ajusta la posición. Falta detectar: ${parts.join(', ')}.`,'warn')}}
+function loseAttempt(){cycle=null;phase='WAITING';lockedSide=null;histories={};resetAttemptMetrics()}function confidenceOf(...pts){if(!pts.length||pts.some(p=>!p||(p.score??0)<CONF))return 0;return pts.reduce((sum,p)=>sum+(p.score??0),0)/pts.length;}function rawScore(pose,i){return pose.keypoints[i]?.score||0}function bestArmSide(pose){const l=rawScore(pose,5)+rawScore(pose,7)+rawScore(pose,9),r=rawScore(pose,6)+rawScore(pose,8)+rawScore(pose,10);return l>=r?'L':'R'}function bestLegSide(pose){const l=rawScore(pose,11)+rawScore(pose,13)+rawScore(pose,15),r=rawScore(pose,12)+rawScore(pose,14)+rawScore(pose,16);return l>=r?'L':'R'}function bestBodySide(pose){const l=[5,7,9,11,15].reduce((s,i)=>s+rawScore(pose,i),0),r=[6,8,10,12,16].reduce((s,i)=>s+rawScore(pose,i),0);return l>=r?'L':'R'}
+function point(pose,index){const p=pose.keypoints[index];return p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&(p.score??0)>=CONF?p:null}function sidePoints(pose,side){const L=side==='L';return{shoulder:point(pose,L?IDX.leftShoulder:IDX.rightShoulder),elbow:point(pose,L?IDX.leftElbow:IDX.rightElbow),wrist:point(pose,L?IDX.leftWrist:IDX.rightWrist),hip:point(pose,L?IDX.leftHip:IDX.rightHip),knee:point(pose,L?IDX.leftKnee:IDX.rightKnee),ankle:point(pose,L?IDX.leftAnkle:IDX.rightAnkle),nose:point(pose,IDX.nose)}}function bodyLineError(shoulder,hip,ankle){const a=angle(shoulder,hip,ankle);return a==null?null:Math.abs(180-a)}
+function updateMetrics(conf,primaryAngle,aux,auxLabel='Alineación',auxSuffix='°'){mAngle.textContent=primaryAngle==null?'—':`${Math.round(primaryAngle)}°`;mAuxLabel.textContent=auxLabel;mAlign.textContent=aux==null?'—':`${Math.round(aux)}${auxSuffix}`;mPhase.textContent=phaseLabel()}let missingSince=null;
+function markVisible(){missingPoseFrames=0;missingSince=null;}
+function missingWarning(parts){
+ const t=judgeTime();missingPoseFrames++;
+ if(missingSince==null)missingSince=t;
+ if(t-missingSince>350&&!advPending)loseAttempt();
+ if(missingPoseFrames>=3)setStatus('Muestra '+parts.join(', ')+'.','warn');
+}
+
 
 /* State machine: strict geometry at both ends + full excursion; only the extreme needs one clean frame, so fast valid reps are still captured. */
-function followCycle({home,away,depart,side,angleValue,minExcursion,pull=false,reason,fault=false}){const now=judgeTime(),homePhase=pull?'BOTTOM':'TOP';if(!cycle)cycle={ready:0,endReady:0,active:false,hit:false,samples:0,last:now,startAngle:null,extreme:null,fault:false};if(now-cycle.last>250){loseAttempt();cycle={ready:0,endReady:0,active:false,hit:false,samples:0,last:now,startAngle:null,extreme:null,fault:false}}cycle.last=now;
+function followCycle({home,away,depart,side,angleValue,minExcursion,pull=false,reason,fault=false}){const now=judgeTime(),homePhase=pull?'BOTTOM':'TOP';if(!cycle)cycle={ready:0,endReady:0,active:false,hit:false,samples:0,last:now,startAngle:null,extreme:null,fault:false};if(now-cycle.last>350){loseAttempt();cycle={ready:0,endReady:0,active:false,hit:false,samples:0,last:now,startAngle:null,extreme:null,fault:false}}cycle.last=now;
  if(home&&!cycle.active)cycle.homeAngle=angleValue;
- if(phase==='WAITING'){cycle.ready=home?cycle.ready+1:0;if(cycle.ready>=3){phase=homePhase;lockedSide=side;setStatus('🟢 Posición inicial validada. Puedes empezar.','ok')}else setStatus(pull?'🟡 Extiende completamente los codos para iniciar.':'🟡 Completa la extensión y posición inicial para iniciar.','warn');return}
+ if(phase==='WAITING'){cycle.ready=home?cycle.ready+1:0;if(cycle.ready>=3){phase=homePhase;lockedSide=side;setStatus('🟢 Listo. Empieza.','ok')}else setStatus(pull?'🟡 Extiende los brazos.':'🟡 Completa la extensión.','warn');return}
  if(!cycle.active){if(!depart)return;startAttempt(side);cycle.active=true;cycle.started=now;cycle.samples=0;cycle.hit=false;cycle.endReady=0;cycle.startAngle=cycle.homeAngle??angleValue;cycle.extreme=angleValue;cycle.fault=false}
  cycle.samples++;cycle.fault=cycle.fault||fault;if(angleValue!=null)cycle.extreme=Math.min(cycle.extreme??angleValue,angleValue);if(away){cycle.hit=true;setStatus(pull?'🟢 Altura válida. Baja hasta extensión completa.':'🟢 Profundidad válida. Regresa a extensión completa.','ok')}phase=cycle.hit?(pull?'DOWN':'UP'):(pull?'UP':'DOWN');
  if(home){cycle.endReady++;if(cycle.endReady<2)return;const duration=now-cycle.started,excursion=(cycle.startAngle??0)-(cycle.extreme??cycle.startAngle??0),supported=cycle.samples>=3&&duration>=220&&duration<=7000&&excursion>=minExcursion;const hit=cycle.hit,badForm=cycle.fault;cycle.active=false;cycle.hit=false;cycle.ready=3;cycle.endReady=0;cycle.homeAngle=angleValue;phase=homePhase;if(hit&&supported&&!badForm)validRep();else noRep(badForm?'se perdió la forma durante el recorrido':hit?`recorrido incompleto (${Math.round(excursion)}° de ${minExcursion}° mínimos)`:reason);lockedSide=side}else cycle.endReady=0}
 
 function validRep(){if(expireCircuit())return;if(circuit&&(circuit.state!=='active'||reps>=circuitGoal()))return;reps++;repNum.textContent=String(reps);flashCounter();setProgress(100,'Válida');const min=attemptMinAngle==null?'':` · mínimo ${Math.round(attemptMinAngle)}°`;setStatus(`✅ REP VÁLIDA${min}`,'ok');latestEvent={id:++eventId,type:'valid',message:'REP VÁLIDA',at:Date.now()};circuitRepAccepted();broadcast()}function noRep(reason){if(Date.now()<noRepCooldown)return;noRepCooldown=Date.now()+450;const min=attemptMinAngle==null?'':` · mínimo ${Math.round(attemptMinAngle)}°`;setStatus(`❌ NO REP — ${reason}${min}`,'bad');mPhase.textContent='No rep';latestEvent={id:++eventId,type:'invalid',message:'NO REP: '+reason,at:Date.now()};broadcast()}
 
-function judgePushup(pose){const r=RULES.pushup,side=lockedSide||bestBodySide(pose),p=sidePoints(pose,side),missing=[];['shoulder','elbow','wrist','hip','ankle'].forEach(k=>{if(!p[k])missing.push(k)});if(missing.length){missingWarning(missing);return}markVisible();const elbow=angle(p.shoulder,p.elbow,p.wrist),align=filtered('push_align',bodyLineError(p.shoulder,p.hip,p.ankle)),tilt=filtered('push_tilt',lineTilt(p.shoulder,p.ankle)),conf=confidenceOf(p.shoulder,p.elbow,p.wrist,p.hip,p.ankle);if(elbow==null||align==null||tilt==null)return;updateMetrics(conf,elbow,align,'Alineación','°');trackMinAngle(elbow);if(conf<JUDGE_CONF){loseAttempt();setStatus('🟡 Baja confianza. Acerca la cámara o mejora la iluminación.','warn');return}const top=elbow>=r.home&&align<=r.alignHome&&tilt<=r.maxTilt,bottom=elbow<=r.away&&align<=r.alignAway&&tilt<=r.maxTilt,depart=elbow<r.depart,formFault=cycle?.active&&(align>32||tilt>45);if(phase!=='WAITING')setProgress(clamp((r.home-elbow)/(r.home-r.away)*100,0,100),phaseLabel());followCycle({home:top,away:bottom,depart,side,angleValue:elbow,minExcursion:r.minExcursion,reason:'faltó profundidad, extensión completa o alineación',fault:formFault})}
-function judgeDip(pose){const r=RULES.dip,side=lockedSide||bestArmSide(pose),p=sidePoints(pose,side),missing=[];['shoulder','elbow','wrist'].forEach(k=>{if(!p[k])missing.push(k)});if(missing.length){missingWarning(missing);return}markVisible();const elbow=angle(p.shoulder,p.elbow,p.wrist);if(elbow==null)return;const upper=distance(p.shoulder,p.elbow)||1,depth=(p.shoulder.y-p.elbow.y)/upper,conf=confidenceOf(p.shoulder,p.elbow,p.wrist);updateMetrics(conf,elbow,depth*100,'Hombro','%');trackMinAngle(elbow);if(conf<JUDGE_CONF){loseAttempt();setStatus('🟡 Baja confianza. Asegura que hombro, codo y muñeca se vean completos.','warn');return}const top=elbow>=r.home,bottom=elbow<=r.away&&depth>=r.minDepth;if(phase!=='WAITING')setProgress(clamp((r.home-elbow)/(r.home-r.away)*100,0,100),phaseLabel());followCycle({home:top,away:bottom,depart:elbow<r.depart,side,angleValue:elbow,minExcursion:r.minExcursion,reason:'faltó profundidad o extensión completa'})}
-function judgeSquat(pose){const r=RULES.squat,side=lockedSide||bestLegSide(pose),p=sidePoints(pose,side),missing=[];['hip','knee','ankle'].forEach(k=>{if(!p[k])missing.push(k)});if(missing.length){missingWarning(missing);return}markVisible();const knee=angle(p.hip,p.knee,p.ankle);if(knee==null)return;const thigh=distance(p.hip,p.knee)||1,depth=(p.hip.y-p.knee.y)/thigh,conf=confidenceOf(p.hip,p.knee,p.ankle);updateMetrics(conf,knee,depth*100,'Cadera','%');trackMinAngle(knee);if(conf<JUDGE_CONF){loseAttempt();setStatus('🟡 Baja confianza. Muestra cadera, rodilla y tobillo completos.','warn');return}const top=knee>=r.home,bottom=knee<=r.away&&depth>=r.minDepth;if(phase!=='WAITING')setProgress(clamp((r.home-knee)/(r.home-r.away)*100,0,100),phaseLabel());followCycle({home:top,away:bottom,depart:knee<r.depart,side,angleValue:knee,minExcursion:r.minExcursion,reason:'faltó profundidad o extensión completa'})}
-function judgePullup(pose){const r=RULES.pullup,side=lockedSide||bestArmSide(pose),p=sidePoints(pose,side);if(!p.shoulder||!p.elbow||!p.wrist||!p.nose){pullSample=null;missingWarning(['hombro, codo, mano y cara visibles']);return}markVisible();const elbow=angle(p.shoulder,p.elbow,p.wrist),forearm=distance(p.elbow,p.wrist),conf=confidenceOf(p.shoulder,p.elbow,p.wrist,p.nose);if(elbow==null||!forearm||forearm<15){pullSample=null;loseAttempt();setStatus('🟡 Ajusta la cámara: el brazo se ve demasiado pequeño o incompleto.','warn');return}const headScale=distance(p.nose,p.shoulder)||forearm,chinY=p.nose.y+.18*headScale,chinHeight=(p.wrist.y-chinY)/forearm,target=pullReference??0,clearance=chinHeight-target,wristAboveShoulder=p.wrist.y<p.shoulder.y-.12*forearm;pullSample={at:performance.now(),chinHeight,elbow,wristAboveShoulder};const bottom=elbow>=r.home&&wristAboveShoulder,top=elbow<=r.away&&clearance>=r.minClearance&&wristAboveShoulder;updateMetrics(conf,elbow,clearance*100,pullReference==null?'Barbilla estimada':'Altura calibrada','%');trackMinAngle(elbow);if(conf<JUDGE_CONF){loseAttempt();setStatus('🟡 Baja confianza. Muestra mano, codo, hombro y cara sin cortes.','warn');return}setProgress(clamp((r.home-elbow)/(r.home-r.away)*100,0,100),phaseLabel());followCycle({home:bottom,away:top,depart:elbow<r.depart,side,angleValue:elbow,minExcursion:r.minExcursion,pull:true,reason:'no se observó barbilla sobre la barra y regreso a extensión completa'});if(cycle?.active&&!cycle.hit&&elbow<=r.away)setStatus('🟡 Falta altura de barbilla. Si ya superó la barra, usa Calibrar altura.','warn')}
+function judgePushup(pose){const r=RULES.pushup,side=lockedSide||bestBodySide(pose),p=sidePoints(pose,side),missing=[];['shoulder','elbow','wrist','hip','ankle'].forEach(k=>{if(!p[k])missing.push(k)});if(missing.length){missingWarning(missing);return}const elbow=angle(p.shoulder,p.elbow,p.wrist),align=filtered('push_align',bodyLineError(p.shoulder,p.hip,p.ankle)),tilt=filtered('push_tilt',lineTilt(p.shoulder,p.ankle)),conf=confidenceOf(p.shoulder,p.elbow,p.wrist,p.hip,p.ankle);if(elbow==null||align==null||tilt==null)return;updateMetrics(conf,elbow,align,'Alineación','°');trackMinAngle(elbow);if(conf<JUDGE_CONF){missingWarning(['hombro, codo, cadera y pies']);return}markVisible();const top=elbow>=r.home&&align<=r.alignHome&&tilt<=r.maxTilt,bottom=elbow<=r.away&&align<=r.alignAway&&tilt<=r.maxTilt,depart=elbow<r.depart,formFault=cycle?.active&&(align>32||tilt>45);if(phase!=='WAITING')setProgress(clamp((r.home-elbow)/(r.home-r.away)*100,0,100),phaseLabel());followCycle({home:top,away:bottom,depart,side,angleValue:elbow,minExcursion:r.minExcursion,reason:'faltó profundidad, extensión completa o alineación',fault:formFault})}
+function judgeDip(pose){const r=RULES.dip,side=lockedSide||bestArmSide(pose),p=sidePoints(pose,side),missing=[];['shoulder','elbow','wrist'].forEach(k=>{if(!p[k])missing.push(k)});if(missing.length){missingWarning(missing);return}const elbow=angle(p.shoulder,p.elbow,p.wrist);if(elbow==null)return;const upper=distance(p.shoulder,p.elbow)||1,depth=(p.shoulder.y-p.elbow.y)/upper,conf=confidenceOf(p.shoulder,p.elbow,p.wrist);updateMetrics(conf,elbow,depth*100,'Hombro','%');trackMinAngle(elbow);if(conf<JUDGE_CONF){missingWarning(['hombro, codo y muñeca']);return}markVisible();const top=elbow>=r.home,bottom=elbow<=r.away&&depth>=r.minDepth;if(phase!=='WAITING')setProgress(clamp((r.home-elbow)/(r.home-r.away)*100,0,100),phaseLabel());followCycle({home:top,away:bottom,depart:elbow<r.depart,side,angleValue:elbow,minExcursion:r.minExcursion,reason:'faltó profundidad o extensión completa'})}
+function judgeSquat(pose){const r=RULES.squat,side=lockedSide||bestLegSide(pose),p=sidePoints(pose,side),missing=[];['hip','knee','ankle'].forEach(k=>{if(!p[k])missing.push(k)});if(missing.length){missingWarning(missing);return}const knee=angle(p.hip,p.knee,p.ankle);if(knee==null)return;const thigh=distance(p.hip,p.knee)||1,depth=(p.hip.y-p.knee.y)/thigh,conf=confidenceOf(p.hip,p.knee,p.ankle);updateMetrics(conf,knee,depth*100,'Cadera','%');trackMinAngle(knee);if(conf<JUDGE_CONF){missingWarning(['cadera, rodilla y tobillo']);return}markVisible();const top=knee>=r.home,bottom=knee<=r.away&&depth>=r.minDepth;if(phase!=='WAITING')setProgress(clamp((r.home-knee)/(r.home-r.away)*100,0,100),phaseLabel());followCycle({home:top,away:bottom,depart:knee<r.depart,side,angleValue:knee,minExcursion:r.minExcursion,reason:'faltó profundidad o extensión completa'})}
+function judgePullup(pose){const r=RULES.pullup,side=lockedSide||bestArmSide(pose),p=sidePoints(pose,side);if(!p.shoulder||!p.elbow||!p.wrist||!p.nose){pullSample=null;missingWarning(['hombro, codo, mano y cara visibles']);return}const elbow=angle(p.shoulder,p.elbow,p.wrist),forearm=distance(p.elbow,p.wrist),conf=confidenceOf(p.shoulder,p.elbow,p.wrist,p.nose);if(elbow==null||!forearm||forearm<15){pullSample=null;loseAttempt();setStatus('🟡 Ajusta la cámara: el brazo se ve demasiado pequeño o incompleto.','warn');return}const headScale=distance(p.nose,p.shoulder)||forearm,chinY=p.nose.y+.18*headScale,chinHeight=(p.wrist.y-chinY)/forearm,target=pullReference??0,clearance=chinHeight-target,wristAboveShoulder=p.wrist.y<p.shoulder.y-.12*forearm;pullSample={at:performance.now(),chinHeight,elbow,wristAboveShoulder};const bottom=elbow>=r.home&&wristAboveShoulder,top=elbow<=r.away&&clearance>=r.minClearance&&wristAboveShoulder;updateMetrics(conf,elbow,clearance*100,pullReference==null?'Barbilla estimada':'Altura calibrada','%');trackMinAngle(elbow);if(conf<JUDGE_CONF){missingWarning(['mano, codo y cara']);return}markVisible();setProgress(clamp((r.home-elbow)/(r.home-r.away)*100,0,100),phaseLabel());followCycle({home:bottom,away:top,depart:elbow<r.depart,side,angleValue:elbow,minExcursion:r.minExcursion,pull:true,reason:'no se observó barbilla sobre la barra y regreso a extensión completa'});if(cycle?.active&&!cycle.hit&&elbow<=r.away)setStatus('🟡 Falta altura de barbilla. Si ya superó la barra, usa Calibrar altura.','warn')}
 function judge(pose){expireCircuit();if(circuit&&circuit.state!=='active'){if(exerciseSelect.value==='pullup'&&['ready','paused'].includes(circuit.state)){const side=bestArmSide(pose),p=sidePoints(pose,side),forearm=distance(p.elbow,p.wrist);if(p.shoulder&&p.elbow&&p.wrist&&p.nose&&forearm>=15){const headScale=distance(p.nose,p.shoulder)||forearm;pullSample={at:performance.now(),chinHeight:(p.wrist.y-(p.nose.y+.18*headScale))/forearm,elbow:angle(p.shoulder,p.elbow,p.wrist),wristAboveShoulder:p.wrist.y<p.shoulder.y-.12*forearm}}else pullSample=null}setStatus(circuitMessage(circuitView()),circuit.state==='complete'?'ok':'info');return}switch(exerciseSelect.value){case'pushup':return judgePushup(pose);case'dip':return judgeDip(pose);case'pullup':return judgePullup(pose);case'squat':return judgeSquat(pose)}}
 
 /* Circuit */
@@ -127,27 +142,30 @@ function renderPhoneCircuit(){const v=circuitView();renderClock('phone',v);$('ph
 function createCircuit(plan,rounds,capMs=0){if(!validCircuitPlan(plan,rounds)||!Number.isSafeInteger(capMs)||capMs<0||capMs>10800000)return false;circuit={plan:plan.map(x=>({...x})),rounds,round:1,index:0,state:'ready',completed:[],capMs,startedAt:null,startedMono:null,elapsedMs:0,finalElapsed:null};controlRevision++;exerciseSelect.value=circuit.plan[0].exercise;resetJudge();return true}function circuitControl(action,revision=controlRevision){if(expireCircuit())return false;if(!circuit||revision!==controlRevision)return false;if(action==='pause'&&circuit.state==='active')circuit.state='paused';else if(action==='advance'&&circuit.state==='transition'){if(circuit.index+1<circuit.plan.length)circuit.index++;else{circuit.index=0;circuit.round++}circuit.state='ready';exerciseSelect.value=circuit.plan[circuit.index].exercise;resetJudge()}else if(action==='start'&&['ready','paused'].includes(circuit.state)&&running&&!document.hidden){circuit.state='active';if(circuit.startedAt===null){circuit.startedAt=Date.now();circuit.startedMono=performance.now()}}else return false;controlRevision++;poseEpoch++;loseAttempt();latestEvent=null;renderPhoneCircuit();setStatus(circuitMessage(circuitView())||'🟢 Retoma la posición inicial.','info');broadcast();return true}function circuitRepAccepted(){if(!circuit)return;if(reps>=circuitGoal()){reps=circuitGoal();repNum.textContent=String(reps);circuit.completed.push({round:circuit.round,index:circuit.index,exercise:exerciseSelect.value,reps});circuit.state=circuit.index===circuit.plan.length-1&&circuit.round===circuit.rounds?'complete':'transition';if(circuit.state==='complete')circuit.finalElapsed=circuitElapsed();controlRevision++;poseEpoch++;setStatus(circuitMessage(circuitView()),'ok');if(latestEvent)latestEvent.message=circuit.state==='complete'?'CIRCUITO COMPLETADO':'META COMPLETADA'}renderPhoneCircuit();broadcast()}
 function renderScoreCircuit(v){remoteCircuit=v;remoteClockAt=performance.now();renderClock('score',v);$('scoreCircuit').hidden=!v;$('scoreAction').hidden=!v||['active','complete','timecap'].includes(v.state);$('scorePause').hidden=!v||v.state!=='active';$('scoreRound').textContent=v?`Ronda ${v.round}/${v.rounds} · Estación ${v.index+1}/${v.steps.length}`:'';$('scoreTarget').textContent=v?(['complete','timecap'].includes(v.state)?'REPETICIONES TOTALES':'DE '+v.target+' REPETICIONES'):'REPETICIONES';if(!v)return;$('scoreAction').textContent=actionLabel(v);$('scoreAction').disabled=!v.canStart;$('scorePause').disabled=false;$('scoreTotal').textContent=`${v.total} / ${v.goal} reps totales`;$('scoreNext').textContent=v.state==='timecap'?'Resultado cerrado · reinicia para volver a intentar':v.state==='complete'?'Todas las metas alcanzadas':'Siguiente: '+v.next;$('scoreProgress').max=v.goal;$('scoreProgress').value=v.total;$('scoreStages').replaceChildren();v.steps.forEach(x=>{const li=document.createElement('li');li.textContent=(x.count===x.target?'✓ ':x.current?'Actual · ':'')+x.name+' · '+x.count+'/'+x.target;if(x.current)li.className='current';$('scoreStages').append(li)});if(['complete','timecap'].includes(v.state)){$('scoreCount').textContent=String(v.total);$('scoreExercise').textContent=v.state==='timecap'?'Timecap terminado':'Circuito completado'}}function validRemoteCircuit(v){return v===null||(v&&(v.capMs===undefined||(Number.isSafeInteger(v.capMs)&&v.capMs>=0&&v.capMs<=10800000&&Number.isFinite(v.remainingMs)&&v.remainingMs>=0&&v.remainingMs<=v.capMs&&Number.isFinite(v.elapsedMs)&&v.elapsedMs>=0&&typeof v.clockStarted==='boolean'))&&['ready','active','paused','transition','complete','timecap'].includes(v.state)&&Number.isSafeInteger(v.revision)&&Number.isSafeInteger(v.round)&&Number.isSafeInteger(v.rounds)&&v.round>=1&&v.round<=v.rounds&&v.rounds<=20&&Number.isSafeInteger(v.index)&&Array.isArray(v.steps)&&v.steps.length>=1&&v.steps.length<=8&&v.index>=0&&v.index<v.steps.length&&Number.isSafeInteger(v.target)&&v.target>=1&&v.target<=500&&Number.isSafeInteger(v.goal)&&v.goal>=1&&v.goal<=80000&&Number.isSafeInteger(v.total)&&v.total>=0&&v.total<=v.goal&&typeof v.next==='string'&&typeof v.canStart==='boolean'&&v.steps.every(x=>typeof x.name==='string'&&Number.isSafeInteger(x.target)&&Number.isSafeInteger(x.count)))}
 function sendCircuitCommand(action){if(!remoteCircuit||!connection?.open)return;PEER_PROTOCOLS.forEach(version=>{try{connection.send({kind:'control',version,session,action,revision:remoteCircuit.revision})}catch(_){}})}function receiveCircuitCommand(s){if(!s||!PEER_PROTOCOLS.includes(s.version)||s.kind!=='control'||s.session!==session||!Number.isSafeInteger(s.revision)||!['start','pause','advance'].includes(s.action))return;circuitControl(s.action,s.revision)}
-function resetJudge(){poseEpoch++;pullReference=null;pullSample=null;$('calibratePull').hidden=exerciseSelect.value!=='pullup';$('calibratePull').textContent='Calibrar altura pull-up';reps=0;repNum.textContent='0';missingPoseFrames=0;noRepCooldown=0;latestEvent=null;loseAttempt();renderPhoneCircuit();const ex=EXERCISES[exerciseSelect.value];guideEl.textContent=ex.guide;setStatus(`Colócate en posición inicial para ${ex.name}.`,'warn');broadcast()}
+function resetJudge(){poseEpoch++;pullReference=null;pullSample=null;$('calibratePull').hidden=exerciseSelect.value!=='pullup';$('calibratePull').textContent='Calibrar altura pull-up';reps=0;repNum.textContent='0';missingPoseFrames=0;noRepCooldown=0;latestEvent=null;loseAttempt();renderPhoneCircuit();const ex=EXERCISES[exerciseSelect.value];guideEl.textContent=initialHint(exerciseSelect.value);setStatus(initialHint(exerciseSelect.value),'warn');broadcast()}
 
 /* Camera */
 function resizeCanvas(){if(!video.videoWidth||!video.videoHeight)return;if(canvas.width!==video.videoWidth||canvas.height!==video.videoHeight){canvas.width=video.videoWidth;canvas.height=video.videoHeight}}function drawPose(pose){resizeCanvas();ctx.clearRect(0,0,canvas.width,canvas.height);const pairs=poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);ctx.lineWidth=Math.max(3,canvas.width/300);ctx.lineCap='round';ctx.strokeStyle='#46f59a';ctx.fillStyle='#46f59a';pairs.forEach(([i,j])=>{const a=pose.keypoints[i],b=pose.keypoints[j];if((a?.score||0)>=DRAW_CONF&&(b?.score||0)>=DRAW_CONF){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}});const r=Math.max(4,canvas.width/220);pose.keypoints.forEach(p=>{if((p?.score||0)>=DRAW_CONF){ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill()}})}
 function startupError(name,message){const e=new Error(message);e.name=name;return e}function startupTimeout(promise,ms,name,message,release=()=>{}){return new Promise((resolve,reject)=>{let settled=false;const timer=setTimeout(()=>{settled=true;reject(startupError(name,message))},ms);Promise.resolve(promise).then(value=>{if(settled){release(value);return}settled=true;clearTimeout(timer);resolve(value)},error=>{if(settled)return;settled=true;clearTimeout(timer);reject(error)})})}function stopCameraStream(s){if(s)s.getTracks().forEach(t=>t.stop())}function waitForCameraFrame(){return new Promise((resolve,reject)=>{let timer;const clean=()=>{clearTimeout(timer);['loadeddata','canplay','resize'].forEach(t=>video.removeEventListener(t,check));video.removeEventListener('error',fail)},check=()=>{if(video.readyState>=2&&video.videoWidth>0){clean();resolve()}},fail=()=>{clean();reject(startupError('VideoError','No se pudo leer el video. Cierra otras apps que usen la cámara.'))};['loadeddata','canplay','resize'].forEach(t=>video.addEventListener(t,check));video.addEventListener('error',fail);timer=setTimeout(()=>{clean();reject(startupError('VideoTimeout','La cámara no entrega imagen. Pulsa Reintentar.'))},12000);check()})}
 function cameraErrorMessage(e,stage){const m={NotAllowedError:stage==='permission'?'Permiso de cámara bloqueado. Permite Cámara en los permisos del sitio y de Chrome.':'Chrome bloqueó la reproducción. Mantén esta pestaña visible y pulsa Reintentar.',SecurityError:'El navegador bloqueó la cámara.',NotFoundError:'No se encontró cámara.',NotReadableError:'No se puede abrir la cámara. Cierra otras apps que la usen.',AbortError:'Se interrumpió el inicio de la cámara.',OverconstrainedError:'La cámara no admite la configuración solicitada.'};return m[e.name]||e.message||'No se pudo completar el inicio.'}
-async function start(){if(startingCamera||running)return;startingCamera=true;let stage='permission';try{startBtn.disabled=true;if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia)throw startupError('SetupError','Abre la página HTTPS en Chrome para usar la cámara.');stopCameraStream(stream);stream=null;video.srcObject=null;setStatus('Solicitando acceso a la cámara… Pulsa Permitir si aparece el aviso.','warn');const request=c=>startupTimeout(navigator.mediaDevices.getUserMedia(c),20000,'PermissionTimeout','La solicitud de cámara no respondió. Revisa los permisos y pulsa Reintentar.',stopCameraStream);try{stream=await request(preferredCameraConstraints())}catch(e){if(e.name!=='OverconstrainedError')throw e;stream=await request({audio:false,video:true})}stage='video';setStatus('Permiso concedido. Iniciando imagen…','warn');video.muted=true;video.defaultMuted=true;video.playsInline=true;video.srcObject=stream;await startupTimeout(video.play(),12000,'VideoTimeout','El video no arrancó. Pulsa Reintentar.');await waitForCameraFrame();resizeCanvas();stage='detector';setStatus('Cámara lista. Cargando detector…','warn');if(typeof tf==='undefined'||typeof poseDetection==='undefined')throw startupError('SetupError','No cargó el detector. Revisa internet y recarga.');try{if(tf.getBackend()!=='webgl')await tf.setBackend('webgl')}catch(_){}await startupTimeout(tf.ready(),30000,'DetectorTimeout','No inició el detector.');detector=await startupTimeout(poseDetection.createDetector(poseDetection.SupportedModels.MoveNet,{modelType:poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,enableSmoothing:true}),60000,'DetectorTimeout','La descarga del detector tardó demasiado.',m=>m.dispose());mDetector.textContent='MoveNet Lightning';if(isIOSDevice()){$('mFps').title='Apple/iOS: cámara optimizada a 30 FPS para estabilidad';}else{$('mFps').title='Android/desktop: intenta hasta 60 FPS cuando el dispositivo lo permite';}running=true;poseEpoch++;loseAttempt();renderPhoneCircuit();setStatus(circuit?circuitMessage(circuitView()):'Cámara lista. Adopta la posición inicial.','info');startBtn.textContent='Cámara activa';requestAnimationFrame(loop)}catch(e){console.error(e);running=false;video.pause();stopCameraStream(stream);stream=null;video.srcObject=null;if(detector){detector.dispose();detector=null}setStatus('❌ '+cameraErrorMessage(e,stage),'bad');startBtn.disabled=false;startBtn.textContent='Reintentar'}finally{startingCamera=false;broadcast()}}
+async function start(){if(startingCamera||running)return;startingCamera=true;let stage='permission';try{startBtn.disabled=true;if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia)throw startupError('SetupError','Abre la página HTTPS en Chrome para usar la cámara.');stopCameraStream(stream);stream=null;video.srcObject=null;setStatus('Solicitando acceso a la cámara… Pulsa Permitir si aparece el aviso.','warn');const request=c=>startupTimeout(navigator.mediaDevices.getUserMedia(c),20000,'PermissionTimeout','La solicitud de cámara no respondió. Revisa los permisos y pulsa Reintentar.',stopCameraStream);try{stream=await request(preferredCameraConstraints())}catch(e){if(e.name!=='OverconstrainedError')throw e;stream=await request({audio:false,video:true})}stage='video';setStatus('Permiso concedido. Iniciando imagen…','warn');video.muted=true;video.defaultMuted=true;video.playsInline=true;video.srcObject=stream;await startupTimeout(video.play(),12000,'VideoTimeout','El video no arrancó. Pulsa Reintentar.');await waitForCameraFrame();resizeCanvas();stage='detector';setStatus('Cámara lista. Cargando detector…','warn');if(typeof tf==='undefined'||typeof poseDetection==='undefined')throw startupError('SetupError','No cargó el detector. Revisa internet y recarga.');try{if(tf.getBackend()!=='webgl')await tf.setBackend('webgl')}catch(_){}await startupTimeout(tf.ready(),30000,'DetectorTimeout','No inició el detector.');detector=await startupTimeout(createJudgeDetector(),60000,'DetectorTimeout','La descarga del detector tardó demasiado.',m=>m.dispose());running=true;poseEpoch++;loseAttempt();renderPhoneCircuit();setStatus(circuit?circuitMessage(circuitView()):'Cámara lista. Adopta la posición inicial.','info');startBtn.textContent='Cámara activa';requestAnimationFrame(loop)}catch(e){console.error(e);running=false;video.pause();stopCameraStream(stream);stream=null;video.srcObject=null;if(detector){detector.dispose();detector=null}setStatus('❌ '+cameraErrorMessage(e,stage),'bad');startBtn.disabled=false;startBtn.textContent='Reintentar'}finally{startingCamera=false;broadcast()}}
 async function loop(){
  if(!running)return;requestAnimationFrame(loop);
  if(busy||!detector||document.hidden||video.readyState<2||video.seeking||video.currentTime===lastVideoTime||(inputMode==='clip'&&video.paused))return;
  lastVideoTime=video.currentTime;busy=true;const epoch=poseEpoch,frameAt=inputMode==='clip'?video.currentTime*1000:performance.now();
  try{
-  const input=analysisInput();const poses=await detector.estimatePoses(input.image,{maxPoses:1,flipHorizontal:false});
+  const input=analysisInput();const poses=await detector.estimatePoses(input.image,{flipHorizontal:false},performance.now());
   if(document.hidden||epoch!==poseEpoch)return;
   poseFrameAt=frameAt;const now=performance.now();
   if(lastJudgedAt&&now-lastJudgedAt>550&&inputMode!=='clip')loseAttempt();lastJudgedAt=now;
-  fpsTimes.push(now);fpsTimes=fpsTimes.filter(t=>now-t<1000);$('mFps').textContent=String(fpsTimes.length);
-  if(poses.length){const pose=poses[0];pose.keypoints.forEach(p=>{p.x+=input.x;p.y+=input.y;});drawPose(pose);drawAnalysisRegion();
-   if(!continuousPose(pose,frameAt)){loseAttempt();setStatus('No evaluable · cambió la persona, el encuadre o faltan puntos. Retoma el inicio.','warn');return;}
+  fpsTimes.push(now);fpsTimes=fpsTimes.filter(t=>now-t<1000);
+  poses.forEach(pose=>pose.keypoints.forEach(p=>{p.x+=input.x;p.y+=input.y;}));
+  const pose=selectAthlete(poses,frameAt);
+  if(pose){drawPose(pose);drawAthleteBox(pose);
+   if(!continuousPose(pose,frameAt)){trackingGap('Seguimiento interrumpido. Retoma el inicio.');return;}
    judge(pose);
-  }else{loseAttempt();trackingSample=null;ctx.clearRect(0,0,canvas.width,canvas.height);drawAnalysisRegion();updateMetrics(0,null,null);setStatus('No evaluable · persona fuera del encuadre.','warn');}
+  }else{ctx.clearRect(0,0,canvas.width,canvas.height);trackingGap(athleteTrack?'Atleta fuera de vista · toca para elegir de nuevo.':'Buscando atleta · toca a la persona.');}
+
  }catch(e){console.error(e);loseAttempt();trackingSample=null;setStatus('Error de detección · retoma la posición inicial.','warn');}finally{busy=false;}
 }
 
@@ -461,15 +479,15 @@ function renderSetupMode(){
 }
 /* V8: geometric candidates, never an official certification. Thresholds below are engineering tolerances. */
 const ADVANCED={
- muscleup:{name:'Muscle-up (barra)',guide:'Lateral-oblicua 20–30° · ambas manos, barra y pies visibles · cámara a altura de la barra, lejos del balanceo.',rule:'Suspensión completa → transición → apoyo con ambos codos extendidos. CALIFEST Élite pp. 2–3. Juez: contacto con estructura, apoyo sobre barra y lastre.'},
- frontlever:{name:'Front lever',hold:true,guide:'Lateral a 90° del cuerpo · lente a altura del torso en horizontal · barra y cuerpo completo visibles.',rule:'Bloques completos de 5 s; los sobrantes de un intento no pasan al siguiente. CALIFEST Élite p. 7. Geometría de entrenamiento: cuerpo horizontal, cadera y rodillas extendidas, brazos rectos. Juez: agarre, pies juntos y ausencia de apoyo.'},
- handstand:{name:'Handstand hold',hold:true,guide:'Lateral-oblicua 15–25° · cámara a media altura del cuerpo invertido · manos y pies completos, piso o parallettes visibles.',rule:'Bloques completos de 5 s. CALIFEST Élite p. 20 permite piso o parallettes. Geometría de entrenamiento: inversión, brazos rectos y cuerpo alineado. Juez: equilibrio sin apoyo y posición de manos.'},
- hspu:{name:'Handstand push-up',guide:'Lateral-oblicua 15–25° · cabeza, ambas manos y pies visibles · muestra la superficie inferior.',rule:'Extensión invertida → descenso → extensión. CALIFEST Élite p. 5 permite piso o parallettes pero no precisa profundidad. Codo ≤90° es un filtro de entrenamiento, NO sustituye contacto/profundidad. Juez debe verificar recorrido y ausencia de impulso; no se impone la pared de CrossFit.'},
- onearmpullup:{name:'One arm pull-up',guide:'Oblicua frontal 30–45° · cara, barra y ambas manos visibles · evita que el brazo libre se oculte.',rule:'Suspensión a un brazo → barbilla sobre barra. CALIFEST Élite pp. 2–3: para cambiar de brazo hay que soltarse por completo. Juez: barbilla real, agarre, ausencia de ayuda y suelta completa.'},
- lunge:{name:'Desplante atrás alternado',guide:'Lateral-oblicua 20–30° · ambas piernas, pies y suelo visibles · deja espacio para el paso atrás.',rule:'CALIFEST Avanzado p. 12: rodilla toca suelo, pie regresa adelante, extensión de cadera y alternancia. Cada pierna cuenta 1 rep. Juez: contacto y dirección del paso.'},
- burpee:{name:'Burpee CALIFEST',guide:'Lateral-oblicua 20–30° · cuerpo completo desde el suelo hasta las manos en el salto · cámara fija.',rule:'CALIFEST Avanzado pp. 13–14: salto con ambos pies atrás → push-up → salto con ambos pies adelante → salto vertical con brazos estirados arriba. Juez: simultaneidad de pies, push-up y vuelo real.'},
- boxjump:{name:'Box jump',guide:'Lateral-oblicua 20–30° · ambos pies y caja completa visibles · calibra de pie en el suelo y después sobre la caja.',rule:'Salto desde el suelo → apoyo de ambos pies arriba → extensión de cadera y rodillas. CALIFEST Élite pp. 9–11 usa caja de 60 cm en esa prueba. Juez: altura real, despegue y apoyo de pies. No es box jump over.'},
- squatboxjump:{name:'Squat box jump',guide:'Lateral-oblicua 20–30° · suelo, caja y ambos pies visibles · calibra suelo y caja.',rule:'CALIFEST Avanzado p. 12: sentadilla antes del salto, extensión arriba y al menos la mitad de cada pie dentro de la caja. Se permite bajar con paso o salto. Juez verifica superficie y pies.'}
+ muscleup:{name:'Muscle-up (barra)',guide:'Lateral-oblicua 20–30° · ambas manos, barra y pies visibles · cámara a altura de la barra, lejos del balanceo.',rule:'Suspensión → transición sobre barra → brazos extendidos. El juez confirma apoyo y ausencia de ayuda.'},
+ frontlever:{name:'Front lever',hold:true,guide:'Lateral a 90° del cuerpo · lente a altura del torso en horizontal · barra y cuerpo completo visibles.',rule:'Cuerpo horizontal, brazos y piernas extendidos. Bloques de 5 s continuos. El juez confirma agarre y ausencia de apoyo.'},
+ handstand:{name:'Handstand hold',hold:true,guide:'Lateral-oblicua 15–25° · cámara a media altura del cuerpo invertido · manos y pies completos, piso o parallettes visibles.',rule:'Cuerpo invertido y alineado, brazos extendidos. Bloques de 5 s continuos. El juez confirma equilibrio y apoyos permitidos.'},
+ hspu:{name:'Handstand push-up',guide:'Lateral-oblicua 15–25° · cabeza, ambas manos y pies visibles · muestra la superficie inferior.',rule:'Entrada libre al pino → extensión → descenso → extensión. Codos a 90° o menos como referencia geométrica. El juez confirma profundidad, contacto e impulso según la prueba.'},
+ onearmpullup:{name:'One arm pull-up',guide:'Oblicua frontal 30–45° · cara, barra y ambas manos visibles · evita que el brazo libre se oculte.',rule:'Suspensión a un brazo → barbilla sobre barra. El juez confirma agarre, altura y ausencia de ayuda.'},
+ lunge:{name:'Desplante atrás alternado',guide:'Lateral-oblicua 20–30° · ambas piernas, pies y suelo visibles · deja espacio para el paso atrás.',rule:'Paso atrás → flexión → regreso de pie. Alterna piernas; cada pierna cuenta una repetición. El juez confirma contacto de rodilla.'},
+ burpee:{name:'Burpee',guide:'Lateral-oblicua 20–30° · cuerpo completo desde el suelo hasta las manos en el salto · cámara fija.',rule:'De pie → plancha → push-up → regreso de pies → salto con brazos arriba. El juez confirma contacto y salto.'},
+ boxjump:{name:'Box jump',guide:'Lateral-oblicua 20–30° · ambos pies y caja completa visibles · calibra de pie en el suelo y después sobre la caja.',rule:'Suelo → salto → apoyo de ambos pies en caja → extensión. Calibra la caja usada en la prueba. El juez confirma altura y apoyos.'},
+ squatboxjump:{name:'Squat box jump',guide:'Lateral-oblicua 20–30° · suelo, caja y ambos pies visibles · calibra suelo y caja.',rule:'Sentadilla → salto a caja → extensión arriba. El juez confirma profundidad y apoyo de los pies.'}
 };
 Object.assign(EXERCISES,ADVANCED);
 for(const [id,ex] of Object.entries(ADVANCED)){CIRCUIT_NAMES[id]=ex.name;const o=document.createElement('option');o.value=id;o.textContent=ex.name;exerciseSelect.append(o)}
@@ -479,8 +497,23 @@ let advPreviousLeg=null,advCandidateId=0;let adv={},advPending=null,advEvents=[]
 function resetAdvanced(){adv={state:'ready',last:null,holdMs:0,credited:0,ready:0};}
 resetAdvanced();
 const advPanel=document.createElement('section');advPanel.id='advancedPanel';advPanel.className='panel';advPanel.hidden=true;
-advPanel.innerHTML='<details><summary>Guía y estándar · detección experimental</summary><p id="advGuide"></p><p id="advRule"></p><p>Los ángulos son tolerancias de visión 2D, no reglas oficiales. El juez confirma los criterios que la cámara no puede comprobar.</p><label><input type="checkbox" id="advAuto"> Auto-conteo experimental para entrenamiento</label><div><button id="calFloor">Calibrar de pie en suelo</button><button id="calBox">Calibrar de pie en caja</button></div><p id="calState"></p></details><p id="advLive">Adopta la posición inicial.</p><div id="advReview" hidden><strong id="advPendingText"></strong><button id="advAccept">Confirmar</button><button id="advReject">No rep</button></div><button id="exportJudge">Exportar registro JSON</button>';
+advPanel.innerHTML='<details><summary>Guía y estándar · detección experimental</summary><p id="advGuide"></p><p id="advRule"></p><p>Los ángulos son tolerancias de visión 2D, no reglas oficiales. El juez confirma los criterios que la cámara no puede comprobar.</p><label><input type="checkbox" id="advAuto"> Auto-conteo experimental para entrenamiento</label><div><button id="calFloor">Calibrar de pie en suelo</button><button id="calBox">Calibrar de pie en caja</button></div><p id="calState"></p></details><p id="advLive">Adopta la posición inicial.</p><div id="advReview" hidden><strong id="advPendingText"></strong><button id="advAccept">Confirmar</button><button id="advReject">No rep</button></div><button id="exportJudge">Descargar posición inicial (PNG)</button>';
 $('app').append(advPanel);
+const guideDialog=document.createElement('dialog');
+guideDialog.id='guideDialog';guideDialog.setAttribute('aria-labelledby','guideTitle');
+guideDialog.innerHTML='<header><h2 id="guideTitle">Guía del ejercicio</h2><button id="closeGuide" type="button" autofocus aria-label="Cerrar guía">Cerrar</button></header>';
+document.body.append(guideDialog);
+const guideDetails=advPanel.querySelector('details');
+const guideSummary=guideDetails.querySelector('summary');guideSummary.remove();
+while(guideDetails.firstChild)guideDialog.append(guideDetails.firstChild);
+guideDetails.remove();guideDialog.append($('exportJudge'));
+const openGuide=document.createElement('button');openGuide.id='openGuide';openGuide.type='button';openGuide.textContent='Guía y opciones';openGuide.setAttribute('aria-haspopup','dialog');openGuide.setAttribute('aria-controls','guideDialog');
+advPanel.prepend(openGuide);
+openGuide.onclick=()=>{if(!guideDialog.open)guideDialog.showModal();};
+$('closeGuide').onclick=()=>guideDialog.close();
+guideDialog.addEventListener('click',event=>{if(event.target===guideDialog){const r=guideDialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)guideDialog.close();}});
+exerciseSelect.addEventListener('change',()=>guideDialog.close());
+
 const advStyle=document.createElement('style');advStyle.textContent='#video,#overlay{object-fit:contain}#advancedPanel{left:8px;right:8px;top:calc(max(8px,env(safe-area-inset-top)) + 132px);max-height:calc(100dvh - 320px);overflow:auto;border-radius:14px;padding:10px;font-size:12px}body.has-advanced #phoneCircuit{top:calc(max(8px,env(safe-area-inset-top)) + 132px)}body.has-advanced.has-circuit #advancedPanel{top:calc(max(8px,env(safe-area-inset-top)) + 330px);max-height:calc(100dvh - 510px)}body.tools-open #advancedPanel{display:none}#advancedPanel p{margin:6px 0}#advancedPanel button{min-height:44px;margin:4px;padding:6px 10px;border-radius:9px;border:1px solid #596679;background:#1a2230;color:white}#advReview{border:1px solid var(--yellow);padding:8px;border-radius:8px}#advReview strong{display:block}#advAccept{background:#158957!important}#advancedPanel summary{cursor:pointer;min-height:32px}@media(max-height:600px){body.has-advanced.has-circuit #advancedPanel{top:130px;left:8px;right:auto;width:48%;max-height:calc(100dvh - 225px)}}';document.head.append(advStyle);
 function refreshAdvanced(){const id=exerciseSelect.value,ex=ADVANCED[id];advPanel.hidden=!ex;document.body.classList.toggle('has-advanced',!!ex);document.body.classList.toggle('has-circuit',!!circuit);if(!ex)return;$('advGuide').textContent=ex.guide;$('advRule').textContent=ex.rule;const box=id==='boxjump'||id==='squatboxjump';$('calFloor').hidden=!box&&id!=='burpee';$('calBox').hidden=!box;$('calState').hidden=!box&&id!=='burpee';$('calState').textContent=advCalibration.floor!=null?'Suelo calibrado'+(advCalibration.box!=null?' · caja calibrada':''):'Calibra de pie antes de burpees o saltos.';$('repLabel').textContent=circuit?'de '+circuitGoal()+' '+unitFor(id):unitFor(id);}
 function logAdvanced(type,amount,detail){advEvents.push({at:new Date().toISOString(),elapsedMs:circuit?circuitElapsed():null,exercise:exerciseSelect.value,type,amount,unit:unitFor(exerciseSelect.value),detail,build:BUILD_ID});}
@@ -491,27 +524,39 @@ $('advAccept').onclick=()=>reviewAdvanced(true);$('advReject').onclick=()=>revie
 $('advAuto').onchange=()=>{advPending=null;$('advReview').hidden=true;resetAdvanced();};
 function calibrateAdvanced(kind){if(!advLastPose||performance.now()-advLastPoseAt>500){setStatus('Muestra una pose reciente de pie para calibrar.','warn');return;}const m=advancedMetrics(advLastPose);if(!m||!m.stand){setStatus('Calibra con ambas piernas y cadera extendidas, cuerpo completo.','warn');return;}if(kind==='box'&&(advCalibration.floor==null||m.feet>advCalibration.floor-m.scale*.15)){setStatus('Calibra primero suelo; después sube a la caja sin mover la cámara.','warn');return;}advCalibration[kind]=m.feet;if(kind==='box'){advCalibration.boxX=(m.l.ankle.x+m.r.ankle.x)/2;}resetAdvanced();refreshAdvanced();}
 $('calFloor').onclick=()=>{advCalibration={};calibrateAdvanced('floor')};$('calBox').onclick=()=>calibrateAdvanced('box');
-$('exportJudge').onclick=()=>{const blob=new Blob([JSON.stringify({build:BUILD_ID,notice:'Registro de entrenamiento/asistencia; no score oficial CALIFEST',events:advEvents,circuit:circuitView()},null,2)],{type:'application/json'});const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='jueceo-v8-'+Date.now()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
-function advancedMetrics(pose){
- const l=sidePoints(pose,'L'),r=sidePoints(pose,'R'),required=['shoulder','elbow','wrist','hip','knee','ankle'];
- if([l,r].some(p=>required.some(k=>!p[k]||p[k].score<.45)))return null;
- const scale=(distance(l.shoulder,l.hip)+distance(r.shoulder,r.hip))/2;if(scale<25)return null;
- const arms=[l,r].map(p=>angle(p.shoulder,p.elbow,p.wrist)),knees=[l,r].map(p=>angle(p.hip,p.knee,p.ankle)),hips=[l,r].map(p=>angle(p.shoulder,p.hip,p.knee));
- const straight=knees.every(a=>a>=165)&&hips.every(a=>a>=160),feet=(l.ankle.y+r.ankle.y)/2;
- const upright=[l,r].every(p=>p.shoulder.y<p.hip.y&&p.hip.y<p.ankle.y&&lineTilt(p.shoulder,p.ankle)>=65);
- const inverted=[l,r].every(p=>p.ankle.y<p.hip.y&&p.hip.y<p.shoulder.y&&p.shoulder.y<p.wrist.y&&lineTilt(p.shoulder,p.ankle)>=65);
- return{confidence:Math.min(...[l,r].flatMap(p=>required.map(k=>p[k].score))),l,r,scale,arms,knees,hips,feet,straight,stand:straight&&upright,inverted,locked:arms.every(a=>a>=165),horizontal:[l,r].every(p=>lineTilt(p.shoulder,p.ankle)<=12),align:[l,r].every(p=>bodyLineError(p.shoulder,p.hip,p.ankle)<=15)};
+$('exportJudge').onclick=exportInitialPosition;
+function advancedMetrics(pose,id=exerciseSelect.value){
+ const l=sidePoints(pose,'L'),r=sidePoints(pose,'R');
+ const upperOnly=['muscleup','onearmpullup'].includes(id),legsOnly=['lunge','boxjump','squatboxjump'].includes(id);
+ const required=upperOnly?['shoulder','elbow','wrist','hip']:legsOnly?['shoulder','hip','knee','ankle']:['shoulder','elbow','wrist','hip','knee','ankle'];
+ const complete=p=>required.every(k=>p[k])&&confidenceOf(...required.map(k=>p[k]))>=JUDGE_CONF;
+ const sides=[l,r].filter(complete);
+ const singleSide=['frontlever','handstand','hspu'].includes(id);
+ if(sides.length<(singleSide?1:2))return null;
+ const scale=sides.reduce((sum,p)=>sum+distance(p.shoulder,p.hip),0)/sides.length;
+ if(scale<Math.max(12,Math.min(video.videoWidth||640,video.videoHeight||480)*.025))return null;
+ const arms=sides.filter(p=>p.elbow&&p.wrist).map(p=>angle(p.shoulder,p.elbow,p.wrist));
+ const knees=sides.filter(p=>p.knee&&p.ankle).map(p=>angle(p.hip,p.knee,p.ankle));
+ const hips=sides.filter(p=>p.knee).map(p=>angle(p.shoulder,p.hip,p.knee));
+ if([...arms,...knees,...hips].some(v=>v==null||!Number.isFinite(v)))return null;
+ const bodyVisible=sides.every(p=>p.knee&&p.ankle),armsVisible=arms.length===sides.length;
+ const straight=bodyVisible&&knees.every(a=>a>=165)&&hips.every(a=>a>=160);
+ const feet=bodyVisible?sides.reduce((sum,p)=>sum+p.ankle.y,0)/sides.length:null;
+ const upright=bodyVisible&&sides.every(p=>p.shoulder.y<p.hip.y&&p.hip.y<p.ankle.y&&lineTilt(p.shoulder,p.ankle)>=65);
+ const inverted=bodyVisible&&armsVisible&&sides.every(p=>p.ankle.y<p.hip.y&&p.hip.y<p.shoulder.y&&p.shoulder.y<p.wrist.y&&lineTilt(p.shoulder,p.ankle)>=65);
+ return{confidence:confidenceOf(...sides.flatMap(p=>required.map(k=>p[k]))),sides,l,r,scale,arms,knees,hips,feet,straight,stand:straight&&upright,inverted,locked:armsVisible&&arms.every(a=>a>=165),horizontal:bodyVisible&&sides.every(p=>lineTilt(p.shoulder,p.ankle)<=12),align:bodyVisible&&sides.every(p=>bodyLineError(p.shoulder,p.hip,p.ankle)<=15)};
 }
 function advanceSequence(state,now){adv.state=state;adv.since=now;adv.stable=0;}
 function judgeAdvanced(pose,now=judgeTime()){
  advLastPose=pose;advLastPoseAt=performance.now();
  if(advPending){$('advLive').textContent='Confirme o rechace antes de continuar.';return;}
- const m=advancedMetrics(pose),id=exerciseSelect.value;
- if(!m){resetAdvanced();$('advLive').textContent='No evaluable: muestra ambos brazos, piernas y pies sin ocultarlos.';setStatus('No evaluable · mejora encuadre/iluminación','warn');return;}
- if(adv.last!=null&&now-adv.last>250)resetAdvanced();const dt=adv.last==null?0:now-adv.last;adv.last=now;
- const {l,r,scale,arms,knees}=m;updateMetrics(m.confidence||.45,Math.min(...arms),Math.min(...knees),'Rodillas','°');
+ const id=exerciseSelect.value,m=advancedMetrics(pose,id);
+ if(id==='hspu'){judgeHspu(m,now);return;}
+ if(!m){if(isHold(id)){adv.holdMs=0;adv.credited=0;adv.holdValid=false;}missingWarning(['las articulaciones del ejercicio']);$('advLive').textContent='Muestra las articulaciones del ejercicio.';return;}markVisible();
+ if(adv.last!=null&&now-adv.last>350)resetAdvanced();const dt=adv.last==null?0:now-adv.last;adv.last=now;
+ const {l,r,scale,arms,knees,sides}=m;updateMetrics(m.confidence,arms.length?Math.min(...arms):null,knees.length?Math.min(...knees):null,'Rodillas','°');
  if(isHold(id)){
-  const good=m.straight&&m.locked&&m.align&&(id==='handstand'?m.inverted:m.horizontal&&[l,r].every(p=>p.wrist.y<p.shoulder.y-scale*.15));
+  const good=m.straight&&m.locked&&m.align&&(id==='handstand'?m.inverted:m.horizontal&&sides.every(p=>p.wrist.y<p.shoulder.y-scale*.15));
   if(!good){adv.holdMs=0;adv.credited=0;adv.holdValid=false;$('advLive').textContent=holdReason(m,id)+' · resto del bloque descartado.';return;}
   // First valid frame starts the clock; no bridging across invalid samples.
   adv.holdMs+=adv.holdValid?dt:0;adv.holdValid=true;
@@ -519,25 +564,19 @@ function judgeAdvanced(pose,now=judgeTime()){
   if(blocks>adv.credited){adv.credited=blocks;candidateAdvanced(5);}return;
  }
  if(adv.since&&now-adv.since>15000){resetAdvanced();return;}
- const hang=m.locked&&[l,r].every(p=>p.wrist.y<p.shoulder.y-scale*.2);
- const support=m.locked&&[l,r].every(p=>p.shoulder.y<p.wrist.y-scale*.2);
+ const hang=m.locked&&sides.every(p=>p.wrist.y<p.shoulder.y-scale*.2);
+ const support=m.locked&&sides.every(p=>p.shoulder.y<p.wrist.y-scale*.2);
  const confirm=(good)=>{adv.stable=good?(adv.stable||0)+1:0;return adv.stable>=2};
  if(id==='muscleup'){
   if(adv.state==='ready'&&confirm(hang))advanceSequence('pull',now);
   else if(adv.state==='pull'&&arms.every(a=>a<140))advanceSequence('transition',now);
-  else if(adv.state==='transition'&&[l,r].every(p=>p.shoulder.y<p.wrist.y)&&arms.some(a=>a<155))advanceSequence('support',now);
+  else if(adv.state==='transition'&&sides.every(p=>p.shoulder.y<p.wrist.y)&&arms.some(a=>a<155))advanceSequence('support',now);
   else if(adv.state==='support'&&confirm(support)){advanceSequence('ready',now);candidateAdvanced(1);}
- }else if(id==='hspu'){
-  const top=m.inverted&&m.locked&&m.straight&&m.align;
-  if(adv.state==='ready'&&confirm(top))advanceSequence('down',now);
-  else if(adv.state==='down'&&m.inverted&&m.straight&&m.align&&arms.every(a=>a<=90))advanceSequence('up',now);
-  else if(adv.state==='up'&&confirm(top)){advanceSequence('ready',now);candidateAdvanced(1);}
-  if((!m.inverted||!m.straight||!m.align)&&adv.state!=='ready'){resetAdvanced();$('advLive').textContent='Intento interrumpido: pierde inversión o alineación.';return;}
  }else if(id==='onearmpullup'){
   const sides=[l,r],eligible=sides.map((p,i)=>p.wrist.y<p.shoulder.y-scale*.2&&sides[1-i].wrist.y>sides[1-i].shoulder.y);
   const side=eligible.findIndex(Boolean);
   if(side<0){resetAdvanced();return;}
-  const p=sides[side],nose=point(pose,0);if(!nose||nose.score<.45){resetAdvanced();return;}
+  const p=sides[side],nose=point(pose,0);if(!nose||nose.score<CONF){resetAdvanced();return;}
   if(adv.state==='ready'&&arms[side]>=168){adv.side=side;advanceSequence('pull',now);}
   else if(adv.state==='pull'){
    if(side!==adv.side){resetAdvanced();return;}
@@ -552,18 +591,18 @@ function judgeAdvanced(pose,now=judgeTime()){
   }
  }else if(id==='burpee'){
   if(advCalibration.floor==null){$('advLive').textContent='Calibra de pie en suelo desde Guía y estándar.';return;}
-  const plank=m.horizontal&&m.align&&[l,r].every(p=>p.shoulder.y<p.wrist.y);
+  const plank=m.horizontal&&m.align&&sides.every(p=>p.shoulder.y<p.wrist.y);
   if(adv.state==='ready'&&confirm(m.stand))advanceSequence('plank',now);
   else if(adv.state==='plank'&&plank&&m.locked)advanceSequence('pushdown',now);
   else if(adv.state==='pushdown'&&plank&&arms.every(a=>a<=90))advanceSequence('pushup',now);
   else if(adv.state==='pushup'&&plank&&m.locked)advanceSequence('jump',now);
-  else if(adv.state==='jump'&&m.stand&&m.locked&&[l,r].every(p=>p.wrist.y<p.shoulder.y-scale*.3)&&m.feet<advCalibration.floor-scale*.10){advanceSequence('ready',now);candidateAdvanced(1);}
+  else if(adv.state==='jump'&&m.stand&&m.locked&&sides.every(p=>p.wrist.y<p.shoulder.y-scale*.3)&&m.feet<advCalibration.floor-scale*.10){advanceSequence('ready',now);candidateAdvanced(1);}
  }else if(id==='boxjump'||id==='squatboxjump'){
   if(advCalibration.floor==null||advCalibration.box==null){$('advLive').textContent='Calibra de pie en suelo y sobre la caja desde Guía y estándar.';return;}
-  const floor=[l,r].every(p=>Math.abs(p.ankle.y-advCalibration.floor)<scale*.12),box=[l,r].every(p=>Math.abs(p.ankle.y-advCalibration.box)<scale*.12&&Math.abs(p.ankle.x-advCalibration.boxX)<scale*.6);
+  const floor=sides.every(p=>Math.abs(p.ankle.y-advCalibration.floor)<scale*.12),box=sides.every(p=>Math.abs(p.ankle.y-advCalibration.box)<scale*.12&&Math.abs(p.ankle.x-advCalibration.boxX)<scale*.6);
   if(adv.state==='ready'&&confirm(floor&&m.stand))advanceSequence(id==='squatboxjump'?'squat':'takeoff',now);
-  else if(adv.state==='squat'&&floor&&knees.every(a=>a<90)&&[l,r].every(p=>p.hip.y>=p.knee.y))advanceSequence('takeoff',now);
-  else if(adv.state==='takeoff'&&[l,r].every(p=>p.ankle.y<advCalibration.floor-scale*.15)&&!box)advanceSequence('land',now);
+  else if(adv.state==='squat'&&floor&&knees.every(a=>a<90)&&sides.every(p=>p.hip.y>=p.knee.y))advanceSequence('takeoff',now);
+  else if(adv.state==='takeoff'&&sides.every(p=>p.ankle.y<advCalibration.floor-scale*.15)&&!box)advanceSequence('land',now);
   else if(adv.state==='land'&&confirm(box&&m.stand)){advanceSequence('ready',now);candidateAdvanced(1);}
  }
  $('advLive').textContent='Fase: '+({ready:'posición inicial',pull:'tracción',transition:'transición sobre barra',support:'extensión arriba',down:'bajada',up:'regreso a extensión',plank:'plancha',pushdown:'bajada de push-up',pushup:'extensión de push-up',jump:'salto con brazos arriba',squat:'sentadilla profunda',takeoff:'despegue',land:'aterrizaje y extensión'}[adv.state]||adv.state);
@@ -613,16 +652,13 @@ function holdReason(m,id){
  return 'Muestra la suspensión con las manos sobre los hombros';
 }
 function continuousPose(pose,t){
- const sides=[{side:'L',ids:[5,11]},{side:'R',ids:[6,12]}].map(s=>({...s,pts:s.ids.map(i=>pose.keypoints[i])})).filter(s=>s.pts.every(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&(p.score??0)>=JUDGE_CONF));
- if(!sides.length){trackingSample=null;return false;}
- const chosen=sides.find(s=>s.side===trackingSample?.side)||sides[0],pts=chosen.pts;
- const center={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2};
- const scale=distance(pts[0],pts[1]);
- if(scale<20){trackingSample=null;return false;}
- const prev=trackingSample;trackingSample={center,scale,t,side:chosen.side};
+ const item=poseDescriptor(pose);if(!item)return false;
+ const prev=trackingSample;trackingSample={center:item.center,scale:item.scale,t};
  if(!prev)return true;
- const dt=t-prev.t,ratio=scale/prev.scale;
- return prev.side===chosen.side&&dt>0&&dt<=250&&ratio>=.55&&ratio<=1.8&&distance(center,prev.center)<=Math.max(scale,prev.scale)*(.55+dt/250);
+ const dt=t-prev.t,ratio=item.scale/prev.scale;
+ if(dt<=0)return false;
+ if(dt>350){if(!advPending)loseAttempt();return true;}
+ return ratio>.45&&ratio<2.2&&distance(item.center,prev.center)<Math.max(item.scale,prev.scale)*1.8;
 }
 function analysisInput(){
  const x=Math.round(video.videoWidth*analysisRegion.x/100),y=Math.round(video.videoHeight*analysisRegion.y/100);
@@ -636,19 +672,10 @@ function drawAnalysisRegion(){
  ctx.save();ctx.strokeStyle='#ffd166';ctx.lineWidth=3;ctx.strokeRect(canvas.width*analysisRegion.x/100,canvas.height*analysisRegion.y/100,canvas.width*analysisRegion.w/100,canvas.height*analysisRegion.h/100);ctx.restore();
 }
 const evidenceTools=document.createElement('details');evidenceTools.id='evidenceTools';
-evidenceTools.innerHTML='<summary>Video de prueba y encuadre</summary><p>Deja un solo atleta dentro del recuadro, con espacio para todo el movimiento. Una persona que cruce delante puede interrumpir la evaluación.</p><div id="regionFields"></div><button id="applyRegion">Aplicar encuadre</button><button id="clearRegion">Ver imagen completa</button><p id="regionMessage" role="status"></p><label>Probar un video local (solo ejercicio libre)<input id="referenceClip" type="file" accept="video/*"></label><p>Selecciona el ejercicio antes de abrir el clip. El archivo se procesa en este dispositivo. Pausas y saltos no unen repeticiones.</p><button id="clipPause" hidden>Pausar video</button><button id="returnCamera" hidden>Volver a cámara</button><p id="clipTime"></p><label id="seekLabel" hidden>Posición del video<input id="clipSeek" type="range" min="0" max="1" step="0.1" value="0"></label>';
+evidenceTools.innerHTML='<summary>Video de prueba</summary><p id="clipMessage" role="status"></p><label>Probar un video local (solo ejercicio libre)<input id="referenceClip" type="file" accept="video/*"></label><p>Selecciona el ejercicio antes de abrir el clip. El archivo se procesa en este dispositivo. Pausas y saltos no unen repeticiones.</p><button id="clipPause" hidden>Pausar video</button><button id="returnCamera" hidden>Volver a cámara</button><p id="clipTime"></p><label id="seekLabel" hidden>Posición del video<input id="clipSeek" type="range" min="0" max="1" step="0.1" value="0"></label>';
 $('cameraTools').append(evidenceTools);
-for(const [key,label] of [['x','Izquierda %'],['y','Arriba %'],['w','Ancho %'],['h','Alto %']]){
- const el=document.createElement('label');el.textContent=label;const inp=document.createElement('input');inp.type='number';inp.min=key==='w'||key==='h'?'10':'0';inp.max='100';inp.value=String(analysisRegion[key]);inp.id='region_'+key;el.append(inp);$('regionFields').append(el);
-}
-const evidenceStyle=document.createElement('style');evidenceStyle.textContent='#evidenceTools{width:100%}#evidenceTools summary{min-height:44px;cursor:pointer}#evidenceTools p{margin:8px 0}#regionFields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}#evidenceTools label{display:block}#evidenceTools input{display:block;max-width:100%;min-height:40px;width:100%;background:#1a2230;color:white;border:1px solid #596679;border-radius:8px}#clipTime{font-variant-numeric:tabular-nums}';document.head.append(evidenceStyle);
+const evidenceStyle=document.createElement('style');evidenceStyle.textContent='#evidenceTools{width:100%}#evidenceTools summary{min-height:44px;cursor:pointer}#evidenceTools p{margin:8px 0}#evidenceTools label{display:block}#evidenceTools input{display:block;max-width:100%;min-height:40px;width:100%;background:#1a2230;color:white;border:1px solid #596679;border-radius:8px}#clipTime{font-variant-numeric:tabular-nums}';document.head.append(evidenceStyle);
 function invalidateEvidence(){poseEpoch++;trackingSample=null;poseFrameAt=null;lastVideoTime=-1;loseAttempt();}
-$('applyRegion').onclick=()=>{
- const r=Object.fromEntries(['x','y','w','h'].map(k=>[k,Number($('region_'+k).value)]));
- if(Object.values(r).some(v=>!Number.isFinite(v))||r.x<0||r.y<0||r.w<10||r.h<10||r.x+r.w>100||r.y+r.h>100){$('regionMessage').textContent='El rectángulo debe quedar dentro del 100% de la imagen; mínimo 10% de ancho y alto.';return;}
- analysisRegion=r;advCalibration={};pullReference=null;invalidateEvidence();refreshAdvanced();$('regionMessage').textContent='Encuadre aplicado. Retoma el inicio; repite la calibración si la usabas.';
-};
-$('clearRegion').onclick=()=>{for(const k of ['x','y','w','h'])$('region_'+k).value=k==='w'||k==='h'?100:0;$('applyRegion').click();};
 async function releaseInput(){
  running=false;poseEpoch++;video.pause();
  const until=performance.now()+15000;
@@ -660,32 +687,32 @@ async function releaseInput(){
 }
 async function startReferenceClip(file){
  if(!file||startingCamera)return;
- if(circuit){$('regionMessage').textContent='Los videos de prueba están disponibles en ejercicio libre. Sal del circuito para probar.';return;}
+ if(circuit){$('clipMessage').textContent='Los videos de prueba están disponibles en ejercicio libre. Sal del circuito para probar.';return;}
  startingCamera=true;$('referenceClip').disabled=true;
  try{
-  await releaseInput();inputMode='clip';resetJudge();advEvents=[];
-  analysisRegion={x:0,y:0,w:100,h:100};for(const k of ['x','y','w','h'])$('region_'+k).value=analysisRegion[k];
+  await releaseInput();resetAthleteTracking();inputMode='clip';resetJudge();advEvents=[];
+  analysisRegion={x:0,y:0,w:100,h:100};
   clipURL=URL.createObjectURL(file);video.src=clipURL;video.muted=true;video.playbackRate=1;video.load();
   await waitForCameraFrame();resizeCanvas();
   if(typeof tf==='undefined'||typeof poseDetection==='undefined')throw new Error('No cargó el detector. Revisa internet y recarga.');
   setStatus('Cargando detector para el video…','warn');try{await tf.setBackend('webgl');}catch(_){}await tf.ready();
-  detector=await startupTimeout(poseDetection.createDetector(poseDetection.SupportedModels.MoveNet,{modelType:poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,enableSmoothing:true}),60000,'DetectorTimeout','No se pudo cargar el detector.',m=>m.dispose());
+  detector=await startupTimeout(createJudgeDetector(),60000,'DetectorTimeout','No se pudo cargar el detector.',m=>m.dispose());
   $('clipPause').hidden=false;$('returnCamera').hidden=false;$('seekLabel').hidden=false;$('clipSeek').max=Number.isFinite(video.duration)?video.duration:1;
   startBtn.disabled=true;startBtn.textContent='Video de prueba';running=true;lastVideoTime=-1;
-  await video.play();requestAnimationFrame(loop);setStatus('Video de prueba · selecciona el encuadre si hay varias personas.','info');
+  await video.play();requestAnimationFrame(loop);setStatus('Buscando atleta · puedes tocarlo en el video.','info');
  }catch(e){running=false;setStatus(e.message,'bad');startBtn.disabled=false;startBtn.textContent='Activar cámara';}
  finally{startingCamera=false;$('referenceClip').disabled=false;}
 }
 $('referenceClip').onchange=()=>startReferenceClip($('referenceClip').files[0]);
 $('clipPause').onclick=async()=>{if(inputMode!=='clip')return;if(video.paused){if(video.ended){resetJudge();advEvents=[];video.currentTime=0;}invalidateEvidence();await video.play();}else{video.pause();invalidateEvidence();}$('clipPause').textContent=video.paused?'Continuar video':'Pausar video';};
 $('clipSeek').onchange=()=>{if(inputMode!=='clip')return;resetJudge();advEvents=[];invalidateEvidence();video.currentTime=Number($('clipSeek').value);};
-video.addEventListener('seeking',()=>{if(inputMode==='clip')invalidateEvidence();});
+video.addEventListener('seeking',()=>{if(inputMode==='clip'){invalidateEvidence();resetAthleteTracking();detector?.reset?.();}});
 video.addEventListener('timeupdate',()=>{if(inputMode==='clip'){$('clipTime').textContent=video.currentTime.toFixed(1)+' / '+video.duration.toFixed(1)+' s';$('clipSeek').value=video.currentTime;}});
 video.addEventListener('ended',()=>{if(inputMode==='clip'){if(!advPending)invalidateEvidence();setStatus(advPending?'Fin del video · revisa el candidato pendiente.':'Fin del video · resultado de prueba, sin decisión oficial.','info');$('clipPause').textContent='Reproducir de nuevo';}});
 const cameraStartV81=start;start=async function(){
  if(startingCamera)return;
- if(inputMode==='clip'){try{await releaseInput();}catch(e){setStatus(e.message,'bad');return;}inputMode='camera';resetJudge();$('clipPause').hidden=true;$('returnCamera').hidden=true;$('seekLabel').hidden=true;$('clipTime').textContent='';}
- return cameraStartV81();
+ if(inputMode==='clip'){try{await releaseInput();}catch(e){setStatus(e.message,'bad');return;}inputMode='camera';resetAthleteTracking();resetJudge();$('clipPause').hidden=true;$('returnCamera').hidden=true;$('seekLabel').hidden=true;$('clipTime').textContent='';}
+ if(!running)resetAthleteTracking();return cameraStartV81();
 };
 $('returnCamera').onclick=()=>start();
 const candidateV81=candidateAdvanced;candidateAdvanced=function(amount){candidateV81(amount);if(inputMode==='clip'&&advPending)video.pause();};
@@ -693,14 +720,159 @@ const reviewV81=reviewAdvanced;reviewAdvanced=function(accept){const resume=inpu
 const logV81=logAdvanced;logAdvanced=function(type,amount,detail){logV81(type,amount,detail);const e=advEvents[advEvents.length-1];e.source=inputMode;e.videoTimeSeconds=inputMode==='clip'?video.currentTime:null;e.region={...analysisRegion};};
 const validRepV81=validRep;validRep=function(){const before=reps;validRepV81();if(reps>before)logAdvanced('accepted',1,'Ciclo geométrico completo');};
 const noRepV81=noRep;noRep=function(reason){const before=latestEvent?.id;noRepV81(reason);if(latestEvent?.id!==before)logAdvanced('rejected',0,reason);};
-// The same JSON evidence export is available for the original four exercises.
-const exportBasic=document.createElement('button');exportBasic.textContent='Exportar registro de prueba';exportBasic.onclick=()=>$('exportJudge').click();evidenceTools.append(exportBasic);
+// The position illustration is available for every exercise.
+const exportBasic=document.createElement('button');exportBasic.textContent='Descargar posición inicial (PNG)';exportBasic.onclick=()=>$('exportJudge').click();evidenceTools.append(exportBasic);
 exerciseSelect.addEventListener('change',()=>{trackingSample=null;poseFrameAt=null;if(inputMode==='clip'){video.pause();video.currentTime=0;advEvents=[];$('clipPause').textContent='Continuar video';}});
+
+/* V8.3: per-person tracking, measured-keypoint quality and initial-position PNG. */
+const INITIAL_HINTS={pushup:'Plancha alta. Brazos extendidos.',dip:'Arriba de las barras. Brazos extendidos.',pullup:'Cuélgate con los brazos extendidos.',squat:'De pie. Rodillas extendidas.',muscleup:'Cuélgate con los brazos extendidos.',frontlever:'Cuerpo horizontal. Brazos y piernas rectos.',handstand:'Sube a pino. Alinea el cuerpo.',hspu:'Sube a pino y extiende los brazos.',onearmpullup:'Cuélgate de un brazo. El otro queda libre.',lunge:'De pie, con los pies juntos.',burpee:'Empieza de pie.',boxjump:'De pie, frente a la caja.',squatboxjump:'De pie, frente a la caja.'};
+function initialHint(id){return INITIAL_HINTS[id]||'Adopta la posición inicial.';}
+function createJudgeDetector(){
+ return poseDetection.createDetector(poseDetection.SupportedModels.MoveNet,{
+  modelType:poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
+  enableSmoothing:true,enableTracking:true,trackerType:poseDetection.TrackerType.BoundingBox,
+  minPoseScore:.15,multiPoseMaxDimension:256
+ });
+}
+let athleteTrack=null,athleteCandidates=new Map(),athleteSearchAt=null,lastAthleteList=[],lastAthleteFrame=-1,lastAthleteAt=0;
+function poseDescriptor(pose){
+ const points=pose.keypoints.filter(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&(p.score??0)>=CONF);
+ const torso=[5,6,11,12].map(i=>pose.keypoints[i]).filter(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&(p.score??0)>=CONF);
+ if(points.length<4||torso.length<2||pose.id==null)return null;
+ const x1=Math.min(...points.map(p=>p.x)),x2=Math.max(...points.map(p=>p.x)),y1=Math.min(...points.map(p=>p.y)),y2=Math.max(...points.map(p=>p.y));
+ const lengths=['L','R'].map(side=>sidePoints(pose,side)).filter(p=>p.shoulder&&p.hip).map(p=>distance(p.shoulder,p.hip));
+ const scale=lengths.length?Math.max(...lengths):Math.max(x2-x1,y2-y1)*.3;
+ if(scale<10||x2<=x1||y2<=y1)return null;
+ return{pose,id:pose.id,center:{x:torso.reduce((s,p)=>s+p.x,0)/torso.length,y:torso.reduce((s,p)=>s+p.y,0)/torso.length},scale,box:{x1,x2,y1,y2},quality:points.reduce((s,p)=>s+p.score,0)/points.length};
+}
+function boxOverlap(a,b){const area=Math.max(0,Math.min(a.x2,b.x2)-Math.max(a.x1,b.x1))*Math.max(0,Math.min(a.y2,b.y2)-Math.max(a.y1,b.y1));return area/Math.max(1,(a.x2-a.x1)*(a.y2-a.y1)+(b.x2-b.x1)*(b.y2-b.y1)-area);}
+function resetAthleteTracking(){athleteTrack=null;athleteCandidates.clear();athleteSearchAt=null;lastAthleteList=[];trackingSample=null;missingSince=null;}
+function lockAthlete(item,t){
+ athleteTrack={...item,lastSeen:t};trackingSample=null;missingSince=null;
+ loseAttempt();advCalibration={};pullReference=null;refreshAdvanced();
+ setStatus('Atleta fijado. '+initialHint(exerciseSelect.value),'info');return item.pose;
+}
+function selectAthlete(poses,t){
+ const items=poses.map(poseDescriptor).filter(Boolean);lastAthleteList=items;lastAthleteFrame=video.currentTime;lastAthleteAt=performance.now();
+ if(athleteTrack){
+  const same=items.find(p=>p.id===athleteTrack.id);
+  if(!same)return null; // Never silently replace a missing athlete with a spectator.
+  const dt=t-athleteTrack.lastSeen,ratio=same.scale/athleteTrack.scale;
+  const nearby=distance(same.center,athleteTrack.center)<Math.max(same.scale,athleteTrack.scale)*(dt>350?1.1:1.6);
+  const ambiguous=items.some(p=>p.id!==same.id&&boxOverlap(p.box,same.box)>.65&&distance(p.center,same.center)<same.scale*.4);
+  if(dt<0||dt>1800||!nearby||ratio<.5||ratio>2||ambiguous)return null;
+  athleteTrack={...same,lastSeen:t};return same.pose;
+ }
+ if(!items.length)return null;
+ if(athleteSearchAt==null)athleteSearchAt=t;
+ const width=video.videoWidth||640,height=video.videoHeight||480;
+ for(const item of items){
+  const prev=athleteCandidates.get(item.id);
+  let motion=0;
+  if(prev){
+   const shifts=item.pose.keypoints.map((p,i)=>{const q=prev.pose.keypoints[i];return p&&q&&p.score>=CONF&&q.score>=CONF?distance(p,q)/Math.max(item.scale,prev.scale):null;}).filter(v=>v!=null);
+   motion=shifts.length?shifts.reduce((a,b)=>a+b,0)/shifts.length:0;
+  }
+  const activity=(prev?.activity||0)*.7+Math.min(.5,motion)*.3;
+  const central=1-clamp(Math.hypot((item.center.x/width-.5)*1.5,(item.center.y/height-.5)),0,1);
+  const size=clamp((item.box.x2-item.box.x1)*(item.box.y2-item.box.y1)/(width*height)*4,0,1);
+  athleteCandidates.set(item.id,{...item,activity,score:central*.5+size*.2+Math.min(1,activity*8)*.25+item.quality*.05,lastSeen:t});
+ }
+ for(const [id,p] of athleteCandidates)if(t-p.lastSeen>1000)athleteCandidates.delete(id);
+ if(t-athleteSearchAt<650)return null;
+ const ranked=items.map(p=>athleteCandidates.get(p.id)).sort((a,b)=>b.score-a.score);
+ return lockAthlete(ranked[0],t);
+}
+function trackingGap(message){
+ if(advPending)return;
+ if(isHold(exerciseSelect.value)){adv.holdMs=0;adv.credited=0;adv.holdValid=false;}
+ const t=judgeTime();if(missingSince==null)missingSince=t;
+ if(t-missingSince>350){loseAttempt();trackingSample=null;}
+ setStatus(message,'warn');
+}
+function drawAthleteBox(pose){
+ const d=poseDescriptor(pose);if(!d)return;const b=d.box;
+ ctx.save();ctx.strokeStyle='#62a8ff';ctx.lineWidth=2;ctx.strokeRect(b.x1-8,b.y1-8,b.x2-b.x1+16,b.y2-b.y1+16);ctx.restore();
+}
+const chooseAthlete=document.createElement('button');chooseAthlete.type='button';chooseAthlete.textContent='Volver a elegir atleta';
+chooseAthlete.onclick=()=>{resetAthleteTracking();loseAttempt();document.body.classList.remove('tools-open');$('toggleTools').setAttribute('aria-expanded','false');setStatus('Toca al atleta o espera la selección automática.','info');};
+$('cameraTools').append(chooseAthlete);
+video.addEventListener('click',event=>{
+ if(!running||video.seeking||(!video.paused&&performance.now()-lastAthleteAt>700)||!lastAthleteList.length)return;
+ const rect=video.getBoundingClientRect(),scale=Math.min(rect.width/video.videoWidth,rect.height/video.videoHeight);
+ const x=(event.clientX-rect.left-(rect.width-video.videoWidth*scale)/2)/scale;
+ const y=(event.clientY-rect.top-(rect.height-video.videoHeight*scale)/2)/scale;
+ const matches=lastAthleteList.filter(p=>x>=p.box.x1-12&&x<=p.box.x2+12&&y>=p.box.y1-12&&y<=p.box.y2+12).sort((a,b)=>distance(a.center,{x,y})-distance(b.center,{x,y}));
+ if(matches.length){poseEpoch++;lockAthlete(matches[0],judgeTime());drawPose(matches[0].pose);drawAthleteBox(matches[0].pose);}
+});
+function judgeHspu(m,now){
+ // Entry is unscored and has no required freeze. A measured extension starts a cycle.
+ if(!m){missingWarning(['un lado completo del cuerpo']);$('advLive').textContent=adv.state==='ready'?'Sube a pino; la entrada no cuenta.':'Muestra brazos, cadera y pies.';return;}
+ markVisible();
+ if(adv.last!=null&&now-adv.last>350)resetAdvanced();adv.last=now;
+ const top=m.inverted&&m.locked&&m.straight&&m.align;
+ const inverted=m.sides.every(p=>p.ankle.y<p.hip.y&&p.hip.y<p.shoulder.y&&p.shoulder.y<=p.wrist.y+m.scale*.2&&lineTilt(p.shoulder,p.ankle)>=60);
+ updateMetrics(m.confidence,Math.min(...m.arms),Math.min(...m.knees),'Rodillas','°');
+ if(adv.state==='ready'){
+  $('advLive').textContent=initialHint('hspu');
+  if(top){advanceSequence('down',now);adv.started=now;adv.samples=1;setStatus('Listo. Baja.','ok');}
+  return;
+ }
+ adv.samples=(adv.samples||0)+1;
+ if(now-adv.started>15000){resetAdvanced();return;}
+ if(!inverted||!m.straight||!m.align){
+  if(adv.formLostAt==null)adv.formLostAt=now;
+  if(now-adv.formLostAt>180){resetAdvanced();$('advLive').textContent='Retoma el pino y extiende los brazos.';}
+  return;
+ }
+ adv.formLostAt=null;
+ if(adv.state==='down'&&m.arms.every(a=>a<=90)){advanceSequence('up',now);$('advLive').textContent='Profundidad lista. Extiende los brazos.';return;}
+ if(adv.state==='up'&&top&&adv.samples>=3&&now-adv.started>=180){advanceSequence('ready',now);candidateAdvanced(1);return;}
+ $('advLive').textContent=adv.state==='up'?'Extiende los brazos.':'Baja con control.';
+}
+
+// This is an instructional illustration, never a claim that a real frame was validated.
+function drawInitialIllustration(out,id){
+ const c=out.getContext('2d');out.width=1000;out.height=800;
+ c.fillStyle='#0b1220';c.fillRect(0,0,1000,800);c.fillStyle='#f6f7f9';c.font='bold 42px system-ui';c.fillText('Ejemplo posición inicial',50,72);
+ c.font='28px system-ui';c.fillStyle='#62a8ff';c.fillText(EXERCISES[id].name,50,122);
+ c.strokeStyle='#596679';c.lineWidth=5;c.beginPath();c.moveTo(90,660);c.lineTo(910,660);c.stroke();
+ let p={head:[400,240],shoulder:[400,290],elbow:[410,370],wrist:[420,450],hip:[400,435],knee:[400,545],ankle:[400,655]};
+ const line=(a,b,color='#46f59a',width=12)=>{c.strokeStyle=color;c.lineWidth=width;c.lineCap='round';c.beginPath();c.moveTo(...a);c.lineTo(...b);c.stroke();};
+ if(['pullup','muscleup','onearmpullup'].includes(id)){p={head:[480,290],shoulder:[480,340],elbow:[480,265],wrist:[480,190],hip:[480,445],knee:[480,550],ankle:[480,655]};line([290,180],[710,180],'#aeb7c4',8);}
+ if(['hspu','handstand'].includes(id)){p={head:[480,575],shoulder:[480,525],elbow:[480,590],wrist:[480,655],hip:[480,420],knee:[480,315],ankle:[480,210]};}
+ if(id==='frontlever'){p={head:[315,420],shoulder:[370,420],elbow:[370,330],wrist:[370,240],hip:[510,420],knee:[650,420],ankle:[790,420]};line([240,230],[510,230],'#aeb7c4',8);}
+ if(id==='pushup'){p={head:[220,475],shoulder:[280,475],elbow:[280,565],wrist:[280,655],hip:[450,530],knee:[620,587],ankle:[810,650]};}
+ if(id==='dip'){p={head:[480,245],shoulder:[480,300],elbow:[480,370],wrist:[480,440],hip:[480,430],knee:[480,540],ankle:[480,645]};line([340,450],[640,450],'#aeb7c4',8);}
+ if(['boxjump','squatboxjump'].includes(id)){c.fillStyle='#263348';c.fillRect(620,510,220,150);c.fillStyle='#c4d0dd';c.font='22px system-ui';c.fillText('Caja',700,590);}
+ if(['hspu','handstand'].includes(id)){
+  line([440,525],[520,525]);line([480,525],[480,420]);line([460,420],[500,420]);
+  for(const x of [440,520]){line([x,525],[x,590]);line([x,590],[x,655]);line([x-14,655],[x+14,655]);}
+  for(const x of [460,500]){line([x,420],[x,315]);line([x,315],[x,210]);}
+  line([480,525],[480,551]);c.strokeStyle='#46f59a';c.lineWidth=10;c.beginPath();c.arc(480,578,24,0,Math.PI*2);c.stroke();
+ }else{
+  for(const [a,b] of [['shoulder','hip'],['shoulder','elbow'],['elbow','wrist'],['hip','knee'],['knee','ankle']])line(p[a],p[b]);
+  c.strokeStyle='#46f59a';c.lineWidth=10;c.beginPath();c.arc(...p.head,24,0,Math.PI*2);c.stroke();
+ }
+ if(id==='onearmpullup'){line([p.shoulder[0]+10,p.shoulder[1]],[565,420],'#62a8ff');line([565,420],[590,485],'#62a8ff');}
+ c.fillStyle='#f6f7f9';c.font='26px system-ui';c.fillText(initialHint(id),50,720);
+ c.fillStyle='#aeb7c4';c.font='19px system-ui';c.fillText('Referencia ilustrativa · no es una repetición evaluada',50,764);
+}
+function exportInitialPosition(){
+ const out=document.createElement('canvas');drawInitialIllustration(out,exerciseSelect.value);
+ out.toBlob(blob=>{if(!blob){setStatus('No se pudo crear la imagen. Intenta de nuevo.','warn');return;}
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Ejemplo posición inicial.png';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+ },'image/png');
+}
+const positionPreview=document.createElement('canvas');positionPreview.id='positionPreview';positionPreview.setAttribute('role','img');positionPreview.style.cssText='display:block;width:100%;height:auto;border-radius:12px;margin:12px 0';guideDialog.insertBefore(positionPreview,$('advGuide'));
+const guideOpenV83=openGuide.onclick;openGuide.onclick=()=>{drawInitialIllustration(positionPreview,exerciseSelect.value);positionPreview.setAttribute('aria-label','Ejemplo posición inicial. '+initialHint(exerciseSelect.value));guideOpenV83();};
 
 renderBuilder();resetJudge();renderSetupMode();
 </script>
 </body>
 </html>
+
+
 
 
 
