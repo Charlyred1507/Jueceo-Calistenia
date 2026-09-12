@@ -51,7 +51,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
   <div id="progressCard" class="panel"><div id="progressText"><span id="mProgress">Recorrido 0%</span><span id="mPhase">Esperando</span></div><div id="progressTrack"><div id="progressFill"></div></div></div>
   <div id="status" class="panel warn" role="status">Selecciona un ejercicio y activa la cámara.</div>
 </div>
-<section id="stationSetup"><div class="stationBox"><p>JUECEO CALISTENIA · ESTACIÓN V8.4 BETA</p><h1>Elige cómo entrenar</h1><p id="modeHelp">Ejercicio libre: cámara, contador y validación en este dispositivo.</p>
+<section id="stationSetup"><div class="stationBox"><p>JUECEO CALISTENIA · ESTACIÓN V8.5 BETA</p><h1>Elige cómo entrenar</h1><p id="modeHelp">Ejercicio libre: cámara, contador y validación en este dispositivo.</p>
   <fieldset id="workoutChoice"><legend>Modo de entrenamiento</legend><label><input type="radio" name="workoutMode" value="free" checked> Ejercicio libre</label><label><input type="radio" name="workoutMode" value="circuit"> Circuito</label></fieldset>
   <section id="circuitBuilder" hidden><p>Completa cada meta en orden. El cambio de estación se confirma desde el teléfono o la tablet.</p><div id="circuitRows"></div><button id="addStage" type="button">+ Agregar ejercicio</button><label for="roundsInput">Rondas</label><input id="roundsInput" type="number" min="1" max="20" step="1" value="1" inputmode="numeric"><strong id="builderTotal"></strong><label id="capChoice"><input id="capEnabled" type="checkbox">Límite de tiempo (timecap)</label><div id="capFields" hidden><label for="capMinutes">Minutos para toda la rutina</label><input id="capMinutes" type="number" min="1" max="180" step="1" value="7" inputmode="numeric" aria-describedby="capHelp"><p id="capHelp">Empieza al iniciar la primera estación. Incluye pausas y cambios de ejercicio. Al llegar a cero, se cierra el resultado.</p></div></section>
   <button id="chooseCamera" class="primary">Abrir ejercicio libre</button><section id="scoreSetup" hidden><h2>En la tablet · marcador</h2><label for="joinCode">En la tablet, escribe el código del teléfono</label><input id="joinCode" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Código de 8 caracteres"><button id="chooseScore">Conectar marcador del circuito</button></section><p id="setupMessage" role="status"></p><p id="connectionHelp" hidden>Para el circuito, usa el teléfono como cámara y la tablet como marcador. Conecta ambos a la misma red Wi-Fi o al hotspot del teléfono. El video permanece en el teléfono.</p></div></section>
@@ -64,7 +64,7 @@ const $=id=>document.getElementById(id);const video=$('video'),canvas=$('overlay
 
 /* V7.4: strict judging + backward-compatible pairing + Apple/Android camera tuning. */
 const CONF=.22,DRAW_CONF=.20,JUDGE_CONF=.30,MISSING_FRAMES_BEFORE_WARNING=6;
-const BUILD_ID='V8.4-beta';
+const BUILD_ID='V8.5-beta';
 const PAIR_PREFIXES=['calistenia-v5-','calistenia-v6-','calistenia-'];
 const PEER_PROTOCOLS=[2,3];
 const PEER_OPTIONS={debug:1,pingInterval:5000,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}]}};
@@ -73,9 +73,9 @@ const RULES={
  pushup:{home:160,depart:148,away:97,alignHome:22,alignAway:27,maxTilt:38,minExcursion:57},
  dip:{home:160,depart:148,away:97,minDepth:-.02,minExcursion:57},
  squat:{home:160,depart:145,away:97,minDepth:-.02,minExcursion:63},
- pullup:{home:163,depart:152,away:120,minExcursion:45,minClearance:-.01}
+ pullup:{home:158,depart:147,away:125,minExcursion:40,minClearance:-.03}
 };
-const EXERCISES={pushup:{name:'Push-up',guide:'Vista lateral · cuerpo completo · manos y pies visibles. Inicio: codos ≥160°. Fondo: codos ≤97° y cuerpo alineado.'},dip:{name:'Fondo',guide:'Vista lateral · hombro, codo y muñeca visibles. Inicio: codos ≥160°. Fondo: codos ≤97° y hombro al nivel o debajo del codo.'},pullup:{name:'Pull-up',guide:'Vista lateral/oblicua suave · cara, mano, hombro y codo visibles. Inicio: codos ≥163°. Arriba: barbilla sobre la línea de la mano/barra. Referencia automática de altura con la muñeca.'},squat:{name:'Squat',guide:'Vista lateral · cadera, rodilla y tobillo visibles. Inicio: rodillas ≥160°. Fondo: rodillas ≤97° y cadera al nivel o debajo de la rodilla.'}};
+const EXERCISES={pushup:{name:'Push-up',guide:'Vista lateral · cuerpo completo · manos y pies visibles. Inicio: codos ≥160°. Fondo: codos ≤97° y cuerpo alineado.'},dip:{name:'Fondo',guide:'Vista lateral · hombro, codo y muñeca visibles. Inicio: codos ≥160°. Fondo: codos ≤97° y hombro al nivel o debajo del codo.'},pullup:{name:'Pull-up',guide:'Muestra ambas muñecas, la cara y un brazo completo. Extensión ≥158°, sin pausa obligatoria. Arriba: nariz a la altura de la línea entre muñecas y codo ≤125°. Criterio de cabeza, no de barbilla; tolerancia experimental 2D.'},squat:{name:'Squat',guide:'Vista lateral · cadera, rodilla y tobillo visibles. Inicio: rodillas ≥160°. Fondo: rodillas ≤97° y cadera al nivel o debajo de la rodilla.'}};
 const IDX={nose:0,leftEye:1,rightEye:2,leftEar:3,rightEar:4,leftShoulder:5,rightShoulder:6,leftElbow:7,rightElbow:8,leftWrist:9,rightWrist:10,leftHip:11,rightHip:12,leftKnee:13,rightKnee:14,leftAnkle:15,rightAnkle:16};
 let detector=null,stream=null,running=false,busy=false,lastVideoTime=-1,lastJudgedAt=0,fpsTimes=[],startingCamera=false,poseEpoch=0;let reps=0,phase='WAITING',lockedSide=null,histories={},missingPoseFrames=0,noRepCooldown=0,attemptMinAngle=null,attemptMaxProgress=0,cycle=null,pullReference=null,pullSample=null;
 let mode='',peer=null,peerAliases=[],pendingConnections=[],connection=null,generation=0,lastReceived=0,lastEvent=0,eventId=0,latestEvent=null,session='',wakeLock=null,pairingTimer=null,reconnectTimer=null,flashTimer=null,lastPeerError='';
@@ -131,8 +131,74 @@ function validRep(){if(expireCircuit())return;if(circuit&&(circuit.state!=='acti
 function judgePushup(pose){const r=RULES.pushup,side=lockedSide||bestBodySide(pose),p=sidePoints(pose,side),missing=[];['shoulder','elbow','wrist','hip','ankle'].forEach(k=>{if(!p[k])missing.push(k)});if(missing.length){missingWarning(missing);return}const elbow=angle(p.shoulder,p.elbow,p.wrist),align=filtered('push_align',bodyLineError(p.shoulder,p.hip,p.ankle)),tilt=filtered('push_tilt',lineTilt(p.shoulder,p.ankle)),conf=confidenceOf(p.shoulder,p.elbow,p.wrist,p.hip,p.ankle);if(elbow==null||align==null||tilt==null)return;updateMetrics(conf,elbow,align,'Alineación','°');trackMinAngle(elbow);if(conf<JUDGE_CONF){missingWarning(['hombro, codo, cadera y pies']);return}markVisible();const top=elbow>=r.home&&align<=r.alignHome&&tilt<=r.maxTilt,bottom=elbow<=r.away&&align<=r.alignAway&&tilt<=r.maxTilt,depart=elbow<r.depart,formFault=cycle?.active&&(align>32||tilt>45);if(phase!=='WAITING')setProgress(clamp((r.home-elbow)/(r.home-r.away)*100,0,100),phaseLabel());followCycle({home:top,away:bottom,depart,side,angleValue:elbow,minExcursion:r.minExcursion,reason:'faltó profundidad, extensión completa o alineación',fault:formFault})}
 function judgeDip(pose){const r=RULES.dip,side=lockedSide||bestArmSide(pose),p=sidePoints(pose,side),missing=[];['shoulder','elbow','wrist'].forEach(k=>{if(!p[k])missing.push(k)});if(missing.length){missingWarning(missing);return}const elbow=angle(p.shoulder,p.elbow,p.wrist);if(elbow==null)return;const upper=distance(p.shoulder,p.elbow)||1,depth=(p.shoulder.y-p.elbow.y)/upper,conf=confidenceOf(p.shoulder,p.elbow,p.wrist);updateMetrics(conf,elbow,depth*100,'Hombro','%');trackMinAngle(elbow);if(conf<JUDGE_CONF){missingWarning(['hombro, codo y muñeca']);return}markVisible();const top=elbow>=r.home,bottom=elbow<=r.away&&depth>=r.minDepth;if(phase!=='WAITING')setProgress(clamp((r.home-elbow)/(r.home-r.away)*100,0,100),phaseLabel());followCycle({home:top,away:bottom,depart:elbow<r.depart,side,angleValue:elbow,minExcursion:r.minExcursion,reason:'faltó profundidad o extensión completa'})}
 function judgeSquat(pose){const r=RULES.squat,side=lockedSide||bestLegSide(pose),p=sidePoints(pose,side),missing=[];['hip','knee','ankle'].forEach(k=>{if(!p[k])missing.push(k)});if(missing.length){missingWarning(missing);return}const knee=angle(p.hip,p.knee,p.ankle);if(knee==null)return;const thigh=distance(p.hip,p.knee)||1,depth=(p.hip.y-p.knee.y)/thigh,conf=confidenceOf(p.hip,p.knee,p.ankle);updateMetrics(conf,knee,depth*100,'Cadera','%');trackMinAngle(knee);if(conf<JUDGE_CONF){missingWarning(['cadera, rodilla y tobillo']);return}markVisible();const top=knee>=r.home,bottom=knee<=r.away&&depth>=r.minDepth;if(phase!=='WAITING')setProgress(clamp((r.home-knee)/(r.home-r.away)*100,0,100),phaseLabel());followCycle({home:top,away:bottom,depart:knee<r.depart,side,angleValue:knee,minExcursion:r.minExcursion,reason:'faltó profundidad o extensión completa'})}
-function judgePullup(pose){const r=RULES.pullup,side=lockedSide||bestArmSide(pose),p=sidePoints(pose,side);if(!p.shoulder||!p.elbow||!p.wrist||!p.nose){pullSample=null;missingWarning(['hombro, codo, mano y cara visibles']);return}const elbow=angle(p.shoulder,p.elbow,p.wrist),forearm=distance(p.elbow,p.wrist),conf=confidenceOf(p.shoulder,p.elbow,p.wrist,p.nose);if(elbow==null||!forearm||forearm<15){pullSample=null;loseAttempt();setStatus('🟡 Ajusta la cámara: el brazo se ve demasiado pequeño o incompleto.','warn');return}const headScale=distance(p.nose,p.shoulder)||forearm,chinY=p.nose.y+.18*headScale,chinHeight=(p.wrist.y-chinY)/forearm,target=0,clearance=chinHeight-target,wristAboveShoulder=p.wrist.y<p.shoulder.y-.12*forearm;pullSample={at:performance.now(),chinHeight,elbow,wristAboveShoulder};const bottom=elbow>=r.home&&wristAboveShoulder,top=elbow<=r.away&&clearance>=r.minClearance&&wristAboveShoulder;updateMetrics(conf,elbow,clearance*100,'Barbilla / muñeca','%');trackMinAngle(elbow);if(conf<JUDGE_CONF){missingWarning(['mano, codo y cara']);return}markVisible();setProgress(clamp((r.home-elbow)/(r.home-r.away)*100,0,100),phaseLabel());followCycle({home:bottom,away:top,depart:elbow<r.depart,side,angleValue:elbow,minExcursion:r.minExcursion,pull:true,reason:'no se observó barbilla sobre la barra y regreso a extensión completa'});if(cycle?.active&&!cycle.hit&&elbow<=r.away)setStatus('🟡 Falta altura de barbilla sobre la muñeca. Si no se ve bien, cambia ligeramente el ángulo de cámara.','warn')}
-function judge(pose){expireCircuit();if(circuit&&circuit.state!=='active'){if(exerciseSelect.value==='pullup'&&['ready','paused'].includes(circuit.state)){const side=bestArmSide(pose),p=sidePoints(pose,side),forearm=distance(p.elbow,p.wrist);if(p.shoulder&&p.elbow&&p.wrist&&p.nose&&forearm>=15){const headScale=distance(p.nose,p.shoulder)||forearm;pullSample={at:performance.now(),chinHeight:(p.wrist.y-(p.nose.y+.18*headScale))/forearm,elbow:angle(p.shoulder,p.elbow,p.wrist),wristAboveShoulder:p.wrist.y<p.shoulder.y-.12*forearm}}else pullSample=null}setStatus(circuitMessage(circuitView()),circuit.state==='complete'?'ok':'info');return}switch(exerciseSelect.value){case'pushup':return judgePushup(pose);case'dip':return judgeDip(pose);case'pullup':return judgePullup(pose);case'squat':return judgeSquat(pose)}}
+// Pull-up V8.5: measured brief extension; head level against the two-wrist line.
+function pullupMetrics(pose){
+ const l=sidePoints(pose,'L'),r=sidePoints(pose,'R'),nose=point(pose,IDX.nose);
+ const required=[l.wrist,r.wrist,nose];
+ if(required.some(p=>!p||p.score<JUDGE_CONF))return null;
+ const hands=distance(l.wrist,r.wrist);if(hands<12)return null;
+ const dx=r.wrist.x-l.wrist.x,dy=r.wrist.y-l.wrist.y;
+ let normal={x:-dy/hands,y:dx/hands};if(normal.y<0){normal.x*=-1;normal.y*=-1;}
+ // Almost end-on/vertical hand line cannot provide reliable screen height.
+ if(normal.y<.5)return null;
+ const below=p=>(p.x-l.wrist.x)*normal.x+(p.y-l.wrist.y)*normal.y;
+ const arms=[['L',l],['R',r]].map(([side,p])=>{
+  if([p.shoulder,p.elbow,p.wrist].some(v=>!v||v.score<JUDGE_CONF))return null;
+  const upper=distance(p.shoulder,p.elbow),forearm=distance(p.elbow,p.wrist);
+  if(Math.min(upper,forearm)<10||Math.min(upper,forearm)/Math.max(upper,forearm)<.25)return null;
+  const elbow=angle(p.shoulder,p.elbow,p.wrist);if(elbow==null)return null;
+  return {side,p,elbow,forearm,length:upper+forearm,score:Math.min(p.shoulder.score,p.elbow.score,p.wrist.score)};
+ }).filter(Boolean);
+ const arm=lockedSide?arms.find(a=>a.side===lockedSide):arms.sort((a,b)=>b.score-a.score)[0];
+ if(!arm||hands<arm.length*.12)return null;
+ const clearance=-below(nose)/arm.forearm;
+ const other=arms.find(a=>a.side!==arm.side);
+ return {side:arm.side,elbow:arm.elbow,clearance,length:arm.length,
+  confidence:Math.min(...required.map(p=>p.score),arm.score),
+  home:arm.elbow>=RULES.pullup.home&&(!other||other.elbow>=RULES.pullup.home-5)&&below(arm.p.shoulder)>arm.forearm*.12,
+  top:arm.elbow<=RULES.pullup.away&&clearance>=RULES.pullup.minClearance};
+}
+function seedPullup(m,now){
+ cycle={kind:'pullup',last:now,active:false,hit:false,startAngle:m.elbow,extreme:m.elbow,
+  startClearance:m.clearance,length:m.length,samples:0};
+ lockedSide=m.side;phase='BOTTOM';resetAttemptMetrics();
+}
+function followPullup(m,now){
+ const r=RULES.pullup;
+ if(cycle&&(cycle.kind!=='pullup'||now-cycle.last>350)){loseAttempt();}
+ if(!cycle){
+  if(m.home){seedPullup(m,now);setStatus('Listo. Sube sin detenerte.','ok');}
+  else setStatus('Extiende los brazos para iniciar; no necesitas quedarte quieto.','warn');
+  return;
+ }
+ if(lockedSide!==m.side){loseAttempt();return;}
+ const c=cycle;c.last=now;
+ if(!c.active){
+  if(m.home){c.startAngle=m.elbow;c.startClearance=m.clearance;c.length=m.length;}
+  if(m.elbow>=r.depart)return;
+  c.active=true;c.started=now;c.extreme=m.elbow;c.samples=0;resetAttemptMetrics();
+ }
+ if(now-c.started>10000||m.length/c.length<.6||m.length/c.length>1.65){loseAttempt();setStatus('Retoma la extensión: se perdió el recorrido visible.','warn');return;}
+ c.samples++;c.extreme=Math.min(c.extreme,m.elbow);trackMinAngle(m.elbow);
+ const excursion=c.startAngle-c.extreme;
+ if(m.top&&excursion>=r.minExcursion&&m.clearance-c.startClearance>=.3){c.hit=true;setStatus('Altura de cabeza alcanzada. Baja a extensión.','ok');}
+ phase=c.hit?'DOWN':'UP';setProgress((c.startAngle-m.elbow)/(c.startAngle-r.away)*100,phaseLabel());
+ if(m.home){
+  const good=c.hit&&excursion>=r.minExcursion&&c.samples>=3&&now-c.started>=180;
+  // Consume this extension once, and reuse it as the next rep's start.
+  seedPullup(m,now);trackMinAngle(c.extreme);
+  if(good)validRep();else noRep(c.hit?'recorrido demasiado breve o incompleto':'faltó altura de cabeza o flexión del codo');
+ }
+}
+function judgePullup(pose){
+ const now=judgeTime();
+ if(cycle?.kind==='pullup'&&now-cycle.last>350)loseAttempt();
+ const m=pullupMetrics(pose);
+ if(!m){missingWarning(['ambas muñecas, cabeza y un brazo completo']);return;}
+ markVisible();updateMetrics(m.confidence,m.elbow,m.clearance*100,'Cabeza / manos','%');
+ followPullup(m,now);
+}
+function judge(pose){expireCircuit();if(circuit&&circuit.state!=='active'){setStatus(circuitMessage(circuitView()),circuit.state==='complete'?'ok':'info');return}switch(exerciseSelect.value){case'pushup':return judgePushup(pose);case'dip':return judgeDip(pose);case'pullup':return judgePullup(pose);case'squat':return judgeSquat(pose)}}
 
 /* Circuit */
 const CIRCUIT_NAMES={pushup:'Push-ups',dip:'Dips / fondos',pullup:'Pull-ups',squat:'Squats'};let circuit=null,controlRevision=0,remoteCircuit=null,circuitDraft=[{exercise:'pushup',target:20},{exercise:'dip',target:20},{exercise:'pullup',target:20}];
@@ -481,7 +547,7 @@ const ADVANCED={
  muscleup:{name:'Muscle-up (barra)',guide:'Lateral-oblicua 20–30° · ambas manos, barra y pies visibles · cámara a altura de la barra, lejos del balanceo.',rule:'Suspensión → transición sobre barra → brazos extendidos. El juez confirma apoyo y ausencia de ayuda.'},
  frontlever:{name:'Front lever',hold:true,guide:'Lateral a 90° del cuerpo · lente a altura del torso en horizontal · barra y cuerpo completo visibles.',rule:'Cuerpo horizontal, brazos y piernas extendidos. Bloques de 5 s continuos. El juez confirma agarre y ausencia de apoyo.'},
  handstand:{name:'Handstand hold',hold:true,guide:'Lateral-oblicua 15–25° · cámara a media altura del cuerpo invertido · manos y pies completos, piso o parallettes visibles.',rule:'Cuerpo invertido y alineado, brazos extendidos. Bloques de 5 s continuos. El juez confirma equilibrio y apoyos permitidos.'},
- hspu:{name:'Handstand push-up',guide:'Muestra hombro, codo y muñeca de un brazo. Vista lateral u oblicua con el brazo visible. Cadera y piernas sirven para reconocer el pino.',rule:'Entrada libre → extensión ≥160° → flexión ≤95° → extensión ≥160°. Hombros y codos determinan el recorrido; muñecas permiten medirlo. Piernas y cadera dan contexto, sin exigir ángulos de alineación. Tolerancias experimentales 2D.'},
+ hspu:{name:'Handstand push-up',guide:'Muestra hombro, codo y muñeca de un brazo. Vista lateral u oblicua con el brazo visible. Cadera y piernas sirven para reconocer el pino.',rule:'Entrada libre → extensión ≥155° → flexión ≤100° → extensión ≥155°. Hombros y codos determinan el recorrido; muñecas permiten medirlo. Piernas y cadera dan contexto, sin exigir ángulos de alineación. Tolerancias experimentales 2D.'},
  onearmpullup:{name:'One arm pull-up',guide:'Oblicua frontal 30–45° · cara, barra y ambas manos visibles · evita que el brazo libre se oculte.',rule:'Suspensión a un brazo → barbilla sobre barra. El juez confirma agarre, altura y ausencia de ayuda.'},
  lunge:{name:'Desplante atrás alternado',guide:'Lateral-oblicua 20–30° · ambas piernas, pies y suelo visibles · deja espacio para el paso atrás.',rule:'Paso atrás → flexión → regreso de pie. Alterna piernas; cada pierna cuenta una repetición. El juez confirma contacto de rodilla.'},
  burpee:{name:'Burpee',guide:'Lateral-oblicua 20–30° · cuerpo completo desde el suelo hasta las manos en el salto · cámara fija.',rule:'De pie → plancha → push-up → regreso de pies → salto con brazos arriba. El juez confirma contacto y salto.'},
@@ -724,8 +790,8 @@ const noRepV81=noRep;noRep=function(reason){const before=latestEvent?.id;noRepV8
 const exportBasic=document.createElement('button');exportBasic.textContent='Descargar posición inicial (PNG)';exportBasic.onclick=()=>$('exportJudge').click();evidenceTools.append(exportBasic);
 exerciseSelect.addEventListener('change',()=>{trackingSample=null;poseFrameAt=null;if(inputMode==='clip'){video.pause();video.currentTime=0;advEvents=[];$('clipPause').textContent='Continuar video';}});
 
-/* V8.4: per-person tracking, measured-keypoint quality and initial-position PNG. */
-const INITIAL_HINTS={pushup:'Plancha alta. Brazos extendidos.',dip:'Arriba de las barras. Brazos extendidos.',pullup:'Cuélgate con los brazos extendidos.',squat:'De pie. Rodillas extendidas.',muscleup:'Cuélgate con los brazos extendidos.',frontlever:'Cuerpo horizontal. Brazos y piernas rectos.',handstand:'Sube a pino. Alinea el cuerpo.',hspu:'Sube a pino y extiende los brazos.',onearmpullup:'Cuélgate de un brazo. El otro queda libre.',lunge:'De pie, con los pies juntos.',burpee:'Empieza de pie.',boxjump:'De pie, frente a la caja.',squatboxjump:'De pie, frente a la caja.'};
+/* V8.5: per-person tracking, measured-keypoint quality and initial-position PNG. */
+const INITIAL_HINTS={pushup:'Plancha alta. Brazos extendidos.',dip:'Arriba de las barras. Brazos extendidos.',pullup:'Extiende los brazos; no necesitas detenerte.',squat:'De pie. Rodillas extendidas.',muscleup:'Cuélgate con los brazos extendidos.',frontlever:'Cuerpo horizontal. Brazos y piernas rectos.',handstand:'Sube a pino. Alinea el cuerpo.',hspu:'Sube a pino y extiende los brazos.',onearmpullup:'Cuélgate de un brazo. El otro queda libre.',lunge:'De pie, con los pies juntos.',burpee:'Empieza de pie.',boxjump:'De pie, frente a la caja.',squatboxjump:'De pie, frente a la caja.'};
 function initialHint(id){return INITIAL_HINTS[id]||'Adopta la posición inicial.';}
 function createJudgeDetector(){
  return poseDetection.createDetector(poseDetection.SupportedModels.MoveNet,{
@@ -805,8 +871,8 @@ video.addEventListener('click',event=>{
  const matches=lastAthleteList.filter(p=>x>=p.box.x1-12&&x<=p.box.x2+12&&y>=p.box.y1-12&&y<=p.box.y2+12).sort((a,b)=>distance(a.center,{x,y})-distance(b.center,{x,y}));
  if(matches.length){poseEpoch++;lockAthlete(matches[0],judgeTime());drawPose(matches[0].pose);drawAthleteBox(matches[0].pose);}
 });
-// V8.4: contextual body position, one coherent arm per cycle, bounded 2D tolerance.
-const HSPU_RULES={home:160,away:95,depart:148,minExcursion:55,minShoulderTravel:.12,maxGap:350};
+// V8.5: contextual body position, one coherent arm per cycle, bounded 2D tolerance.
+const HSPU_RULES={home:155,away:100,depart:143,minExcursion:50,minShoulderTravel:.12,maxGap:350};
 function hspuMetrics(pose){
  const candidates=['L','R'].map(side=>{
   const p=sidePoints(pose,side),arm=[p.shoulder,p.elbow,p.wrist];
