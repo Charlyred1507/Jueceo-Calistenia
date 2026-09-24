@@ -7457,6 +7457,651 @@ document.title='Jueceo Calistenia AI · V10.7 Burpees';
 refreshAdvanced();
 </script>
 
+
+<script>
+/* ============================================================
+   V10.8 — BURPEES: CICLOS BIDIRECCIONALES
+   Basado en videos 1000191453.mp4 y 1000191455.mp4.
+
+   Permite dos inicios válidos:
+   A) Fondo primero: fondo -> recuperación -> salto+manos -> CUENTA.
+   B) Salto primero: salto+manos -> aterrizaje -> fondo -> recuperación -> CUENTA.
+
+   La rep siguiente queda rearmada al aterrizar / recuperar, sin mezclar
+   el final de la anterior con el inicio de la nueva.
+   ============================================================ */
+
+const BURPEE_V108 = {
+  // salto
+  jumpLiftBoth: .032,
+  jumpLiftOne: .078,
+  jumpConfirmFrames: 2,
+  landingLift: .020,
+  landingConfirmFrames: 2,
+  handsWindow: 950,
+
+  // fondo / recuperación
+  bottomConfirmFrames: 2,
+  bottomClearFrames: 2,
+  recoverConfirmFrames: 2,
+  recoverTorso: .28,
+  recoverPelvisRise: .30,
+
+  // tiempo
+  bridge: 650,
+  maxGap: 1200,
+  maxCycle: 15000,
+  invalidHandsGrace: 650
+};
+
+function newBurpeeV108(keepFloor=null){
+  return {
+    mode:'open', // open | bottomFirst | jumpFirstAir | jumpFirstAwaitBottom |
+                 // jumpFirstRecover | bottomFirstAir | awaitLandingCounted |
+                 // awaitLandingInvalid
+    last:null,
+    lastMetricAt:null,
+
+    floorY:keepFloor,
+    floorBuf:keepFloor==null?[]:[keepFloor,keepFloor,keepFloor],
+    floorSamples:keepFloor==null?0:3,
+
+    bottomConfirm:0,
+    bottomClear:0,
+    bottomLatched:false,
+    bottomSeen:false,
+    bottomAt:null,
+    bottomPelvisY:null,
+
+    recovered:false,
+    recoverConfirm:0,
+    recoveredAt:null,
+
+    airborne:false,
+    jumpConfirm:0,
+    jumpAt:null,
+    maxLift:0,
+    landingConfirm:0,
+
+    handLAt:null,
+    handRAt:null,
+    strongLAt:null,
+    strongRAt:null,
+    elbowLAt:null,
+    elbowRAt:null,
+    nearLAt:null,
+    nearRAt:null,
+
+    cycleStarted:null,
+    counted:false,
+    invalidReason:null
+  };
+}
+
+let burpeeV108 = newBurpeeV108();
+
+function resetBurpeeV108(keepFloor=true){
+  const floor=keepFloor?burpeeV108.floorY:null;
+  burpeeV108=newBurpeeV108(floor);
+}
+
+function burpeeFloorMedianV108(buf){
+  if(!buf.length)return null;
+  const a=buf.slice().sort((x,y)=>x-y);
+  return a[Math.floor(a.length*.65)];
+}
+
+function burpeeLiftV108(m,s=burpeeV108){
+  if(s.floorY==null||m.footLowY==null)return 0;
+  return (s.floorY-m.footLowY)/Math.max(10,m.scale);
+}
+
+function learnFloorV108(m){
+  const s=burpeeV108;
+  if(m.footLowY==null||s.airborne)return;
+
+  // Usamos la línea más baja de los pies. Solo aprendemos cuando parece
+  // estar cerca del suelo; así el despegue no arrastra el piso hacia arriba.
+  let candidate=m.footLowY;
+
+  if(s.floorY!=null){
+    const lift=(s.floorY-candidate)/Math.max(10,m.scale);
+    if(lift>.025)return;
+  }
+
+  s.floorBuf.push(candidate);
+  if(s.floorBuf.length>12)s.floorBuf.shift();
+  s.floorSamples=Math.min(20,(s.floorSamples||0)+1);
+  s.floorY=burpeeFloorMedianV108(s.floorBuf);
+}
+
+function updateHandsV108(m,now){
+  const s=burpeeV108;
+  if(m.leftHandUp)s.handLAt=now;
+  if(m.rightHandUp)s.handRAt=now;
+  if(m.leftStrong)s.strongLAt=now;
+  if(m.rightStrong)s.strongRAt=now;
+  if(m.leftElbowHigh)s.elbowLAt=now;
+  if(m.rightElbowHigh)s.elbowRAt=now;
+  if(m.leftNear)s.nearLAt=now;
+  if(m.rightNear)s.nearRAt=now;
+}
+
+function handsValidV108(){
+  const s=burpeeV108;
+  if(s.jumpAt==null)return false;
+  const near=t=>t!=null&&Math.abs(t-s.jumpAt)<=BURPEE_V108.handsWindow;
+
+  if(near(s.handLAt)&&near(s.handRAt))return true;
+  if(near(s.strongLAt)&&(near(s.elbowRAt)||near(s.nearRAt)))return true;
+  if(near(s.strongRAt)&&(near(s.elbowLAt)||near(s.nearLAt)))return true;
+  if(
+    near(s.elbowLAt)&&near(s.elbowRAt)&&
+    (near(s.handLAt)||near(s.handRAt))
+  )return true;
+  return false;
+}
+
+function clearJumpEvidenceV108(){
+  const s=burpeeV108;
+  s.airborne=false;
+  s.jumpConfirm=0;
+  s.jumpAt=null;
+  s.maxLift=0;
+  s.landingConfirm=0;
+  s.handLAt=null;s.handRAt=null;
+  s.strongLAt=null;s.strongRAt=null;
+  s.elbowLAt=null;s.elbowRAt=null;
+  s.nearLAt=null;s.nearRAt=null;
+}
+
+function jumpCandidateV108(m){
+  const s=burpeeV108;
+  const lift=burpeeLiftV108(m,s);
+  s.maxLift=Math.max(s.maxLift||0,lift);
+
+  if(s.floorSamples<2)return false;
+  if(m.ankleCount>=2)return lift>=BURPEE_V108.jumpLiftBoth;
+  if(m.ankleCount===1)return lift>=BURPEE_V108.jumpLiftOne;
+  return false;
+}
+
+function landingCandidateV108(m){
+  const s=burpeeV108;
+  if(!s.airborne||s.jumpAt==null||m.footLowY==null||s.floorY==null)return false;
+  if(judgeTime()-s.jumpAt<140)return false;
+  return burpeeLiftV108(m,s)<=BURPEE_V108.landingLift;
+}
+
+function bottomEventV108(m,now){
+  const s=burpeeV108;
+
+  if(m.bottom){
+    s.bottomConfirm=(s.bottomConfirm||0)+1;
+    s.bottomClear=0;
+  }else{
+    s.bottomConfirm=0;
+    s.bottomClear=(s.bottomClear||0)+1;
+    if(s.bottomClear>=BURPEE_V108.bottomClearFrames){
+      s.bottomLatched=false;
+    }
+  }
+
+  if(
+    !s.bottomLatched &&
+    s.bottomConfirm>=BURPEE_V108.bottomConfirmFrames
+  ){
+    s.bottomLatched=true;
+    s.bottomSeen=true;
+    s.bottomAt=now;
+    s.bottomPelvisY=m.pelvisY;
+    s.recovered=false;
+    s.recoverConfirm=0;
+    return true;
+  }
+  return false;
+}
+
+function recoveryNowV108(m,s){
+  if(s.bottomPelvisY==null)return false;
+  const pelvisRise=
+    (s.bottomPelvisY-m.pelvisY)/Math.max(10,m.scale);
+
+  const torsoRecovered=
+    m.shoulder.y<m.hip.y-m.scale*BURPEE_V108.recoverTorso;
+
+  return m.standing || (
+    torsoRecovered &&
+    pelvisRise>=BURPEE_V108.recoverPelvisRise
+  );
+}
+
+function countBurpeeV108(detail){
+  acceptAdvanced(1,detail);
+  setProgress(100,'Válida');
+  $('advLive').textContent='Burpee válido · ciclo completo.';
+}
+
+function startBottomFirstV108(m,now){
+  const s=burpeeV108;
+  s.mode='bottomFirst';
+  s.cycleStarted=now;
+  s.bottomSeen=true;
+  s.bottomAt=now;
+  s.bottomPelvisY=m.pelvisY;
+  s.recovered=false;
+  s.recoverConfirm=0;
+  clearJumpEvidenceV108();
+  resetAttemptMetrics();
+  setProgress(46,'Abajo');
+  setStatus(
+    'Fondo válido. Recupera y termina con salto + manos arriba.',
+    'ok'
+  );
+  $('advLive').textContent='Inicio por fondo ✓';
+}
+
+function startJumpFirstV108(now){
+  const s=burpeeV108;
+  s.mode='jumpFirstAir';
+  s.cycleStarted=now;
+  s.bottomSeen=false;
+  s.recovered=false;
+  s.counted=false;
+  setProgress(42,'Inicio por salto');
+  setStatus(
+    'Salto inicial válido. Aterriza y baja hasta el fondo.',
+    'ok'
+  );
+  $('advLive').textContent='Inicio por salto ✓ · falta fondo + recuperación.';
+}
+
+function closeAfterLandingV108(m){
+  const floor=burpeeV108.floorY;
+  resetBurpeeV108(true);
+  burpeeV108.floorY=floor;
+  learnFloorV108(m);
+}
+
+function judgeBurpeeV108(pose,now=judgeTime()){
+  advLastPose=pose;
+  advLastPoseAt=performance.now();
+
+  let s=burpeeV108;
+
+  if(s.last!=null&&now-s.last>BURPEE_V108.maxGap){
+    resetBurpeeV108(true);
+    s=burpeeV108;
+  }
+
+  const m=burpeeMetricV107(pose);
+
+  if(!m){
+    if(s.lastMetricAt!=null&&now-s.lastMetricAt<=BURPEE_V108.bridge){
+      setStatus('Seguimiento parcial · continúa el burpee.','info');
+      return;
+    }
+    missingWarning(['hombros, brazos, cadera y pies']);
+    $('advLive').textContent='Muestra el cuerpo completo.';
+    return;
+  }
+
+  markVisible();
+  s.last=now;
+  s.lastMetricAt=now;
+
+  // Antes de actualizar el piso, medimos el posible despegue contra la
+  // referencia previa. Esto permite detectar un salto al inicio del clip.
+  const liftBefore=burpeeLiftV108(m,s);
+  updateHandsV108(m,now);
+
+  updateMetrics(
+    m.confidence,
+    m.minElbow,
+    Math.max(0,liftBefore*100),
+    'Despegue','%'
+  );
+  if(m.minElbow!=null)trackMinAngle(m.minElbow);
+
+  /* --------------------------------------------------------
+     DETECCIÓN DE FONDO, independiente de cuál sea el primer evento.
+     -------------------------------------------------------- */
+  const newBottom=bottomEventV108(m,now);
+
+  /* --------------------------------------------------------
+     DETECCIÓN DE SALTO.
+     Solo confirmamos el aire; la validez de manos puede llegar unos
+     frames antes/después del despegue.
+     -------------------------------------------------------- */
+  if(!s.airborne){
+    const j=jumpCandidateV108(m);
+    s.jumpConfirm=j?(s.jumpConfirm||0)+1:0;
+    if(s.jumpConfirm>=BURPEE_V108.jumpConfirmFrames){
+      s.airborne=true;
+      s.jumpAt=now;
+      s.landingConfirm=0;
+    }
+  }
+
+  /* ========================================================
+     ESTADO OPEN: acepta fondo primero O salto primero.
+     ======================================================== */
+  if(s.mode==='open'){
+    // Si aparece un fondo real primero, el ciclo queda orientado fondo->salto.
+    if(newBottom){
+      startBottomFirstV108(m,now);
+      burpeeV108=s;
+      return;
+    }
+
+    // Si aparece un salto primero, solo abrimos un ciclo cuando las manos
+    // también pertenecen a ese salto. Así un pequeño brinco no crea rep.
+    if(s.airborne){
+      if(handsValidV108()){
+        startJumpFirstV108(now);
+        burpeeV108=s;
+        return;
+      }
+
+      setProgress(30,'Salto');
+      setStatus('Salto detectado · confirma manos arriba.','info');
+      $('advLive').textContent='Posible inicio por salto.';
+      burpeeV108=s;
+      return;
+    }
+
+    // Si no hay salto, aprender piso de forma segura.
+    learnFloorV108(m);
+
+    if(m.standing){
+      setProgress(0,'Listo');
+      setStatus('Listo: puedes empezar bajando o con el salto.','ok');
+      $('advLive').textContent='Esperando fondo o salto inicial.';
+    }else{
+      setProgress(16,'Preparación');
+      setStatus('Preparando burpee.','info');
+    }
+
+    burpeeV108=s;
+    return;
+  }
+
+  /* ========================================================
+     FONDO PRIMERO
+     fondo -> recuperación -> salto+manos -> CUENTA.
+     ======================================================== */
+  if(s.mode==='bottomFirst'){
+    if(!s.recovered){
+      const rec=recoveryNowV108(m,s);
+      s.recoverConfirm=rec?(s.recoverConfirm||0)+1:0;
+
+      if(s.recoverConfirm>=BURPEE_V108.recoverConfirmFrames){
+        s.recovered=true;
+        s.recoveredAt=now;
+        setProgress(72,'Preparando salto');
+        setStatus('Fondo ✓ · recuperación ✓ · ahora salto + manos.','ok');
+      }else{
+        setProgress(58,'Subiendo');
+        setStatus('Fondo ✓ · completa la recuperación.','info');
+      }
+
+      burpeeV108=s;
+      return;
+    }
+
+    // Después de recuperar sí buscamos el salto final.
+    if(s.airborne){
+      if(handsValidV108()){
+        countBurpeeV108(
+          'Burpee válido · fondo → recuperación → salto + manos'
+        );
+        s.counted=true;
+        s.mode='awaitLandingCounted';
+        setStatus(
+          'Rep válida. Aterriza para rearmar inmediatamente la siguiente.',
+          'ok'
+        );
+      }else{
+        s.mode='bottomFirstAir';
+        setProgress(90,'Salto');
+        setStatus('Salto ✓ · faltan manos por encima de hombros.','info');
+      }
+
+      burpeeV108=s;
+      return;
+    }
+
+    learnFloorV108(m);
+    setProgress(78,'Esperando salto');
+    setStatus('Fondo ✓ · recuperación ✓ · falta el salto.','info');
+    burpeeV108=s;
+    return;
+  }
+
+  /* ========================================================
+     SALTO FINAL DESPUÉS DE FONDO.
+     Si manos llegan durante el vuelo, cuenta. Si aterriza sin manos: NO REP.
+     ======================================================== */
+  if(s.mode==='bottomFirstAir'){
+    if(handsValidV108()){
+      countBurpeeV108(
+        'Burpee válido · fondo → recuperación → salto + manos'
+      );
+      s.counted=true;
+      s.mode='awaitLandingCounted';
+      setStatus('Rep válida. Aterrizando…','ok');
+      burpeeV108=s;
+      return;
+    }
+
+    if(landingCandidateV108(m)){
+      s.landingConfirm=(s.landingConfirm||0)+1;
+    }else{
+      s.landingConfirm=0;
+    }
+
+    if(s.landingConfirm>=BURPEE_V108.landingConfirmFrames){
+      noRep('las manos no pasaron por encima de los hombros durante el salto');
+      closeAfterLandingV108(m);
+      setProgress(0,'Siguiente');
+      setStatus('No rep · listo para el siguiente burpee.','warn');
+      return;
+    }
+
+    setProgress(92,'Salto');
+    setStatus('Salto ✓ · sube las manos por encima de hombros.','info');
+    burpeeV108=s;
+    return;
+  }
+
+  /* ========================================================
+     REP YA CONTADA EN EL SALTO.
+     IMPORTANTE: NO retornamos antes de evaluar aterrizaje.
+     Este era el bug que mezclaba rep anterior y siguiente.
+     ======================================================== */
+  if(s.mode==='awaitLandingCounted'){
+    if(landingCandidateV108(m)){
+      s.landingConfirm=(s.landingConfirm||0)+1;
+    }else{
+      s.landingConfirm=0;
+    }
+
+    if(s.landingConfirm>=BURPEE_V108.landingConfirmFrames){
+      closeAfterLandingV108(m);
+      setProgress(0,'Siguiente');
+      setStatus(
+        'Aterrizaje confirmado · siguiente burpee armado.',
+        'ok'
+      );
+      $('advLive').textContent='Ciclo cerrado · listo para la siguiente rep.';
+      return;
+    }
+
+    // Fallback: si el aterrizaje fue demasiado breve para MoveNet y ya
+    // aparece el fondo de la siguiente rep, cerramos la anterior y usamos
+    // ESTE MISMO fondo como inicio de la nueva. No se pierde una rep.
+    if(newBottom&&s.jumpAt!=null&&now-s.jumpAt>220){
+      const floor=s.floorY;
+      resetBurpeeV108(true);
+      burpeeV108.floorY=floor;
+      bottomEventV108(m,now);
+      startBottomFirstV108(m,now);
+      setStatus(
+        'Nueva rep detectada inmediatamente después de la anterior.',
+        'ok'
+      );
+      return;
+    }
+
+    setProgress(100,'Aterrizando');
+    burpeeV108=s;
+    return;
+  }
+
+  /* ========================================================
+     SALTO PRIMERO
+     salto+manos -> aterrizaje -> fondo -> recuperación -> CUENTA.
+     ======================================================== */
+  if(s.mode==='jumpFirstAir'){
+    // Ya sabemos que las manos fueron válidas al abrir este modo.
+    if(landingCandidateV108(m)){
+      s.landingConfirm=(s.landingConfirm||0)+1;
+    }else{
+      s.landingConfirm=0;
+    }
+
+    if(s.landingConfirm>=BURPEE_V108.landingConfirmFrames){
+      s.mode='jumpFirstAwaitBottom';
+      s.airborne=false;
+      s.jumpConfirm=0;
+      s.landingConfirm=0;
+      s.bottomSeen=false;
+      s.bottomConfirm=0;
+      s.bottomLatched=false;
+      learnFloorV108(m);
+
+      setProgress(48,'Salto inicial ✓');
+      setStatus('Salto inicial ✓ · ahora baja hasta el fondo.','ok');
+      $('advLive').textContent='Aterrizaje ✓ · esperando fondo.';
+      burpeeV108=s;
+      return;
+    }
+
+    setProgress(44,'Aterrizando');
+    burpeeV108=s;
+    return;
+  }
+
+  if(s.mode==='jumpFirstAwaitBottom'){
+    learnFloorV108(m);
+
+    if(newBottom){
+      s.mode='jumpFirstRecover';
+      s.bottomSeen=true;
+      s.bottomAt=now;
+      s.bottomPelvisY=m.pelvisY;
+      s.recoverConfirm=0;
+      setProgress(76,'Fondo ✓');
+      setStatus(
+        'Salto inicial ✓ · fondo ✓ · completa la subida.',
+        'ok'
+      );
+      $('advLive').textContent='Falta recuperación para completar la rep.';
+      burpeeV108=s;
+      return;
+    }
+
+    setProgress(58,'Bajando');
+    setStatus('Salto inicial ✓ · baja hasta el fondo.','info');
+    burpeeV108=s;
+    return;
+  }
+
+  if(s.mode==='jumpFirstRecover'){
+    const rec=recoveryNowV108(m,s);
+    s.recoverConfirm=rec?(s.recoverConfirm||0)+1:0;
+
+    if(s.recoverConfirm>=BURPEE_V108.recoverConfirmFrames){
+      countBurpeeV108(
+        'Burpee válido · salto + manos → aterrizaje → fondo → recuperación'
+      );
+
+      // Aquí termina arriba y en el suelo, por lo que podemos rearmar
+      // inmediatamente; la siguiente rep puede comenzar bajando O saltando.
+      const floor=s.floorY;
+      resetBurpeeV108(true);
+      burpeeV108.floorY=floor;
+      learnFloorV108(m);
+
+      setProgress(0,'Siguiente');
+      setStatus(
+        'Rep válida · siguiente burpee armado.',
+        'ok'
+      );
+      $('advLive').textContent='Ciclo salto-primero completado.';
+      return;
+    }
+
+    setProgress(86,'Subiendo');
+    setStatus('Fondo ✓ · completa la subida para contar la rep.','info');
+    burpeeV108=s;
+    return;
+  }
+
+  if(
+    s.cycleStarted!=null &&
+    now-s.cycleStarted>BURPEE_V108.maxCycle
+  ){
+    noRep('secuencia de burpee incompleta');
+    resetBurpeeV108(true);
+    setProgress(0,'Reiniciar');
+    return;
+  }
+
+  burpeeV108=s;
+}
+
+/* V10.8 intercepta únicamente burpees. */
+const judgeAdvancedV108Base=judgeAdvanced;
+judgeAdvanced=function(pose,now=judgeTime()){
+  if(exerciseSelect.value==='burpee'){
+    return judgeBurpeeV108(pose,now);
+  }
+  return judgeAdvancedV108Base(pose,now);
+};
+
+/* Cada clip empieza con piso/estado limpio. */
+video.addEventListener('loadedmetadata',()=>{
+  if(exerciseSelect.value==='burpee'){
+    resetBurpeeV108(false);
+  }
+});
+
+video.addEventListener('seeking',()=>{
+  if(exerciseSelect.value==='burpee'&&inputMode==='clip'){
+    resetBurpeeV108(false);
+  }
+});
+
+exerciseSelect.addEventListener('change',()=>{
+  resetBurpeeV108(false);
+});
+
+const loseAttemptV108Base=loseAttempt;
+loseAttempt=function(){
+  resetBurpeeV108(true);
+  return loseAttemptV108Base();
+};
+
+ADVANCED.burpee.rule=
+  'El ciclo puede empezar por el fondo o por el salto. Fondo primero: fondo → recuperación → salto con manos arriba. Salto primero: salto con manos arriba → aterrizaje → fondo → recuperación. Cada ciclo completo cuenta exactamente una rep.';
+ADVANCED.burpee.guide=
+  'Muestra cuerpo completo. El sistema separa cada repetición por aterrizaje/recuperación y rearma inmediatamente la siguiente. Acepta tanto empezar bajando hacia la lagartija como empezar con el salto. En ambos casos exige un fondo claro, un salto real y manos por encima de hombros dentro del mismo ciclo.';
+
+document.title='Jueceo Calistenia AI · V10.8 Burpees';
+refreshAdvanced();
+</script>
+
 </body>
 </html>
 
