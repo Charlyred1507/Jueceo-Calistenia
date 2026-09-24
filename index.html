@@ -8572,6 +8572,597 @@ document.title='Jueceo Calistenia AI · V10.9 Burpees';
 refreshAdvanced();
 
 </script>
+
+<script>
+/* ============================================================
+   V10.10 — LUNGES / DESPLANTES
+   Calibración positiva:
+   - 1000191386.mp4 (forward lunges)
+   - 1000191387.mp4 (lunges consecutivos)
+   - 1000191388.mp4 (forward + reverse lunges)
+
+   Principios:
+   - admite paso hacia adelante o hacia atrás;
+   - no obliga a alternar pierna;
+   - admite repeticiones consecutivas sin pausa;
+   - juzga principalmente la pierna que entra en flexión;
+   - fondo válido = rodilla y cadera alrededor de 90°,
+     con tolerancia 2D razonable;
+   - la rep se acredita únicamente al volver arriba/extensión;
+   - no exige que ambos lados del cuerpo estén visibles a la vez.
+   ============================================================ */
+
+const LUNGE_V1010={
+  pointConf:.13,
+  shoulderConf:.10,
+
+  // Posición alta / salida.
+  topKnee:142,
+  topHip:142,
+  departKnee:136,
+  departHip:136,
+
+  // "Alrededor de 90°" con tolerancia de proyección 2D.
+  bottomKnee:125,
+  bottomHip:130,
+  strongKnee:108,
+  strongHip:112,
+  minReasonable:48,
+
+  // Movimiento corporal mínimo para que no baste una pose ruidosa.
+  minPelvisDrop:.13,
+  strongPelvisDrop:.22,
+
+  // Cierre de rep.
+  finishKnee:140,
+  finishHip:138,
+  finishPelvisReturn:.20,
+  finishConfirmFrames:2,
+
+  // Memoria temporal de los picos.
+  peakWindow:700,
+  bottomConfirmFrames:2,
+
+  bridge:600,
+  maxGap:1050,
+  maxCycle:10000,
+  minDuration:220
+};
+
+function lungePtV1010(pose,index,min=LUNGE_V1010.pointConf){
+  return v10RawPoint(pose,index,min);
+}
+
+function lungeCenterV1010(points){
+  const a=points.filter(Boolean);
+  if(!a.length)return null;
+  return{
+    x:a.reduce((s,p)=>s+p.x,0)/a.length,
+    y:a.reduce((s,p)=>s+p.y,0)/a.length
+  };
+}
+
+function lungeMetricsV1010(pose){
+  const ls=lungePtV1010(pose,IDX.leftShoulder,LUNGE_V1010.shoulderConf);
+  const rs=lungePtV1010(pose,IDX.rightShoulder,LUNGE_V1010.shoulderConf);
+  const lh=lungePtV1010(pose,IDX.leftHip);
+  const rh=lungePtV1010(pose,IDX.rightHip);
+  const lk=lungePtV1010(pose,IDX.leftKnee);
+  const rk=lungePtV1010(pose,IDX.rightKnee);
+  const la=lungePtV1010(pose,IDX.leftAnkle);
+  const ra=lungePtV1010(pose,IDX.rightAnkle);
+
+  const shoulderCenter=lungeCenterV1010([ls,rs]);
+  const pelvis=lungeCenterV1010([lh,rh]);
+
+  function side(side,S,H,K,A){
+    if(!H||!K||!A)return null;
+
+    // Si el hombro del mismo lado se pierde, usar el centro de hombros.
+    // En vistas frontales/oblicuas esto es más estable que descartar la pierna.
+    const shoulder=S||shoulderCenter;
+    if(!shoulder)return null;
+
+    const thigh=distance(H,K);
+    const shin=distance(K,A);
+    const torso=distance(shoulder,H);
+    if(!thigh||!shin||!torso||thigh<8||shin<7||torso<8)return null;
+
+    const kneeAngle=angle(H,K,A);
+    const hipAngle=angle(shoulder,H,K);
+    if(
+      kneeAngle==null||hipAngle==null||
+      !Number.isFinite(kneeAngle)||!Number.isFinite(hipAngle)
+    )return null;
+
+    return{
+      side,shoulder,hip:H,knee:K,ankle:A,
+      thigh,shin,torso,
+      scale:(thigh+shin+torso)/3,
+      kneeAngle,hipAngle,
+      confidence:Math.min(H.score||0,K.score||0,A.score||0,shoulder.score||1)
+    };
+  }
+
+  const left=side('L',ls,lh,lk,la);
+  const right=side('R',rs,rh,rk,ra);
+  const sides=[left,right].filter(Boolean);
+
+  if(!sides.length)return null;
+
+  const scale=sides.reduce((s,m)=>s+m.scale,0)/sides.length;
+
+  return{
+    sides,left,right,pelvis,scale,
+    confidence:Math.max(...sides.map(s=>s.confidence))
+  };
+}
+
+function newLungeV1010(){
+  return{
+    state:'ready',
+    last:null,
+    lastMetricAt:null,
+    started:null,
+
+    // Referencia superior.
+    topPelvisY:null,
+    topScale:null,
+
+    // Memoria por lado durante la bajada.
+    mem:{
+      L:{minKnee:180,minHip:180,kneeAt:null,hipAt:null,maxDrop:0},
+      R:{minKnee:180,minHip:180,kneeAt:null,hipAt:null,maxDrop:0}
+    },
+
+    bottomConfirm:0,
+    workingSide:null,
+    bottomAt:null,
+    bottomKnee:null,
+    bottomHip:null,
+    bottomAnkle:null,
+    bottomKneePoint:null,
+    finishConfirm:0,
+    maxProgress:0
+  };
+}
+
+let lungeV1010=newLungeV1010();
+
+function resetLungeV1010(){
+  lungeV1010=newLungeV1010();
+}
+
+function lungeTopishV1010(m){
+  return (
+    m.kneeAngle>=LUNGE_V1010.topKnee &&
+    m.hipAngle>=LUNGE_V1010.topHip
+  );
+}
+
+function updateLungeTopV1010(metrics){
+  const s=lungeV1010;
+  const topSides=metrics.sides.filter(lungeTopishV1010);
+  if(!topSides.length||!metrics.pelvis)return;
+
+  const py=metrics.pelvis.y;
+  if(s.topPelvisY==null){
+    s.topPelvisY=py;
+    s.topScale=metrics.scale;
+  }else{
+    // Adaptación lenta para walking lunges: el atleta puede avanzar,
+    // pero la altura de pelvis en la posición alta es similar.
+    s.topPelvisY=s.topPelvisY*.82+py*.18;
+    s.topScale=(s.topScale||metrics.scale)*.82+metrics.scale*.18;
+  }
+}
+
+function lungePelvisDropV1010(metrics){
+  const s=lungeV1010;
+  if(!metrics.pelvis||s.topPelvisY==null)return 0;
+  return (metrics.pelvis.y-s.topPelvisY)/Math.max(10,s.topScale||metrics.scale);
+}
+
+function lungeBottomEvidenceV1010(m,mem,drop){
+  const knee=mem.minKnee;
+  const hip=mem.minHip;
+  const peaksClose=
+    mem.kneeAt!=null&&mem.hipAt!=null&&
+    Math.abs(mem.kneeAt-mem.hipAt)<=LUNGE_V1010.peakWindow;
+
+  const sane=
+    knee>=LUNGE_V1010.minReasonable&&
+    hip>=LUNGE_V1010.minReasonable;
+
+  if(!sane||!peaksClose)return false;
+
+  // Estándar principal: ambas articulaciones cerca de 90°.
+  const bothNear=
+    knee<=LUNGE_V1010.bottomKnee&&
+    hip<=LUNGE_V1010.bottomHip;
+
+  // Si una proyección 2D infla una articulación, la otra debe ser fuerte
+  // y además debe existir descenso claro de pelvis.
+  const kneeStrong=
+    knee<=LUNGE_V1010.strongKnee&&
+    hip<=138&&
+    drop>=LUNGE_V1010.minPelvisDrop;
+
+  const hipStrong=
+    hip<=LUNGE_V1010.strongHip&&
+    knee<=135&&
+    drop>=LUNGE_V1010.minPelvisDrop;
+
+  return(
+    (bothNear&&drop>=LUNGE_V1010.minPelvisDrop)||
+    kneeStrong||
+    hipStrong||
+    (
+      bothNear&&
+      Math.max(mem.maxDrop||0,drop)>=LUNGE_V1010.strongPelvisDrop
+    )
+  );
+}
+
+function lungeProgressV1010(m,drop){
+  const kneeP=clamp(
+    (LUNGE_V1010.topKnee-m.kneeAngle)/
+    Math.max(20,LUNGE_V1010.topKnee-95)*100,
+    0,100
+  );
+  const hipP=clamp(
+    (LUNGE_V1010.topHip-m.hipAngle)/
+    Math.max(20,LUNGE_V1010.topHip-95)*100,
+    0,100
+  );
+  const dropP=clamp(
+    drop/Math.max(.18,LUNGE_V1010.strongPelvisDrop)*100,
+    0,100
+  );
+
+  // Rodilla y cadera son las señales principales; pelvis estabiliza
+  // el progreso sin dominarlo.
+  const jointP=Math.min(kneeP,hipP);
+  return clamp(jointP*.82+dropP*.18,0,100);
+}
+
+function updateLungeMemoryV1010(metrics,now){
+  const s=lungeV1010;
+  const drop=lungePelvisDropV1010(metrics);
+
+  for(const m of metrics.sides){
+    const mem=s.mem[m.side];
+    if(m.kneeAngle<mem.minKnee){
+      mem.minKnee=m.kneeAngle;
+      mem.kneeAt=now;
+    }
+    if(m.hipAngle<mem.minHip){
+      mem.minHip=m.hipAngle;
+      mem.hipAt=now;
+    }
+    mem.maxDrop=Math.max(mem.maxDrop||0,drop);
+  }
+
+  return drop;
+}
+
+function bestLungeBottomV1010(metrics,drop){
+  const s=lungeV1010;
+  const valid=[];
+
+  for(const m of metrics.sides){
+    const mem=s.mem[m.side];
+    if(!lungeBottomEvidenceV1010(m,mem,drop))continue;
+
+    const kneeErr=Math.abs(mem.minKnee-90);
+    const hipErr=Math.abs(mem.minHip-90);
+    valid.push({
+      metric:m,
+      score:kneeErr+hipErr-drop*18
+    });
+  }
+
+  valid.sort((a,b)=>a.score-b.score);
+  return valid[0]?.metric||null;
+}
+
+function matchLungeWorkingLegV1010(metrics){
+  const s=lungeV1010;
+  if(!s.workingSide)return null;
+
+  // Preferir etiqueta original si sigue razonable.
+  const same=metrics.sides.find(m=>m.side===s.workingSide);
+  if(same)return same;
+
+  // Fallback espacial si MoveNet intercambia L/R.
+  if(!s.bottomKneePoint&&!s.bottomAnkle)return metrics.sides[0]||null;
+
+  return metrics.sides
+    .map(m=>{
+      const scale=Math.max(10,m.scale,metrics.scale);
+      let score=0;
+      if(s.bottomKneePoint)score+=distance(m.knee,s.bottomKneePoint)/scale;
+      if(s.bottomAnkle)score+=distance(m.ankle,s.bottomAnkle)/scale*.55;
+      return{m,score};
+    })
+    .sort((a,b)=>a.score-b.score)[0]?.m||null;
+}
+
+function lungeFinishV1010(m,metrics){
+  const s=lungeV1010;
+
+  const joints=
+    m.kneeAngle>=LUNGE_V1010.finishKnee&&
+    m.hipAngle>=LUNGE_V1010.finishHip;
+
+  let pelvisReturned=true;
+  if(
+    s.topPelvisY!=null&&
+    metrics.pelvis
+  ){
+    const delta=
+      Math.abs(metrics.pelvis.y-s.topPelvisY)/
+      Math.max(10,s.topScale||metrics.scale);
+    pelvisReturned=delta<=LUNGE_V1010.finishPelvisReturn;
+  }
+
+  return joints&&pelvisReturned;
+}
+
+function lungeClearMemoryV1010(){
+  const s=lungeV1010;
+  s.mem={
+    L:{minKnee:180,minHip:180,kneeAt:null,hipAt:null,maxDrop:0},
+    R:{minKnee:180,minHip:180,kneeAt:null,hipAt:null,maxDrop:0}
+  };
+  s.bottomConfirm=0;
+  s.workingSide=null;
+  s.bottomAt=null;
+  s.bottomKnee=null;
+  s.bottomHip=null;
+  s.bottomAnkle=null;
+  s.bottomKneePoint=null;
+  s.finishConfirm=0;
+  s.maxProgress=0;
+}
+
+function judgeLungeV1010(pose,now=judgeTime()){
+  advLastPose=pose;
+  advLastPoseAt=performance.now();
+
+  let s=lungeV1010;
+
+  if(s.last!=null&&now-s.last>LUNGE_V1010.maxGap){
+    resetLungeV1010();
+    s=lungeV1010;
+  }
+
+  const metrics=lungeMetricsV1010(pose);
+
+  if(!metrics){
+    if(
+      s.lastMetricAt!=null&&
+      now-s.lastMetricAt<=LUNGE_V1010.bridge
+    ){
+      setStatus('Seguimiento parcial · continúa el desplante.','info');
+      return;
+    }
+
+    missingWarning(['hombro, cadera, rodilla y tobillo de una pierna']);
+    $('advLive').textContent=
+      'Muestra al menos una pierna completa; no hacen falta ambas.';
+    return;
+  }
+
+  markVisible();
+  s.last=now;
+  s.lastMetricAt=now;
+
+  updateLungeTopV1010(metrics);
+  const drop=updateLungeMemoryV1010(metrics,now);
+
+  const bestCurrent=metrics.sides
+    .slice()
+    .sort((a,b)=>{
+      const ap=lungeProgressV1010(a,drop);
+      const bp=lungeProgressV1010(b,drop);
+      return bp-ap;
+    })[0];
+
+  const currentProgress=bestCurrent
+    ? lungeProgressV1010(bestCurrent,drop)
+    : 0;
+
+  s.maxProgress=Math.max(s.maxProgress||0,currentProgress);
+
+  updateMetrics(
+    metrics.confidence,
+    bestCurrent?.hipAngle??null,
+    bestCurrent?.kneeAngle??null,
+    'Rodilla','°'
+  );
+
+  if(bestCurrent){
+    trackMinAngle(bestCurrent.kneeAngle);
+  }
+
+  /* --------------------------------------------------------
+     READY / DOWN
+     No exige pies juntos ni alternancia.
+     Forward y reverse usan la misma lógica angular.
+     -------------------------------------------------------- */
+  if(s.state==='ready'||s.state==='down'){
+    const flexing=metrics.sides.some(m=>
+      m.kneeAngle<LUNGE_V1010.departKnee||
+      m.hipAngle<LUNGE_V1010.departHip
+    );
+
+    if(flexing&&s.state==='ready'){
+      s.state='down';
+      s.started=now;
+      resetAttemptMetrics();
+    }
+
+    const bottom=bestLungeBottomV1010(metrics,drop);
+
+    if(bottom){
+      s.bottomConfirm=(s.bottomConfirm||0)+1;
+
+      if(s.bottomConfirm>=LUNGE_V1010.bottomConfirmFrames){
+        const mem=s.mem[bottom.side];
+
+        s.state='up';
+        s.workingSide=bottom.side;
+        s.bottomAt=now;
+        s.bottomKnee=mem.minKnee;
+        s.bottomHip=mem.minHip;
+        s.bottomAnkle={x:bottom.ankle.x,y:bottom.ankle.y};
+        s.bottomKneePoint={x:bottom.knee.x,y:bottom.knee.y};
+        s.finishConfirm=0;
+        s.maxProgress=100;
+
+        setProgress(100,'Profundidad ✓');
+        setStatus(
+          'Profundidad válida. Regresa arriba para contar la rep.',
+          'ok'
+        );
+        $('advLive').textContent=
+          'Rodilla ≈ '+Math.round(mem.minKnee)+'° · cadera ≈ '+
+          Math.round(mem.minHip)+'° · falta completar la subida.';
+
+        lungeV1010=s;
+        return;
+      }
+    }else{
+      s.bottomConfirm=0;
+    }
+
+    if(s.state==='down'){
+      setProgress(currentProgress,'Bajando');
+      const left=Math.max(0,100-Math.round(s.maxProgress||0));
+      setStatus(
+        s.maxProgress>=80
+          ? 'Casi: flexiona un poco más rodilla y cadera.'
+          : 'Bajando en desplante.',
+        'info'
+      );
+      $('advLive').textContent=
+        'Recorrido máx. '+Math.round(s.maxProgress||0)+'% · faltan '+left+'%.';
+    }else{
+      setProgress(0,'Listo');
+      setStatus(
+        'Listo. Puedes dar el paso hacia adelante o hacia atrás.',
+        'ok'
+      );
+      $('advLive').textContent=
+        'No es obligatorio alternar piernas ni juntar los pies entre reps.';
+    }
+
+    lungeV1010=s;
+    return;
+  }
+
+  /* --------------------------------------------------------
+     UP
+     La rep todavía NO cuenta en el fondo.
+     Solo al volver a extensión sobre la pierna trabajada.
+     -------------------------------------------------------- */
+  if(s.state==='up'){
+    const working=matchLungeWorkingLegV1010(metrics);
+
+    if(!working){
+      if(now-s.lastMetricAt<=LUNGE_V1010.bridge){
+        setStatus('Seguimiento parcial · continúa subiendo.','info');
+        return;
+      }
+      lungeV1010=s;
+      return;
+    }
+
+    const finished=lungeFinishV1010(working,metrics);
+    s.finishConfirm=finished?(s.finishConfirm||0)+1:0;
+
+    setProgress(100,'Subiendo');
+    setStatus(
+      'Profundidad ✓ · completa la extensión para contar.',
+      'ok'
+    );
+
+    if(s.finishConfirm>=LUNGE_V1010.finishConfirmFrames){
+      const duration=s.started==null?LUNGE_V1010.minDuration:now-s.started;
+
+      if(duration>=LUNGE_V1010.minDuration){
+        acceptAdvanced(
+          1,
+          'Desplante válido · rodilla/cadera cerca de 90° + regreso a extensión'
+        );
+
+        $('advLive').textContent=
+          'Desplante válido · subida completada.';
+
+        // Rearme inmediato: permite reps seguidas, misma pierna o alternando.
+        s.state='ready';
+        s.started=null;
+        lungeClearMemoryV1010();
+        updateLungeTopV1010(metrics);
+        setProgress(0,'Siguiente');
+        lungeV1010=s;
+        return;
+      }
+    }
+
+    if(
+      s.bottomAt!=null&&
+      now-s.bottomAt>LUNGE_V1010.maxCycle
+    ){
+      noRep('no completó el regreso a extensión');
+      s.state='ready';
+      s.started=null;
+      lungeClearMemoryV1010();
+    }
+
+    lungeV1010=s;
+    return;
+  }
+
+  lungeV1010=s;
+}
+
+/* Interceptar únicamente LUNGE; todo lo demás conserva V10.9. */
+const judgeAdvancedV1010Base=judgeAdvanced;
+judgeAdvanced=function(pose,now=judgeTime()){
+  if(exerciseSelect.value==='lunge'){
+    return judgeLungeV1010(pose,now);
+  }
+  return judgeAdvancedV1010Base(pose,now);
+};
+
+exerciseSelect.addEventListener('change',()=>{
+  resetLungeV1010();
+});
+
+video.addEventListener('loadedmetadata',()=>{
+  if(exerciseSelect.value==='lunge')resetLungeV1010();
+});
+
+video.addEventListener('seeking',()=>{
+  if(exerciseSelect.value==='lunge'&&inputMode==='clip'){
+    resetLungeV1010();
+  }
+});
+
+ADVANCED.lunge.name='Desplante / Lunge';
+ADVANCED.lunge.rule=
+  'Paso hacia adelante o hacia atrás → rodilla y cadera de la pierna que flexiona alrededor de 90° → regreso a extensión. La rep se cuenta al terminar la subida. No es obligatorio alternar pierna.';
+ADVANCED.lunge.guide=
+  'Vista lateral, frontal u oblicua. Basta con que se vea bien una pierna completa y el torso. Se aceptan forward y reverse lunges, reps seguidas, misma pierna o alternadas. El sistema conserva los mínimos de rodilla/cadera durante la misma bajada y acredita la rep solo cuando vuelve arriba.';
+INITIAL_HINTS.lunge=
+  'De pie. Da el paso hacia adelante o atrás; baja hasta cerca de 90° de rodilla y cadera y vuelve arriba.';
+
+document.title='Jueceo Calistenia AI · V10.10 Lunges';
+refreshAdvanced();
+</script>
+
 </body>
 </html>
 
