@@ -5203,6 +5203,464 @@ refreshAdvanced();
 document.title='Jueceo Calistenia AI · V10.3 Pistol Squat';
 </script>
 
+
+<script>
+/* ============================================================
+   V10.4 — PISTOL SQUAT
+   Ajuste con videos positivos 1000191410 / 1000191411.
+
+   Cambios:
+   - La rep se juzga principalmente con la pierna de apoyo.
+   - La pierna libre se usa para confirmar el inicio, pero no tiene
+     que permanecer perfectamente visible durante toda la repetición.
+   - Reenganche de la pierna física por posición del pie para tolerar
+     intercambios L/R de MoveNet en vistas frontales.
+   - Profundidad robusta por tres señales: flexión de rodilla,
+     relación cadera-rodilla y caída vertical de cadera.
+   - La barra usa las dos mejores señales 2D en vez de la peor.
+   ============================================================ */
+
+const PISTOL_V104={
+  pointConf:.15,
+  freeConf:.12,
+  top:145,
+  depart:140,
+  topHipRise:.27,
+  freeAnkleLift:.045,
+  freeKneeLift:.10,
+  bottomStrongKnee:103,
+  bottomKnee:121,
+  bottomDepth:-.12,
+  bottomDrop:.50,
+  targetDrop:.62,
+  targetDepth:-.06,
+  minExcursion:30,
+  peakWindow:700,
+  maxGap:950,
+  bridge:500,
+  minDuration:160,
+  maxDuration:12000,
+  departSamples:2,
+  supportHandoff:.90
+};
+
+function pistolSupportV104(pose,side){
+  const L=side==='L';
+  const hip=v10RawPoint(pose,L?IDX.leftHip:IDX.rightHip,PISTOL_V104.pointConf);
+  const knee=v10RawPoint(pose,L?IDX.leftKnee:IDX.rightKnee,PISTOL_V104.pointConf);
+  const ankle=v10RawPoint(pose,L?IDX.leftAnkle:IDX.rightAnkle,PISTOL_V104.pointConf);
+  if(!hip||!knee||!ankle)return null;
+
+  const thigh=distance(hip,knee);
+  const shin=distance(knee,ankle);
+  if(!thigh||!shin||thigh<9||shin<7)return null;
+
+  const kneeAngle=angle(hip,knee,ankle);
+  if(kneeAngle==null||!Number.isFinite(kneeAngle))return null;
+
+  const legScale=(thigh+shin)/2;
+  const depth=(hip.y-knee.y)/Math.max(10,thigh);
+  const hipRise=(knee.y-hip.y)/Math.max(10,thigh);
+
+  const freeL=!L;
+  const freeAnkle=v10RawPoint(
+    pose,freeL?IDX.leftAnkle:IDX.rightAnkle,PISTOL_V104.freeConf
+  );
+  const freeKnee=v10RawPoint(
+    pose,freeL?IDX.leftKnee:IDX.rightKnee,PISTOL_V104.freeConf
+  );
+
+  const freeAnkleLift=freeAnkle
+    ? (ankle.y-freeAnkle.y)/Math.max(12,legScale)
+    : null;
+  const freeKneeLift=freeKnee
+    ? (knee.y-freeKnee.y)/Math.max(12,legScale)
+    : null;
+
+  const freeRaised=
+    (freeAnkleLift!=null && freeAnkleLift>=PISTOL_V104.freeAnkleLift) ||
+    (freeKneeLift!=null && freeKneeLift>=PISTOL_V104.freeKneeLift);
+
+  const standing=
+    kneeAngle>=PISTOL_V104.top &&
+    hipRise>=PISTOL_V104.topHipRise;
+
+  const confidence=Math.min(
+    hip.score||0,knee.score||0,ankle.score||0
+  );
+
+  return{
+    side,hip,knee,ankle,freeAnkle,freeKnee,
+    thigh,shin,legScale,kneeAngle,depth,hipRise,
+    freeAnkleLift,freeKneeLift,freeRaised,standing,confidence
+  };
+}
+
+function pistolCandidatesV104(pose){
+  return ['L','R'].map(s=>pistolSupportV104(pose,s)).filter(Boolean);
+}
+
+function bestPistolStartV104(pose){
+  const c=pistolCandidatesV104(pose)
+    .filter(m=>m.standing&&m.freeRaised)
+    .sort((a,b)=>{
+      const af=Math.max(a.freeAnkleLift??-1,a.freeKneeLift??-1);
+      const bf=Math.max(b.freeAnkleLift??-1,b.freeKneeLift??-1);
+      return (bf*1.8+b.kneeAngle/180+b.confidence*.25)-
+             (af*1.8+a.kneeAngle/180+a.confidence*.25);
+    });
+  return c[0]||null;
+}
+
+function physicalSupportV104(pose,state){
+  const c=pistolCandidatesV104(pose);
+  if(!c.length)return null;
+  if(!state?.lastAnkle)return c.find(x=>x.side===state?.side)||c[0];
+
+  const scored=c.map(m=>{
+    const d=distance(m.ankle,state.lastAnkle)/
+      Math.max(12,m.legScale,state.lastLegScale||0);
+    return{m,d};
+  }).sort((a,b)=>a.d-b.d);
+
+  if(scored[0].d<=PISTOL_V104.supportHandoff)return scored[0].m;
+
+  // Si por perspectiva el pie se desplazó algo más, preferimos todavía
+  // el lado anterior antes de saltar a la pierna libre.
+  return c.find(x=>x.side===state.side)||scored[0].m;
+}
+
+function pistolDepthEvidenceV104(m,s){
+  const drop=(m.hip.y-s.startHipY)/Math.max(12,s.startLegScale);
+  const kneeStrong=m.kneeAngle<=PISTOL_V104.bottomStrongKnee;
+  const kneeEnough=m.kneeAngle<=PISTOL_V104.bottomKnee;
+  const hipLevel=m.depth>=PISTOL_V104.bottomDepth;
+  const dropped=drop>=PISTOL_V104.bottomDrop;
+
+  const valid=
+    kneeStrong ||
+    (kneeEnough && (hipLevel||dropped)) ||
+    (hipLevel && dropped && m.kneeAngle<=128);
+
+  return{drop,kneeStrong,kneeEnough,hipLevel,dropped,valid};
+}
+
+function pistolProgressV104(m,s,evidence){
+  const startAngle=Math.max(PISTOL_V104.top,s.startAngle||PISTOL_V104.top);
+
+  const angleP=clamp(
+    (startAngle-m.kneeAngle)/
+    Math.max(20,startAngle-PISTOL_V104.bottomStrongKnee)*100,
+    0,100
+  );
+
+  const dropP=clamp(
+    (evidence.drop/PISTOL_V104.targetDrop)*100,
+    0,100
+  );
+
+  const startDepth=Math.min(-.20,s.startDepth??-.55);
+  const depthP=clamp(
+    (m.depth-startDepth)/
+    Math.max(.20,PISTOL_V104.targetDepth-startDepth)*100,
+    0,100
+  );
+
+  // En 2D una de las tres señales puede quedar artificialmente corta.
+  // Promediar las dos mejores conserva exigencia sin depender del peor
+  // eje proyectado.
+  const vals=[angleP,dropP,depthP].sort((a,b)=>b-a);
+  let p=(vals[0]+vals[1])/2;
+
+  if(evidence.valid)p=100;
+  return clamp(p,0,100);
+}
+
+let pistolV104=null;
+
+function resetPistolV104(){
+  pistolV104=null;
+}
+
+function armPistolV104(m,now){
+  pistolV104={
+    side:m.side,
+    last:now,
+    lastMetricAt:now,
+    lastAnkle:{x:m.ankle.x,y:m.ankle.y},
+    lastLegScale:m.legScale,
+    armed:true,
+    active:false,
+    departFrames:0,
+    started:null,
+    startAngle:m.kneeAngle,
+    startDepth:m.depth,
+    startHipY:m.hip.y,
+    startLegScale:m.legScale,
+    minKnee:m.kneeAngle,
+    minKneeAt:now,
+    maxDepth:m.depth,
+    maxDepthAt:now,
+    maxDrop:0,
+    maxProgress:0,
+    samples:0,
+    hit:false
+  };
+  phase='TOP';
+}
+
+function judgePistolV104(pose,now=judgeTime()){
+  advLastPose=pose;
+  advLastPoseAt=performance.now();
+
+  if(pistolV104&&now-pistolV104.last>PISTOL_V104.maxGap){
+    resetPistolV104();
+  }
+
+  if(!pistolV104){
+    const start=bestPistolStartV104(pose);
+
+    if(!start){
+      const any=pistolCandidatesV104(pose);
+      if(!any.length){
+        missingWarning(['cadera, rodilla y tobillo de la pierna de apoyo']);
+        $('advLive').textContent='Muestra al menos una pierna completa.';
+        return;
+      }
+
+      markVisible();
+      const best=any.slice().sort((a,b)=>
+        (b.standing?1:0)-(a.standing?1:0) ||
+        b.kneeAngle-a.kneeAngle
+      )[0];
+
+      updateMetrics(
+        best.confidence,best.kneeAngle,
+        Math.max(best.freeAnkleLift??0,best.freeKneeLift??0)*100,
+        'Pierna libre','%'
+      );
+      setProgress(0,'Preparación');
+
+      $('advLive').textContent=best.standing
+        ? 'Eleva la pierna libre sin apoyarla.'
+        : 'Extiende la pierna de apoyo para iniciar.';
+      setStatus($('advLive').textContent,'warn');
+      return;
+    }
+
+    markVisible();
+    armPistolV104(start,now);
+    resetAttemptMetrics();
+    updateMetrics(
+      start.confidence,start.kneeAngle,
+      Math.max(start.freeAnkleLift??0,start.freeKneeLift??0)*100,
+      'Pierna libre','%'
+    );
+    trackMinAngle(start.kneeAngle);
+    setProgress(0,'Listo');
+    setStatus('Listo. Baja manteniendo la otra pierna sin apoyo.','ok');
+    $('advLive').textContent='Pierna de apoyo fijada físicamente · listo.';
+    return;
+  }
+
+  const s=pistolV104;
+  const m=physicalSupportV104(pose,s);
+
+  if(!m){
+    if(now-s.lastMetricAt<=PISTOL_V104.bridge){
+      setStatus('Seguimiento parcial · continúa el movimiento.','info');
+      $('advLive').textContent='Conservando la pierna de apoyo durante la oclusión.';
+      return;
+    }
+    missingWarning(['cadera, rodilla y tobillo de la pierna de apoyo']);
+    $('advLive').textContent='Recuperando la pierna de apoyo.';
+    return;
+  }
+
+  markVisible();
+  s.last=now;
+  s.lastMetricAt=now;
+  s.side=m.side;
+  s.lastAnkle={x:m.ankle.x,y:m.ankle.y};
+  s.lastLegScale=m.legScale;
+
+  updateMetrics(
+    m.confidence,m.kneeAngle,
+    Math.max(m.freeAnkleLift??0,m.freeKneeLift??0)*100,
+    'Pierna libre','%'
+  );
+  trackMinAngle(m.kneeAngle);
+
+  /* -------- Armado -------- */
+  if(!s.active){
+    if(m.standing){
+      s.startAngle=Math.max(s.startAngle,m.kneeAngle);
+      s.startDepth=Math.min(s.startDepth,m.depth);
+      s.startHipY=Math.min(s.startHipY,m.hip.y);
+      s.startLegScale=(s.startLegScale+m.legScale)/2;
+      s.departFrames=0;
+      setProgress(0,'Listo');
+      setStatus('Listo. Baja manteniendo la otra pierna sin apoyo.','ok');
+      $('advLive').textContent='Listo · inicia el descenso unilateral.';
+      pistolV104=s;
+      return;
+    }
+
+    const hipDrop=(m.hip.y-s.startHipY)/Math.max(12,s.startLegScale);
+    const departed=
+      m.kneeAngle<=PISTOL_V104.depart ||
+      hipDrop>=.12;
+
+    s.departFrames=departed?(s.departFrames||0)+1:0;
+
+    if(s.departFrames>=PISTOL_V104.departSamples){
+      s.active=true;
+      s.started=now;
+      s.samples=0;
+      s.hit=false;
+      s.minKnee=m.kneeAngle;
+      s.minKneeAt=now;
+      s.maxDepth=m.depth;
+      s.maxDepthAt=now;
+      s.maxDrop=Math.max(0,hipDrop);
+
+      const e=pistolDepthEvidenceV104(m,s);
+      s.maxProgress=pistolProgressV104(m,s,e);
+      s.hit=e.valid;
+
+      resetAttemptMetrics();
+      phase=s.hit?'UP':'DOWN';
+      setProgress(s.maxProgress,phaseLabel());
+      setStatus(
+        s.hit?'Profundidad válida. Regresa arriba.':'Bajando en una pierna.',
+        s.hit?'ok':'info'
+      );
+      pistolV104=s;
+      return;
+    }
+
+    pistolV104=s;
+    return;
+  }
+
+  /* -------- Rep activa -------- */
+  if(now-s.started>PISTOL_V104.maxDuration){
+    resetPistolV104();
+    phase='WAITING';
+    noRep('tiempo excedido; reinicia arriba sobre una pierna');
+    return;
+  }
+
+  s.samples++;
+
+  if(m.kneeAngle<s.minKnee){
+    s.minKnee=m.kneeAngle;
+    s.minKneeAt=now;
+  }
+  if(m.depth>s.maxDepth){
+    s.maxDepth=m.depth;
+    s.maxDepthAt=now;
+  }
+
+  const e=pistolDepthEvidenceV104(m,s);
+  s.maxDrop=Math.max(s.maxDrop,e.drop);
+
+  const progress=pistolProgressV104(m,s,e);
+  s.maxProgress=Math.max(s.maxProgress,progress);
+
+  const peakClose=Math.abs(s.minKneeAt-s.maxDepthAt)<=PISTOL_V104.peakWindow;
+
+  if(
+    e.valid ||
+    (
+      s.minKnee<=PISTOL_V104.bottomKnee &&
+      (
+        s.maxDepth>=PISTOL_V104.bottomDepth ||
+        s.maxDrop>=PISTOL_V104.bottomDrop
+      ) &&
+      peakClose
+    )
+  ){
+    s.hit=true;
+  }
+
+  phase=s.hit?'UP':'DOWN';
+  setProgress(s.hit?100:progress,phaseLabel());
+
+  if(s.hit){
+    setStatus('Profundidad válida. Regresa arriba sobre la misma pierna.','ok');
+    $('advLive').textContent='Profundidad válida · vuelve a extensión.';
+  }else{
+    const left=Math.max(0,100-Math.round(s.maxProgress));
+    setStatus(
+      s.maxProgress>=82
+        ? 'Casi: baja un poco más con la pierna de apoyo.'
+        : 'Continúa bajando sobre la pierna de apoyo.',
+      'info'
+    );
+    $('advLive').textContent=
+      'Recorrido máximo '+Math.round(s.maxProgress)+'% · faltan '+left+'%.';
+  }
+
+  /* -------- Cierre -------- */
+  if(m.standing){
+    const excursion=s.startAngle-s.minKnee;
+    const good=
+      s.hit &&
+      excursion>=PISTOL_V104.minExcursion &&
+      s.samples>=3 &&
+      now-s.started>=PISTOL_V104.minDuration;
+
+    const minSeen=s.minKnee;
+    const maxSeen=s.hit?100:Math.max(s.maxProgress,attemptMaxProgress||0);
+
+    // Para armar inmediatamente otra rep sí volvemos a pedir evidencia
+    // de pierna libre elevada; si no, esperamos una nueva preparación.
+    if(m.freeRaised){
+      armPistolV104(m,now);
+    }else{
+      resetPistolV104();
+      phase='WAITING';
+    }
+
+    trackMinAngle(minSeen);
+    attemptMaxProgress=Math.max(attemptMaxProgress,Math.round(maxSeen));
+
+    if(good){
+      validRep();
+      $('advLive').textContent='Pistol squat válido.';
+    }else{
+      noRep('faltó profundidad · recorrido máximo '+Math.round(maxSeen)+'%');
+      $('advLive').textContent=
+        'No rep · faltaron '+Math.max(0,100-Math.round(maxSeen))+'%.';
+    }
+    return;
+  }
+
+  pistolV104=s;
+}
+
+/* Intercepta únicamente pistol squat. */
+const judgeAdvancedV104Base=judgeAdvanced;
+judgeAdvanced=function(pose,now=judgeTime()){
+  if(exerciseSelect.value==='pistolsquat'){
+    return judgePistolV104(pose,now);
+  }
+  return judgeAdvancedV104Base(pose,now);
+};
+
+exerciseSelect.addEventListener('change',()=>{
+  resetPistolV104();
+});
+
+ADVANCED.pistolsquat.rule=
+  'Una pierna de apoyo → descenso unilateral hasta profundidad válida → regreso a extensión. La pierna libre debe estar sin apoyo al iniciar; durante la rep puede flexionarse o quedar parcialmente ocluida.';
+ADVANCED.pistolsquat.guide=
+  'Vista lateral, oblicua o frontal. Mantén visible la pierna de apoyo. La pierna libre puede ir recta o flexionada y solo se usa como requisito fuerte al iniciar. La profundidad combina flexión de rodilla, caída de cadera y relación cadera-rodilla para tolerar perspectiva 2D.';
+
+document.title='Jueceo Calistenia AI · V10.4 Pistol';
+</script>
+
 </body>
 </html>
 
