@@ -4372,6 +4372,259 @@ EXERCISES.squat.guide=
 document.title='Jueceo Calistenia AI · V10.1 Squats';
 </script>
 
+
+<script>
+/* ============================================================
+   V10.2 — SQUATS: ARMED/LATCH FIX
+   Corrige el bug de V10.1 donde el estado "Listo. Baja." se borraba
+   justo al comenzar el descenso, provocando:
+   "Completa la extensión para iniciar" durante una rep válida.
+   ============================================================ */
+
+const SQUAT_V102 = {
+  departAngle: 147,
+  departDepth: -.34,
+  departSamples: 2,
+  armTimeout: 1400
+};
+
+function newSquatStateV102(m,now){
+  return {
+    kind:'v102squat',
+    last:now,
+    ready:0,
+    armed:false,
+    armedAt:null,
+    departSamples:0,
+    active:false,
+    started:null,
+    startTopAngle:m?.topAngle ?? 0,
+    minKnee:m?.minAngle ?? 180,
+    minKneeAt:now,
+    maxDepth:m?.maxDepth ?? -1,
+    maxDepthAt:now,
+    samples:0,
+    hit:false
+  };
+}
+
+function seedSquatV102(m,now){
+  const c=newSquatStateV102(m,now);
+  c.ready=2;
+  c.armed=true;
+  c.armedAt=now;
+  c.startTopAngle=m.topAngle;
+  cycle=c;
+  phase='TOP';
+}
+
+function judgeSquatV102(pose){
+  const now=judgeTime();
+  let c=cycle?.kind==='v102squat'?cycle:null;
+
+  if(c && now-c.last>SQUAT_V101.maxGap){
+    c=null;
+    cycle=null;
+    phase='WAITING';
+  }
+
+  const m=squatMetricsV101(pose);
+
+  if(!m){
+    cycle=c;
+    missingWarning(['cadera, rodilla y tobillo']);
+    return;
+  }
+
+  markVisible();
+  updateMetrics(m.confidence,m.topAngle,m.maxDepth*100,'Cadera','%');
+  trackMinAngle(m.minAngle);
+
+  if(!c)c=newSquatStateV102(m,now);
+  c.last=now;
+
+  /* ---------------- PREPARACIÓN / ARMADO ---------------- */
+  if(!c.active){
+    if(m.standing){
+      c.ready=Math.min(4,(c.ready||0)+1);
+      c.startTopAngle=Math.max(c.startTopAngle||0,m.topAngle);
+      c.minKnee=m.minAngle;
+      c.minKneeAt=now;
+      c.maxDepth=m.maxDepth;
+      c.maxDepthAt=now;
+      c.departSamples=0;
+
+      if(c.ready>=2){
+        c.armed=true;
+        c.armedAt=now;
+        phase='TOP';
+        cycle=c;
+        setStatus('Listo. Baja.','ok');
+        setProgress(0,'Listo');
+        return;
+      }
+
+      cycle=c;
+      phase='WAITING';
+      setStatus('Mantén un instante la posición de pie.','info');
+      return;
+    }
+
+    /* IMPORTANTE:
+       Si ya estaba armado, NO borramos ready/armed al dejar la extensión.
+       Esa salida de la posición de pie es precisamente el inicio de la rep.
+    */
+    if(c.armed){
+      const departed=
+        m.topAngle<=SQUAT_V102.departAngle ||
+        m.maxDepth>=SQUAT_V102.departDepth;
+
+      c.departSamples=departed ? (c.departSamples||0)+1 : 0;
+
+      if(c.departSamples>=SQUAT_V102.departSamples){
+        c.active=true;
+        c.started=now;
+        c.samples=0;
+        c.hit=false;
+        c.minKnee=m.minAngle;
+        c.minKneeAt=now;
+        c.maxDepth=m.maxDepth;
+        c.maxDepthAt=now;
+        resetAttemptMetrics();
+        phase='DOWN';
+        cycle=c;
+        setStatus('Bajando.','info');
+        setProgress(
+          clamp(
+            (SQUAT_V101.projectedTop-m.minAngle)/
+            (SQUAT_V101.projectedTop-SQUAT_V101.bottomKnee)*100,
+            0,100
+          ),
+          'Bajando'
+        );
+        return;
+      }
+
+      // Un frame intermedio todavía puede estar muy cerca de la extensión.
+      // Conservamos el armado brevemente, en lugar de volver a WAITING.
+      if(now-(c.armedAt||now)<=SQUAT_V102.armTimeout){
+        cycle=c;
+        phase='TOP';
+        setStatus('Listo. Iniciando descenso…','ok');
+        return;
+      }
+
+      // Solo se desarma si pasó demasiado tiempo sin una salida real.
+      c.armed=false;
+      c.ready=0;
+      c.departSamples=0;
+    }
+
+    cycle=c;
+    phase='WAITING';
+    setStatus(
+      m.topAngle>=145
+        ? 'Casi listo · termina de ponerte de pie.'
+        : 'Completa la extensión para iniciar.',
+      'warn'
+    );
+    return;
+  }
+
+  /* ---------------- REP ACTIVA ---------------- */
+  if(now-c.started>SQUAT_V101.maxDuration){
+    cycle=null;
+    phase='WAITING';
+    setStatus('Reinicia desde la posición de pie.','warn');
+    return;
+  }
+
+  c.samples++;
+
+  if(m.minAngle<c.minKnee){
+    c.minKnee=m.minAngle;
+    c.minKneeAt=now;
+  }
+  if(m.maxDepth>c.maxDepth){
+    c.maxDepth=m.maxDepth;
+    c.maxDepthAt=now;
+  }
+
+  const peakClose=Math.abs(c.minKneeAt-c.maxDepthAt)<=SQUAT_V101.peakWindow;
+
+  if(
+    m.deep ||
+    (
+      c.minKnee<=SQUAT_V101.bottomKnee &&
+      c.maxDepth>=SQUAT_V101.bottomDepth &&
+      peakClose
+    )
+  ){
+    c.hit=true;
+  }
+
+  phase=c.hit?'UP':'DOWN';
+
+  const progress=clamp(
+    (SQUAT_V101.projectedTop-m.minAngle)/
+    (SQUAT_V101.projectedTop-SQUAT_V101.bottomKnee)*100,
+    0,100
+  );
+  setProgress(progress,phaseLabel());
+
+  if(!c.hit){
+    if(m.minAngle<=112){
+      setStatus(
+        'Baja un poco más: lleva la cadera al nivel o debajo de la rodilla.',
+        'info'
+      );
+    }else{
+      setStatus('Bajando.','info');
+    }
+  }else if(!m.standing){
+    setStatus('Profundidad válida. Regresa a extensión.','ok');
+  }
+
+  /* ---------------- CIERRE ---------------- */
+  if(m.standing){
+    const excursion=c.startTopAngle-c.minKnee;
+    const good=
+      c.hit &&
+      excursion>=SQUAT_V101.minExcursion &&
+      c.samples>=3 &&
+      now-c.started>=SQUAT_V101.minDuration;
+
+    const minSeen=c.minKnee;
+
+    // Primero dejamos armado el siguiente ciclo.
+    seedSquatV102(m,now);
+    trackMinAngle(minSeen);
+
+    if(good){
+      validRep();
+    }else{
+      noRep(
+        c.hit
+          ? 'recorrido demasiado corto'
+          : 'faltó profundidad: cadera al nivel o debajo de la rodilla'
+      );
+    }
+    return;
+  }
+
+  cycle=c;
+}
+
+judgeSquat=function(pose){
+  return judgeSquatV102(pose);
+};
+
+EXERCISES.squat.guide=
+  'Vista lateral u oblicua. El sistema confirma primero la posición de pie y queda armado; al empezar a bajar conserva ese estado. Rep válida: cadera aproximadamente al nivel o debajo de la rodilla y regreso a extensión completa. No requiere pausa arriba ni abajo.';
+
+document.title='Jueceo Calistenia AI · V10.2 Squats';
+</script>
+
 </body>
 </html>
 
