@@ -48,7 +48,7 @@ y ausencia de duplicados. Falta validación de rendimiento en teléfono real.
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Jueceo Calistenia AI · V10 beta</title>
+<title>Jueceo Calistenia AI · V10.1 Squats</title>
 <style>
 :root{--bg:#070a0f;--panel:rgba(7,10,15,.9);--line:rgba(255,255,255,.13);--text:#f6f7f9;--muted:#aeb7c4;--green:#46f59a;--red:#ff6577;--yellow:#ffd166;--blue:#62a8ff}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}button,select,input{font:inherit}button{cursor:pointer}[hidden]{display:none!important}body:not([data-mode="camera"]) #app{display:none}
@@ -4066,6 +4066,310 @@ ADVANCED.squatboxjump.rule+=' La fase se conserva ante microcortes breves de pos
 
 document.title='Jueceo Calistenia AI · V10 beta';
 refreshAdvanced();
+</script>
+
+
+<script>
+/* ============================================================
+   V10.1 — SQUATS
+   Ajuste basado en videos positivos 1000191350/1351 y referencia
+   visual good/bad 1000191352.
+
+   Objetivos:
+   - No bloquear el inicio por proyección 2D de una rodilla recta.
+   - Evaluar ambas piernas y usar la mejor evidencia de extensión.
+   - Mantener estricta la profundidad: cadera ~ nivel/debajo rodilla.
+   - No exigir que profundidad de cadera y mínimo ángulo ocurran en
+     exactamente el mismo frame, pero sí dentro de la misma bajada.
+   ============================================================ */
+
+const SQUAT_V101 = {
+  pointConf: .18,
+  avgConf: .23,
+  // El estándar real sigue siendo extensión completa; este umbral es
+  // una tolerancia de proyección 2D para reconocer visualmente "de pie".
+  projectedTop: 150,
+  depart: 143,
+  bottomKnee: 105,
+  bottomDepth: -.03,
+  topHipRise: .42,
+  topKneeRise: .18,
+  peakWindow: 520,
+  maxGap: 850,
+  minDuration: 160,
+  maxDuration: 10000,
+  minExcursion: 42
+};
+
+function squatSideV101(pose, side){
+  const L=side==='L';
+  const hip=v10RawPoint(pose,L?IDX.leftHip:IDX.rightHip,SQUAT_V101.pointConf);
+  const knee=v10RawPoint(pose,L?IDX.leftKnee:IDX.rightKnee,SQUAT_V101.pointConf);
+  const ankle=v10RawPoint(pose,L?IDX.leftAnkle:IDX.rightAnkle,SQUAT_V101.pointConf);
+  if(!hip||!knee||!ankle)return null;
+
+  const avg=((hip.score||0)+(knee.score||0)+(ankle.score||0))/3;
+  if(avg<SQUAT_V101.avgConf)return null;
+
+  const thigh=distance(hip,knee);
+  const shin=distance(knee,ankle);
+  const kneeAngle=angle(hip,knee,ankle);
+  if(!thigh||!shin||thigh<10||shin<8||kneeAngle==null||!Number.isFinite(kneeAngle))return null;
+
+  const depth=(hip.y-knee.y)/thigh;
+  const hipRise=(knee.y-hip.y)/thigh;
+  const kneeRise=(ankle.y-knee.y)/shin;
+
+  // "De pie" geométrico: además del ángulo, cadera claramente por
+  // encima de rodilla y rodilla por encima de tobillo. Evita que una
+  // media sentadilla con proyección favorable se interprete como inicio.
+  const standing=
+    kneeAngle>=SQUAT_V101.projectedTop &&
+    hipRise>=SQUAT_V101.topHipRise &&
+    kneeRise>=SQUAT_V101.topKneeRise;
+
+  const deep=
+    kneeAngle<=SQUAT_V101.bottomKnee &&
+    depth>=SQUAT_V101.bottomDepth;
+
+  return {
+    side,hip,knee,ankle,thigh,shin,
+    kneeAngle,depth,standing,deep,
+    confidence:Math.min(hip.score||0,knee.score||0,ankle.score||0)
+  };
+}
+
+function squatMetricsV101(pose){
+  const sides=['L','R'].map(s=>squatSideV101(pose,s)).filter(Boolean);
+  if(!sides.length)return null;
+
+  // Para reconocer extensión usamos la pierna con mayor ángulo observado:
+  // en vistas oblicuas la pierna lejana suele proyectarse artificialmente
+  // más flexionada aun estando completamente recta.
+  const topSide=sides.slice().sort((a,b)=>b.kneeAngle-a.kneeAngle)[0];
+
+  // Para profundidad usamos la evidencia más profunda/consistente.
+  const depthSide=sides.slice().sort((a,b)=>{
+    if(a.deep!==b.deep)return a.deep?-1:1;
+    if(Math.abs(a.depth-b.depth)>.03)return b.depth-a.depth;
+    return a.kneeAngle-b.kneeAngle;
+  })[0];
+
+  return {
+    sides,
+    topSide,
+    depthSide,
+    standing:sides.some(s=>s.standing),
+    deep:sides.some(s=>s.deep),
+    topAngle:topSide.kneeAngle,
+    minAngle:Math.min(...sides.map(s=>s.kneeAngle)),
+    maxDepth:Math.max(...sides.map(s=>s.depth)),
+    confidence:Math.max(...sides.map(s=>s.confidence))
+  };
+}
+
+function seedSquatV101(m,now){
+  cycle={
+    kind:'v101squat',
+    last:now,
+    ready:2,
+    active:false,
+    started:null,
+    startTopAngle:m.topAngle,
+    minKnee:m.minAngle,
+    minKneeAt:now,
+    maxDepth:m.maxDepth,
+    maxDepthAt:now,
+    samples:0,
+    hit:false,
+    departed:false
+  };
+  phase='TOP';
+}
+
+function judgeSquatV101(pose){
+  const now=judgeTime();
+  let c=cycle?.kind==='v101squat'?cycle:null;
+
+  if(c&&now-c.last>SQUAT_V101.maxGap){
+    c=null;
+    cycle=null;
+    phase='WAITING';
+  }
+
+  const m=squatMetricsV101(pose);
+
+  if(!m){
+    cycle=c;
+    missingWarning(['cadera, rodilla y tobillo']);
+    return;
+  }
+
+  markVisible();
+  updateMetrics(m.confidence,m.topAngle,m.maxDepth*100,'Cadera','%');
+  trackMinAngle(m.minAngle);
+
+  if(!c){
+    c={
+      kind:'v101squat',
+      last:now,
+      ready:0,
+      active:false,
+      started:null,
+      startTopAngle:m.topAngle,
+      minKnee:m.minAngle,
+      minKneeAt:now,
+      maxDepth:m.maxDepth,
+      maxDepthAt:now,
+      samples:0,
+      hit:false,
+      departed:false
+    };
+  }
+  c.last=now;
+
+  /* -------- Entrada / extensión inicial -------- */
+  if(!c.active){
+    if(m.standing){
+      c.ready=Math.min(4,(c.ready||0)+1);
+      c.startTopAngle=Math.max(c.startTopAngle||0,m.topAngle);
+      c.minKnee=m.minAngle;
+      c.minKneeAt=now;
+      c.maxDepth=m.maxDepth;
+      c.maxDepthAt=now;
+    }else{
+      c.ready=0;
+    }
+
+    if(c.ready<2){
+      cycle=c;
+      phase='WAITING';
+      setStatus(
+        m.topAngle>=145
+          ? 'Casi listo · termina de ponerte de pie.'
+          : 'Completa la extensión para iniciar.',
+        'warn'
+      );
+      return;
+    }
+
+    phase='TOP';
+
+    // Mientras siga claramente de pie, queda armado para iniciar una rep.
+    if(m.standing){
+      cycle=c;
+      setStatus('Listo. Baja.','ok');
+      setProgress(0,'Listo');
+      return;
+    }
+
+    // La rep empieza al salir de la zona de extensión. No exige pausa.
+    if(m.topAngle<SQUAT_V101.depart || m.maxDepth>-.48){
+      c.active=true;
+      c.departed=true;
+      c.started=now;
+      c.samples=0;
+      c.hit=false;
+      c.minKnee=m.minAngle;
+      c.minKneeAt=now;
+      c.maxDepth=m.maxDepth;
+      c.maxDepthAt=now;
+      resetAttemptMetrics();
+    }else{
+      cycle=c;
+      return;
+    }
+  }
+
+  /* -------- Repetición activa -------- */
+  if(now-c.started>SQUAT_V101.maxDuration){
+    cycle=null;
+    phase='WAITING';
+    setStatus('Reinicia desde la posición de pie.','warn');
+    return;
+  }
+
+  c.samples++;
+
+  if(m.minAngle<c.minKnee){
+    c.minKnee=m.minAngle;
+    c.minKneeAt=now;
+  }
+  if(m.maxDepth>c.maxDepth){
+    c.maxDepth=m.maxDepth;
+    c.maxDepthAt=now;
+  }
+
+  // Profundidad válida si el ángulo y la altura de cadera ocurrieron
+  // juntos o muy cerca dentro de la misma bajada.
+  const peakClose=Math.abs(c.minKneeAt-c.maxDepthAt)<=SQUAT_V101.peakWindow;
+  if(
+    (m.deep) ||
+    (
+      c.minKnee<=SQUAT_V101.bottomKnee &&
+      c.maxDepth>=SQUAT_V101.bottomDepth &&
+      peakClose
+    )
+  ){
+    c.hit=true;
+  }
+
+  phase=c.hit?'UP':'DOWN';
+
+  const progress=clamp(
+    (SQUAT_V101.projectedTop-m.minAngle)/
+    (SQUAT_V101.projectedTop-SQUAT_V101.bottomKnee)*100,
+    0,100
+  );
+  setProgress(progress,phaseLabel());
+
+  if(!c.hit){
+    if(m.minAngle<=112){
+      setStatus('Baja un poco más: lleva la cadera al nivel o debajo de la rodilla.','info');
+    }else{
+      setStatus('Bajando.','info');
+    }
+  }else if(!m.standing){
+    setStatus('Profundidad válida. Regresa a extensión.','ok');
+  }
+
+  /* -------- Cierre al volver de pie -------- */
+  if(m.standing){
+    const excursion=c.startTopAngle-c.minKnee;
+    const good=
+      c.hit &&
+      excursion>=SQUAT_V101.minExcursion &&
+      c.samples>=3 &&
+      now-c.started>=SQUAT_V101.minDuration;
+
+    const minSeen=c.minKnee;
+    seedSquatV101(m,now);
+    trackMinAngle(minSeen);
+
+    if(good){
+      validRep();
+    }else{
+      noRep(
+        c.hit
+          ? 'recorrido demasiado corto'
+          : 'faltó profundidad: cadera al nivel o debajo de la rodilla'
+      );
+    }
+    return;
+  }
+
+  cycle=c;
+}
+
+judgeSquat=function(pose){
+  return judgeSquatV101(pose);
+};
+
+// Texto de guía actualizado. El estándar no cambia; cambia la tolerancia 2D.
+EXERCISES.squat.guide=
+  'Vista lateral u oblicua. Para iniciar, ponte claramente de pie; el sistema tolera la proyección 2D de la rodilla en vistas oblicuas. Rep válida: baja hasta que la cadera llegue aproximadamente al nivel o debajo de la rodilla y vuelve a extensión completa. No requiere pausa arriba ni abajo.';
+
+document.title='Jueceo Calistenia AI · V10.1 Squats';
 </script>
 
 </body>
