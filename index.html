@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-JUECEO CALISTENIA AI — V9.5 BETA (FRONT LEVER CONTINUITY)
+JUECEO CALISTENIA AI — V9.6 BETA (HANDSTAND HOLD)
 Instalación: copia TODO este archivo en index.html de tu repositorio y guarda el cambio.
 No pegues el contenido dentro de otro documento HTML. No necesitas cambiar RULES.
 
@@ -48,7 +48,7 @@ y ausencia de duplicados. Falta validación de rendimiento en teléfono real.
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Jueceo Calistenia AI · V9.5 beta</title>
+<title>Jueceo Calistenia AI · V9.6 beta</title>
 <style>
 :root{--bg:#070a0f;--panel:rgba(7,10,15,.9);--line:rgba(255,255,255,.13);--text:#f6f7f9;--muted:#aeb7c4;--green:#46f59a;--red:#ff6577;--yellow:#ffd166;--blue:#62a8ff}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}button,select,input{font:inherit}button{cursor:pointer}[hidden]{display:none!important}body:not([data-mode="camera"]) #app{display:none}
@@ -105,7 +105,7 @@ const $=id=>document.getElementById(id);const video=$('video'),canvas=$('overlay
 
 /* V7.4: strict judging + backward-compatible pairing + Apple/Android camera tuning. */
 const CONF=.22,DRAW_CONF=.20,JUDGE_CONF=.30,MISSING_FRAMES_BEFORE_WARNING=6;
-const BUILD_ID='V9.5-frontlever-continuity';
+const BUILD_ID='V9.6-handstand-hold';
 const PAIR_PREFIXES=['calistenia-v5-','calistenia-v6-','calistenia-'];
 const PEER_PROTOCOLS=[2,3];
 const PEER_OPTIONS={debug:1,pingInterval:5000,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}]}};
@@ -1225,7 +1225,7 @@ renderBuilder();resetJudge();renderSetupMode();
  */
 (()=>{
 'use strict';
-const VERSION='V9.5-beta', DB_NAME='calistenia-var-v1', CONFIG_KEY='calistenia-var-config-v1';
+const VERSION='V9.6-beta', DB_NAME='calistenia-var-v1', CONFIG_KEY='calistenia-var-config-v1';
 const uid=()=>crypto.randomUUID(), copy=x=>structuredClone(x), finite=x=>Number.isFinite(x)?x:null;
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
 const button=(text,fn)=>{const b=el('button',text);b.type='button';b.onclick=()=>Promise.resolve().then(fn).catch(showError);return b;};
@@ -2528,6 +2528,733 @@ ADVANCED.frontlever.guide=
 refreshAdvanced();
 
 </script>
+
+<script>
+/* Jueceo Calistenia AI — V9.6
+   Ajuste dirigido únicamente a HANDSTAND HOLD.
+
+   Referencias positivas suministradas:
+   - 1000191336.mp4
+   - 1000191335.mp4
+   - 1000191333.mp4
+   - 1000191332.mp4
+   - 1000191334.mp4
+
+   Criterio V9.6:
+   - Un handstand NO necesita una línea corporal perfecta.
+   - Se permiten arco/banana, ligera pica, separación o pequeñas correcciones
+     de piernas mientras el atleta siga claramente invertido y sostenido
+     sobre las manos.
+   - Para ENTRAR al hold se exige una inversión clara durante un intervalo
+     corto, evitando contar un simple paso por vertical durante la subida.
+   - Una vez dentro, histéresis temporal tolera pequeñas correcciones y
+     microcortes de keypoints sin congelar el reloj.
+   - No modifica muscle-up V9.3 ni front lever V9.5.
+*/
+
+const HS96 = {
+  pointConf: .10,
+
+  /* Entrada: confirma apoyo sobre la(s) mano(s) + cadera claramente
+     por encima de hombros. NO exige cuerpo recto ni rodillas extendidas. */
+  strict: {
+    elbow: 145,
+    armTilt: 50,
+    supportRise: .34,
+    hipRise: .24,
+    lowerRise: .05
+  },
+
+  /* Continuidad: solo después de entrar correctamente al hold. */
+  sustain: {
+    elbow: 132,
+    armTilt: 40,
+    supportRise: .16,
+    hipRise: .04
+  },
+
+  entryMs: 180,
+  strictRefresh: 2200,
+  bridge: 450,
+  resetGrace: 1250,
+  maxGap: 2000
+};
+
+function hs96RawPoint(pose,index) {
+  const p=pose?.keypoints?.[index];
+  return p &&
+    Number.isFinite(p.x) &&
+    Number.isFinite(p.y) &&
+    (p.score ?? 0) >= HS96.pointConf
+      ? p
+      : null;
+}
+
+function hs96RawSide(pose,side) {
+  const L=side==='L';
+  return {
+    shoulder:hs96RawPoint(pose,L?IDX.leftShoulder:IDX.rightShoulder),
+    elbow:hs96RawPoint(pose,L?IDX.leftElbow:IDX.rightElbow),
+    wrist:hs96RawPoint(pose,L?IDX.leftWrist:IDX.rightWrist),
+    hip:hs96RawPoint(pose,L?IDX.leftHip:IDX.rightHip),
+    knee:hs96RawPoint(pose,L?IDX.leftKnee:IDX.rightKnee),
+    ankle:hs96RawPoint(pose,L?IDX.leftAnkle:IDX.rightAnkle),
+    nose:hs96RawPoint(pose,IDX.nose)
+  };
+}
+
+function hs96Descriptor(pose) {
+  if (!pose || pose.id==null) return null;
+
+  const points=(pose.keypoints||[]).filter(p=>
+    p &&
+    Number.isFinite(p.x) &&
+    Number.isFinite(p.y) &&
+    (p.score ?? 0)>=HS96.pointConf
+  );
+  if (points.length<4) return null;
+
+  const torso=[5,6,11,12]
+    .map(i=>hs96RawPoint(pose,i))
+    .filter(Boolean);
+
+  if (torso.length<2) return null;
+
+  const x1=Math.min(...points.map(p=>p.x));
+  const x2=Math.max(...points.map(p=>p.x));
+  const y1=Math.min(...points.map(p=>p.y));
+  const y2=Math.max(...points.map(p=>p.y));
+
+  const shoulders=[5,6].map(i=>hs96RawPoint(pose,i)).filter(Boolean);
+  const hips=[11,12].map(i=>hs96RawPoint(pose,i)).filter(Boolean);
+  const torsoLengths=[];
+  for (const s of shoulders) {
+    for (const h of hips) {
+      const d=distance(s,h);
+      if (d && Number.isFinite(d)) torsoLengths.push(d);
+    }
+  }
+
+  const scale=torsoLengths.length
+    ? Math.max(...torsoLengths)
+    : Math.max(x2-x1,y2-y1)*.30;
+
+  if (!Number.isFinite(scale)||scale<8||x2<=x1||y2<=y1) return null;
+
+  return {
+    pose,
+    id:pose.id,
+    center:{
+      x:torso.reduce((s,p)=>s+p.x,0)/torso.length,
+      y:torso.reduce((s,p)=>s+p.y,0)/torso.length
+    },
+    scale,
+    box:{x1,x2,y1,y2},
+    quality:points.reduce((s,p)=>s+(p.score||0),0)/points.length
+  };
+}
+
+function hs96Arm(p,side) {
+  if (![p.shoulder,p.elbow,p.wrist].every(Boolean)) return null;
+
+  const elbow=angle(p.shoulder,p.elbow,p.wrist);
+  const armLen=distance(p.shoulder,p.wrist);
+  const tilt=lineTilt(p.shoulder,p.wrist);
+
+  if (
+    elbow==null || !Number.isFinite(elbow) ||
+    !armLen || armLen<8 ||
+    tilt==null || !Number.isFinite(tilt)
+  ) return null;
+
+  return {
+    side,
+    shoulder:p.shoulder,
+    elbowPoint:p.elbow,
+    wrist:p.wrist,
+    elbow,
+    armLen,
+    armTilt:tilt,
+    supportRise:(p.wrist.y-p.shoulder.y)/armLen,
+    confidence:Math.min(
+      p.shoulder.score??0,
+      p.elbow.score??0,
+      p.wrist.score??0
+    )
+  };
+}
+
+function hs96TorsoCandidates(pose) {
+  const shoulders=[5,6]
+    .map(i=>hs96RawPoint(pose,i))
+    .filter(Boolean);
+  const hips=[11,12]
+    .map(i=>hs96RawPoint(pose,i))
+    .filter(Boolean);
+
+  const out=[];
+  for (const shoulder of shoulders) {
+    for (const hip of hips) {
+      const scale=distance(shoulder,hip);
+      if (!scale || scale<8) continue;
+      out.push({
+        shoulder,
+        hip,
+        scale,
+        hipRise:(shoulder.y-hip.y)/scale,
+        torsoTilt:lineTilt(shoulder,hip),
+        confidence:Math.min(shoulder.score??0,hip.score??0)
+      });
+    }
+  }
+  return out;
+}
+
+function handstandMetricsV96(pose) {
+  const L=hs96RawSide(pose,'L');
+  const R=hs96RawSide(pose,'R');
+
+  const arms=[
+    hs96Arm(L,'L'),
+    hs96Arm(R,'R')
+  ].filter(Boolean);
+
+  const torsos=hs96TorsoCandidates(pose);
+
+  if (!arms.length || !torsos.length) {
+    return {
+      strictValid:false,
+      sustainValid:false,
+      missing:{
+        arm:!arms.length,
+        torso:!torsos.length
+      },
+      arms,torsos
+    };
+  }
+
+  /* Mejor brazo = soporte más vertical y más extendido.
+     Mejor torso = cadera más claramente elevada sobre hombros.
+     No pedimos que brazo y torso sean del mismo lado porque MoveNet puede
+     intercambiar/ocultar lados en posiciones invertidas. */
+  arms.sort((a,b)=>
+    (b.supportRise-a.supportRise) ||
+    (b.armTilt-a.armTilt) ||
+    (b.elbow-a.elbow) ||
+    (b.confidence-a.confidence)
+  );
+
+  torsos.sort((a,b)=>
+    (b.hipRise-a.hipRise) ||
+    (b.confidence-a.confidence)
+  );
+
+  const arm=arms[0];
+  const torso=torsos[0];
+  const scale=Math.max(8,torso.scale);
+
+  const lower=[
+    L.knee,L.ankle,R.knee,R.ankle
+  ].filter(Boolean);
+
+  const highestLower=lower.length
+    ? Math.min(...lower.map(p=>p.y))
+    : null;
+
+  /* Evidencia de que la parte inferior del cuerpo ya pasó realmente arriba.
+     Si pies/rodillas están recortados, una cadera claramente elevada basta. */
+  const lowerRise=highestLower==null
+    ? null
+    : (torso.shoulder.y-highestLower)/scale;
+
+  const bodyUp=
+    (lowerRise!=null && lowerRise>=HS96.strict.lowerRise) ||
+    torso.hipRise>=.55;
+
+  const strictValid=
+    arm.elbow>=HS96.strict.elbow &&
+    arm.armTilt>=HS96.strict.armTilt &&
+    arm.supportRise>=HS96.strict.supportRise &&
+    torso.hipRise>=HS96.strict.hipRise &&
+    bodyUp;
+
+  const sustainValid=
+    arm.elbow>=HS96.sustain.elbow &&
+    arm.armTilt>=HS96.sustain.armTilt &&
+    arm.supportRise>=HS96.sustain.supportRise &&
+    torso.hipRise>=HS96.sustain.hipRise;
+
+  return {
+    strictValid,
+    sustainValid,
+    valid:strictValid,
+    arm,
+    torso,
+    lower,
+    lowerRise,
+    bodyUp,
+    confidence:Math.min(arm.confidence,torso.confidence),
+    missing:{arm:false,torso:false}
+  };
+}
+
+function handstandReasonV96(m) {
+  if (!m) return 'No se pudo estimar la pose';
+  if (m.missing?.arm) return 'Mantén visible al menos un hombro, codo y muñeca';
+  if (m.missing?.torso) return 'Mantén visibles hombros y cadera';
+  if (m.arm.elbow<HS96.sustain.elbow) return 'Mantén el apoyo sobre las manos';
+  if (m.arm.supportRise<HS96.sustain.supportRise) return 'Coloca los hombros sobre las manos';
+  if (m.torso.hipRise<HS96.sustain.hipRise) return 'Mantén la cadera por encima de los hombros';
+  if (!m.bodyUp && !adv.holdValid) return 'Completa la entrada al handstand';
+  return 'Recupera el equilibrio sobre las manos';
+}
+
+function resetHandstandV96Hard() {
+  adv.holdMs=0;
+  adv.credited=0;
+  adv.holdValid=false;
+  adv.hs96EntrySince=null;
+  adv.hs96LastAt=null;
+  adv.hs96LastStrictAt=null;
+  adv.hs96BadSince=null;
+  adv.hs96PendingGap=0;
+}
+
+function renderHandstandV96(ms,note='') {
+  const blocks=Math.floor(ms/5000);
+  const inBlock=ms%5000;
+
+  setProgress(inBlock/50,'Handstand');
+  mProgress.textContent=
+    'Handstand válido: '+(ms/1000).toFixed(1)+
+    ' s · siguiente bloque '+(inBlock/1000).toFixed(1)+' / 5 s';
+
+  $('advLive').textContent=
+    (ms/1000).toFixed(1)+' s sobre las manos'+
+    (note?' · '+note:'');
+}
+
+function creditHandstandV96() {
+  const blocks=Math.floor(adv.holdMs/5000);
+  if (blocks<=adv.credited) return;
+
+  const newBlocks=blocks-adv.credited;
+  adv.credited=blocks;
+
+  for (let i=0;i<newBlocks;i++) {
+    acceptAdvanced(
+      5,
+      'Handstand: 5 s válidos detectados automáticamente · provisional V9.6'
+    );
+  }
+
+  setStatus(
+    'Handstand válido · '+(blocks*5)+' s acreditados',
+    'ok'
+  );
+}
+
+function judgeHandstandV96(pose,now) {
+  advLastPose=pose;
+  advLastPoseAt=performance.now();
+
+  /* Handstand V9.6 acredita bloques automáticamente; elimina cualquier
+     candidato viejo de la lógica experimental anterior. */
+  if (advPending && advPending.exercise==='handstand') {
+    advPending=null;
+    $('advReview').hidden=true;
+  }
+
+  const m=handstandMetricsV96(pose);
+  const prevAt=adv.hs96LastAt;
+  let dt=prevAt==null?0:now-prevAt;
+
+  if (!Number.isFinite(dt)||dt<0||dt>HS96.maxGap) {
+    resetHandstandV96Hard();
+    dt=0;
+  }
+  adv.hs96LastAt=now;
+
+  const strict=!!m?.strictValid;
+  const canSustain=
+    !!m?.sustainValid &&
+    !!adv.holdValid &&
+    adv.hs96LastStrictAt!=null &&
+    now-adv.hs96LastStrictAt<=HS96.strictRefresh;
+
+  if (strict || canSustain) {
+    markVisible();
+
+    if (strict) {
+      adv.hs96LastStrictAt=now;
+      if (adv.hs96EntrySince==null) adv.hs96EntrySince=now;
+    }
+
+    if (!adv.holdValid) {
+      if (
+        strict &&
+        adv.hs96EntrySince!=null &&
+        now-adv.hs96EntrySince>=HS96.entryMs
+      ) {
+        /* Confirmado el equilibrio: recupera desde el primer frame estricto
+           para que el arranque de ~180 ms no reste tiempo al atleta. */
+        adv.holdValid=true;
+        adv.holdMs+=now-adv.hs96EntrySince;
+        adv.hs96PendingGap=0;
+      }
+    } else {
+      const pending=adv.hs96PendingGap||0;
+
+      /* Microcorte confirmado como continuidad real. */
+      if (pending>0 && pending<=HS96.bridge) {
+        adv.holdMs+=pending;
+      }
+      adv.hs96PendingGap=0;
+
+      if (dt>0 && dt<=HS96.maxGap) {
+        adv.holdMs+=dt;
+      }
+    }
+
+    adv.hs96BadSince=null;
+
+    updateMetrics(
+      m.confidence,
+      m.arm.elbow,
+      Math.round(m.torso.hipRise*100),
+      'Cadera arriba',
+      '%'
+    );
+
+    renderHandstandV96(
+      adv.holdMs,
+      strict?'equilibrio detectado':'corrección de equilibrio tolerada'
+    );
+    creditHandstandV96();
+    return;
+  }
+
+  /* Antes de entrar, cualquier frame que no confirma inversión reinicia
+     únicamente el pequeño buffer de entrada, no el resto del sistema. */
+  if (!adv.holdValid) {
+    adv.hs96EntrySince=null;
+    renderHandstandV96(0,'buscando apoyo invertido');
+    setStatus(handstandReasonV96(m),'info');
+    return;
+  }
+
+  if (adv.hs96BadSince==null) adv.hs96BadSince=now;
+  if (dt>0 && dt<=HS96.maxGap) {
+    adv.hs96PendingGap=(adv.hs96PendingGap||0)+dt;
+  }
+
+  const badFor=now-adv.hs96BadSince;
+  const pending=adv.hs96PendingGap||0;
+
+  if (pending<=HS96.bridge) {
+    renderHandstandV96(
+      adv.holdMs+pending,
+      'estabilizando equilibrio'
+    );
+  } else {
+    renderHandstandV96(
+      adv.holdMs,
+      'corrige la posición'
+    );
+  }
+
+  const reason=handstandReasonV96(m);
+
+  if (badFor>HS96.bridge && badFor<=HS96.resetGrace) {
+    setStatus(reason,'warn');
+  }
+
+  if (badFor>HS96.resetGrace) {
+    resetHandstandV96Hard();
+    renderHandstandV96(0,'reinicia el hold');
+    setStatus(reason+' · hold reiniciado','warn');
+  }
+}
+
+/* Intercepta HANDSTAND antes de la lógica V8.
+   Front lever V9.5, muscle-up V9.3 y el resto quedan intactos. */
+const judgeAdvancedV96Base=judgeAdvanced;
+judgeAdvanced=function(pose,now=judgeTime()) {
+  if (exerciseSelect.value==='handstand') {
+    return judgeHandstandV96(pose,now);
+  }
+  return judgeAdvancedV96Base(pose,now);
+};
+
+/* Resolución 384 solo para handstand, además de las decisiones de resolución
+   ya existentes para muscle-up/front lever. */
+const createJudgeDetectorV96Base=createJudgeDetector;
+createJudgeDetector=async function() {
+  if (exerciseSelect.value!=='handstand') {
+    const d=await createJudgeDetectorV96Base();
+    d.__v96Handstand=false;
+    return d;
+  }
+
+  const d=await poseDetection.createDetector(
+    poseDetection.SupportedModels.MoveNet,
+    {
+      modelType:poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
+      enableSmoothing:true,
+      enableTracking:true,
+      trackerType:poseDetection.TrackerType.BoundingBox,
+      minPoseScore:.10,
+      multiPoseMaxDimension:384
+    }
+  );
+
+  d.__muscleupResolution=false;
+  d.__v95Frontlever=false;
+  d.__v96Handstand=true;
+  return d;
+};
+
+/* Garantiza que el cambio hacia/desde handstand recree el detector incluso
+   cuando ambos ejercicios tienen __muscleupResolution=false. */
+exerciseSelect.addEventListener('change',async()=>{
+  const needsHandstand=exerciseSelect.value==='handstand';
+  if (
+    !running ||
+    !detector ||
+    startingCamera ||
+    Boolean(detector.__v96Handstand)===needsHandstand
+  ) return;
+
+  const previous=detector;
+  startingCamera=true;
+  running=false;
+  poseEpoch++;
+  exerciseSelect.disabled=true;
+
+  setStatus('Ajustando detector para handstand…','info');
+
+  try {
+    const deadline=performance.now()+15000;
+    while (busy) {
+      if (performance.now()>deadline) {
+        throw new Error('El detector sigue ocupado. Reinicia la cámara.');
+      }
+      await new Promise(resolve=>setTimeout(resolve,25));
+    }
+
+    detector=await startupTimeout(
+      createJudgeDetector(),
+      60000,
+      'DetectorTimeout',
+      'No se pudo ajustar el detector.',
+      m=>m.dispose()
+    );
+
+    previous.dispose();
+    resetAthleteTracking();
+    loseAttempt();
+    lastVideoTime=-1;
+    setStatus(initialHint(exerciseSelect.value),'info');
+  } catch(e) {
+    detector=previous;
+    setStatus(e.message,'warn');
+  } finally {
+    startingCamera=false;
+    exerciseSelect.disabled=!!circuit;
+    running=true;
+    requestAnimationFrame(loop);
+  }
+});
+
+/* Seguimiento invertido: MoveNet puede cambiar el ID del atleta al pasar
+   de pie a handstand. V9.6 permite un reacople espacial conservador. */
+const selectAthleteV96Base=selectAthlete;
+selectAthlete=function(poses,t) {
+  if (exerciseSelect.value!=='handstand') {
+    return selectAthleteV96Base(poses,t);
+  }
+
+  const items=poses.map(hs96Descriptor).filter(Boolean);
+  lastAthleteList=items;
+  lastAthleteFrame=video.currentTime;
+  lastAthleteAt=performance.now();
+
+  if (athleteTrack) {
+    const same=items.find(x=>x.id===athleteTrack.id);
+    if (same) {
+      const dt=t-athleteTrack.lastSeen;
+      const ratio=same.scale/athleteTrack.scale;
+      const nearby=
+        distance(same.center,athleteTrack.center)<
+        Math.max(same.scale,athleteTrack.scale)*(dt>500?1.5:2.0);
+
+      if (
+        dt>=0 &&
+        dt<=HS96.maxGap &&
+        nearby &&
+        ratio>.38 &&
+        ratio<2.6
+      ) {
+        athleteTrack={...same,lastSeen:t};
+        missingSince=null;
+        return same.pose;
+      }
+    }
+
+    const before=athleteTrack;
+    const candidates=items
+      .map(item=>{
+        const ratio=item.scale/before.scale;
+        const d=
+          distance(item.center,before.center)/
+          Math.max(item.scale,before.scale);
+        const overlap=boxOverlap(item.box,before.box);
+        return {
+          item,ratio,d,overlap,
+          score:
+            d+
+            Math.abs(Math.log(Math.max(.01,ratio)))*.40-
+            overlap*.30
+        };
+      })
+      .filter(x=>
+        x.ratio>.40 &&
+        x.ratio<2.5 &&
+        (x.d<1.45 || x.overlap>.08)
+      )
+      .sort((a,b)=>a.score-b.score);
+
+    if (
+      candidates.length &&
+      (
+        candidates.length===1 ||
+        candidates[0].score+.20<candidates[1].score
+      )
+    ) {
+      athleteTrack={...candidates[0].item,lastSeen:t};
+      missingSince=null;
+      return candidates[0].item.pose;
+    }
+
+    return null;
+  }
+
+  /* En los videos de calibración hay un atleta: no perdemos los primeros
+     650 ms esperando selección si solo existe una pose. */
+  if (items.length===1) {
+    return lockAthlete(items[0],t);
+  }
+
+  return selectAthleteV96Base(poses,t);
+};
+
+/* Continuidad espacial relajada para una pose invertida que oscila al
+   equilibrarse. No afecta otros ejercicios. */
+const continuousPoseV96Base=continuousPose;
+continuousPose=function(pose,t) {
+  if (exerciseSelect.value!=='handstand') {
+    return continuousPoseV96Base(pose,t);
+  }
+
+  const item=hs96Descriptor(pose);
+  if (!item) return false;
+
+  const prev=trackingSample;
+  trackingSample={
+    center:item.center,
+    scale:item.scale,
+    t
+  };
+
+  if (!prev) return true;
+
+  const dt=t-prev.t;
+  const ratio=item.scale/prev.scale;
+
+  if (dt<=0) return false;
+
+  if (dt>HS96.maxGap) {
+    resetHandstandV96Hard();
+    return true;
+  }
+
+  return (
+    ratio>.32 &&
+    ratio<2.8 &&
+    distance(item.center,prev.center)<
+      Math.max(item.scale,prev.scale)*2.5
+  );
+};
+
+/* Microcortes de pose tampoco congelan inmediatamente el reloj. */
+const trackingGapV96Base=trackingGap;
+trackingGap=function(message) {
+  if (exerciseSelect.value!=='handstand') {
+    return trackingGapV96Base(message);
+  }
+
+  const t=judgeTime();
+  if (missingSince==null) missingSince=t;
+
+  const prevAt=adv.hs96LastAt;
+  let dt=prevAt==null?0:t-prevAt;
+
+  if (!Number.isFinite(dt)||dt<0||dt>HS96.maxGap) dt=0;
+  adv.hs96LastAt=t;
+
+  if (!adv.holdValid) {
+    adv.hs96EntrySince=null;
+    renderHandstandV96(0,'buscando pose');
+    setStatus('Mantén manos, hombros y cadera dentro del encuadre.','info');
+    return;
+  }
+
+  if (adv.hs96BadSince==null) adv.hs96BadSince=t;
+  if (dt>0) {
+    adv.hs96PendingGap=(adv.hs96PendingGap||0)+dt;
+  }
+
+  const badFor=t-adv.hs96BadSince;
+  const pending=adv.hs96PendingGap||0;
+
+  if (pending<=HS96.bridge) {
+    renderHandstandV96(
+      adv.holdMs+pending,
+      'estabilizando seguimiento'
+    );
+  } else {
+    renderHandstandV96(
+      adv.holdMs,
+      'seguimiento parcial'
+    );
+  }
+
+  if (badFor>HS96.bridge) {
+    setStatus(
+      'Seguimiento parcial: mantén manos, hombros y cadera visibles.',
+      'warn'
+    );
+  }
+
+  if (badFor>HS96.resetGrace || t-missingSince>HS96.maxGap) {
+    resetHandstandV96Hard();
+    trackingSample=null;
+    renderHandstandV96(0,'reinicia el hold');
+  }
+};
+
+ADVANCED.handstand.rule=
+  'Handstand válido = mantener el cuerpo invertido y sostenido sobre las manos. No se exige una línea corporal perfectamente recta: se permiten arco/banana, separación de piernas y pequeñas correcciones de equilibrio. Cada 5 s válidos se acreditan automáticamente como resultado provisional.';
+
+ADVANCED.handstand.guide=
+  'Muestra las manos, al menos un brazo, hombros y cadera. Los pies pueden estar algo recortados y las piernas no necesitan permanecer juntas ni perfectamente extendidas. El sistema exige una entrada invertida clara y después tolera pequeñas correcciones sin detener el reloj.';
+
+INITIAL_HINTS.handstand=
+  'Sube a handstand y mantén el apoyo sobre las manos; no necesitas una línea corporal perfecta.';
+
+refreshAdvanced();
+</script>
+
 </body>
 </html>
 
