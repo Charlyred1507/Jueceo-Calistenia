@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-JUECEO CALISTENIA AI — V9.2 BETA (MUSCLE-UPS + FRONT LEVER)
+JUECEO CALISTENIA AI — V9.3 BETA (MUSCLE-UP CONSISTENCY + UI)
 Instalación: copia TODO este archivo en index.html de tu repositorio y guarda el cambio.
 No pegues el contenido dentro de otro documento HTML. No necesitas cambiar RULES.
 
@@ -48,7 +48,7 @@ y ausencia de duplicados. Falta validación de rendimiento en teléfono real.
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Jueceo Calistenia AI · V9.2 beta</title>
+<title>Jueceo Calistenia AI · V9.3 beta</title>
 <style>
 :root{--bg:#070a0f;--panel:rgba(7,10,15,.9);--line:rgba(255,255,255,.13);--text:#f6f7f9;--muted:#aeb7c4;--green:#46f59a;--red:#ff6577;--yellow:#ffd166;--blue:#62a8ff}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}button,select,input{font:inherit}button{cursor:pointer}[hidden]{display:none!important}body:not([data-mode="camera"]) #app{display:none}
@@ -105,7 +105,7 @@ const $=id=>document.getElementById(id);const video=$('video'),canvas=$('overlay
 
 /* V7.4: strict judging + backward-compatible pairing + Apple/Android camera tuning. */
 const CONF=.22,DRAW_CONF=.20,JUDGE_CONF=.30,MISSING_FRAMES_BEFORE_WARNING=6;
-const BUILD_ID='V9.2-mu-frontlever-beta';
+const BUILD_ID='V9.3-muscleup-consistency-ui';
 const PAIR_PREFIXES=['calistenia-v5-','calistenia-v6-','calistenia-'];
 const PEER_PROTOCOLS=[2,3];
 const PEER_OPTIONS={debug:1,pingInterval:5000,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}]}};
@@ -1225,7 +1225,7 @@ renderBuilder();resetJudge();renderSetupMode();
  */
 (()=>{
 'use strict';
-const VERSION='V9.2-beta', DB_NAME='calistenia-var-v1', CONFIG_KEY='calistenia-var-config-v1';
+const VERSION='V9.3-beta', DB_NAME='calistenia-var-v1', CONFIG_KEY='calistenia-var-config-v1';
 const uid=()=>crypto.randomUUID(), copy=x=>structuredClone(x), finite=x=>Number.isFinite(x)?x:null;
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
 const button=(text,fn)=>{const b=el('button',text);b.type='button';b.onclick=()=>Promise.resolve().then(fn).catch(showError);return b;};
@@ -1434,7 +1434,616 @@ openDB().then(allSessions).then(all=>{if(all.some(s=>s.status==='recording'))not
    - 1000187881.mp4: front lever válido
 
    Alcance: únicamente muscle-up y front lever.
-   Pega este bloque inmediatamente ANTES de </body> en tu index.html actual.
+   Pega este bloque inmediatamente ANTES de <script>
+/* Jueceo Calistenia AI — V9.3
+   Ajuste dirigido a consistencia de muscle-up + UI compacta.
+
+   Referencias:
+   - 1000191304.mp4: el mismo clip produjo 3 reps y después 2.
+   - 1000191305.mp4: 4 reps válidas; una quedó fuera.
+
+   Hallazgo principal:
+   en las reps omitidas el recorrido llegaba a 100 %, pero la estimación 2D del
+   codo en el apoyo superior variaba lo suficiente para no cruzar el umbral.
+   V9.3 conserva la exigencia de suspensión + ascenso + apoyo, pero usa evidencia
+   temporal del apoyo y una tolerancia 2D específica para el lockout superior.
+*/
+
+/* ---------- Muscle-up V9.3: tolerancia 2D + memoria del pico ---------- */
+const MU93 = {
+  pointConf: .18,
+  home: 145,
+  depart: 136,
+  supportElbow: 134,
+  strongSupportElbow: 126,
+  hangLevel: -.28,
+  supportLevel: .14,
+  strongSupportLevel: .28,
+  nearSupportLevel: .06,
+  minTravel: .66,
+  strongTravel: .98,
+  minExcursion: 18,
+  maxGap: 1800,
+  minDuration: 150,
+  maxDuration: 12000,
+  wristDrift: 1.00
+};
+
+/* Mantén también la tolerancia temporal de V9.2 alineada con V9.3,
+   porque continuousPose V9.2 consulta este objeto. */
+if (typeof MU92 !== 'undefined') MU92.maxGap = MU93.maxGap;
+
+function muscleupMetricsV93(pose) {
+  const options = ['L', 'R'].map(side => {
+    const p = sidePoints(pose, side);
+    const arm = [p.shoulder, p.elbow, p.wrist];
+
+    if (arm.some(v => !v || (v.score ?? 0) < MU93.pointConf)) return null;
+
+    const upper = distance(p.shoulder, p.elbow);
+    const lower = distance(p.elbow, p.wrist);
+    const length = upper + lower;
+
+    if (
+      Math.min(upper, lower) < 7 ||
+      Math.min(upper, lower) / Math.max(upper, lower) < .16
+    ) return null;
+
+    const other = sidePoints(pose, side === 'L' ? 'R' : 'L');
+    const hip =
+      (p.hip && (p.hip.score ?? 0) >= .18)
+        ? p.hip
+        : other.hip;
+
+    if (!hip || (hip.score ?? 0) < .15) return null;
+
+    const elbow = angle(...arm);
+    if (elbow == null || !Number.isFinite(elbow)) return null;
+
+    const level = (p.wrist.y - p.shoulder.y) / length;
+    const confidence = Math.min(...arm.map(v => v.score ?? 0), hip.score ?? 0);
+
+    return {
+      side,
+      p,
+      hip,
+      elbow,
+      level,
+      length,
+      confidence,
+      home:
+        elbow >= MU93.home &&
+        level <= MU93.hangLevel
+    };
+  }).filter(Boolean);
+
+  if (!options.length) return null;
+
+  let primary;
+
+  if (adv.mu) {
+    const a = adv.mu;
+
+    /* Conserva el brazo de inicio para medir el recorrido.
+       Si MoveNet cambia L/R, permite reasociación por posición del agarre. */
+    primary = options.find(m =>
+      m.side === a.side &&
+      distance(m.p.wrist, a.wrist) < a.length * MU93.wristDrift
+    );
+
+    if (!primary) {
+      primary = options
+        .filter(m =>
+          distance(m.p.wrist, a.wrist) <
+          a.length * MU93.wristDrift
+        )
+        .sort((x, y) =>
+          distance(x.p.wrist, a.wrist) -
+          distance(y.p.wrist, a.wrist)
+        )[0] || null;
+    }
+  } else {
+    primary =
+      options
+        .filter(m => m.home)
+        .sort((a, b) => b.confidence - a.confidence)[0]
+      || options.sort((a, b) => b.confidence - a.confidence)[0]
+      || null;
+  }
+
+  if (!primary) return null;
+
+  /* Para confirmar el lockout superior se permite usar la proyección del brazo
+     más clara del MISMO atleta. No cambia el brazo usado para medir el recorrido. */
+  const nearTop = options.filter(m => m.level >= MU93.nearSupportLevel);
+  const bestTopElbow = nearTop.length
+    ? Math.max(...nearTop.map(m => m.elbow))
+    : -Infinity;
+
+  const bestExtendedLevel = options
+    .filter(m => m.elbow >= MU93.strongSupportElbow)
+    .reduce((best, m) => Math.max(best, m.level), -Infinity);
+
+  return {
+    ...primary,
+    bestTopElbow,
+    bestExtendedLevel,
+    allArms: options
+  };
+}
+
+judgeMuscleup = function (pose, now) {
+  const r = MU93;
+
+  if (
+    adv.mu &&
+    (
+      !Number.isFinite(now) ||
+      now < adv.mu.last ||
+      now - adv.mu.last > r.maxGap
+    )
+  ) {
+    resetAdvanced();
+  }
+
+  const m = muscleupMetricsV93(pose);
+
+  if (!m) {
+    if (!adv.mu) {
+      missingWarning(['hombro, codo y muñeca de un brazo']);
+    } else {
+      if (adv.mu.missingSince == null) adv.mu.missingSince = now;
+
+      if (now - adv.mu.missingSince > r.maxGap) {
+        resetAdvanced();
+      } else {
+        setStatus(
+          'Ocultamiento breve: mantén la barra y los brazos visibles.',
+          'warn'
+        );
+      }
+    }
+
+    $('advLive').textContent =
+      'Pérdida breve de pose: se conserva el intento dentro del margen temporal.';
+    return;
+  }
+
+  markVisible();
+  updateMetrics(
+    m.confidence,
+    m.elbow,
+    m.level * 100,
+    'Hombro / agarre',
+    '%'
+  );
+
+  if (!adv.mu) {
+    if (m.home) {
+      adv.mu = {
+        side: m.side,
+        last: now,
+        start: now,
+        startAngle: m.elbow,
+        minAngle: m.elbow,
+        startLevel: m.level,
+        maxLevel: m.level,
+        length: m.length,
+        wrist: { x: m.p.wrist.x, y: m.p.wrist.y },
+        active: false,
+        credited: false,
+        missingSince: null,
+        bestTopElbow: -Infinity,
+        bestExtendedLevel: -Infinity
+      };
+
+      adv.state = 'pull';
+      resetAttemptMetrics();
+      setStatus(
+        'Suspensión detectada. Sube sobre la barra.',
+        'ok'
+      );
+      $('advLive').textContent =
+        'Inicio válido detectado; no necesitas pausar abajo.';
+    } else {
+      $('advLive').textContent =
+        'Comienza desde suspensión con el brazo extendido.';
+    }
+    return;
+  }
+
+  const a = adv.mu;
+  a.last = now;
+  a.missingSince = null;
+
+  if (a.credited) {
+    if (m.home) {
+      resetAdvanced();
+      judgeMuscleup(pose, now);
+    } else {
+      $('advLive').textContent =
+        'Rep registrada. Vuelve a suspensión para iniciar la siguiente.';
+    }
+    return;
+  }
+
+  const ratio = m.length / a.length;
+
+  if (
+    ratio < .40 ||
+    ratio > 2.30 ||
+    distance(m.p.wrist, a.wrist) >
+      a.length * r.wristDrift
+  ) {
+    /* Una reasociación de brazo puede mover el wrist de referencia.
+       Antes de borrar el intento, permite que el siguiente frame recupere pose. */
+    if (a.referenceLostAt == null) a.referenceLostAt = now;
+
+    if (now - a.referenceLostAt > 700) {
+      resetAdvanced();
+      $('advLive').textContent =
+        'Se perdió la referencia del agarre. Retoma la suspensión.';
+    }
+    return;
+  }
+
+  a.referenceLostAt = null;
+
+  if (!a.active) {
+    if (m.home) {
+      a.startAngle = m.elbow;
+      a.startLevel = m.level;
+      a.minAngle = m.elbow;
+      a.maxLevel = m.level;
+      a.length = m.length;
+      a.wrist = { x: m.p.wrist.x, y: m.p.wrist.y };
+      a.bestTopElbow = -Infinity;
+      a.bestExtendedLevel = -Infinity;
+    }
+
+    if (
+      m.elbow < r.depart ||
+      m.level - a.startLevel > .15
+    ) {
+      a.active = true;
+      a.start = now;
+      adv.started = now;
+    } else {
+      return;
+    }
+  }
+
+  if (now - a.start > r.maxDuration) {
+    resetAdvanced();
+    return;
+  }
+
+  a.minAngle = Math.min(a.minAngle, m.elbow);
+  a.maxLevel = Math.max(a.maxLevel, m.level);
+
+  if (Number.isFinite(m.bestTopElbow)) {
+    a.bestTopElbow = Math.max(
+      a.bestTopElbow,
+      m.bestTopElbow
+    );
+  }
+
+  if (Number.isFinite(m.bestExtendedLevel)) {
+    a.bestExtendedLevel = Math.max(
+      a.bestExtendedLevel,
+      m.bestExtendedLevel
+    );
+  }
+
+  trackMinAngle(m.elbow);
+
+  const excursion = a.startAngle - a.minAngle;
+  const travel = a.maxLevel - a.startLevel;
+
+  setProgress(
+    (m.level - a.startLevel) /
+      (r.supportLevel - a.startLevel) * 100,
+    m.level > 0 ? 'Apoyo sobre barra' : 'Tracción'
+  );
+
+  const enoughPull =
+    excursion >= r.minExcursion ||
+    travel >= r.strongTravel;
+
+  /*
+    Dos caminos de confirmación del apoyo:
+    A) codo proyectado ≥134° cuando el hombro ya está sobre el agarre;
+    B) proyección más difícil: codo ≥126° pero con hombro claramente más alto.
+    Ambos exigen el recorrido completo desde suspensión.
+  */
+  const supportEvidence =
+    (
+      a.maxLevel >= r.supportLevel &&
+      a.bestTopElbow >= r.supportElbow
+    ) ||
+    (
+      a.maxLevel >= r.strongSupportLevel &&
+      a.bestTopElbow >= r.strongSupportElbow
+    ) ||
+    (
+      a.bestExtendedLevel >= r.supportLevel &&
+      a.maxLevel >= r.supportLevel
+    );
+
+  const top =
+    supportEvidence &&
+    travel >= r.minTravel &&
+    enoughPull;
+
+  if (
+    top &&
+    now - a.start >= r.minDuration
+  ) {
+    a.credited = true;
+    adv.state = 'return';
+    adv.started = null;
+
+    acceptAdvanced(
+      1,
+      'Muscle-up: suspensión → ascenso → apoyo extendido · provisional V9.3'
+    );
+
+    $('advLive').textContent =
+      'Muscle-up válido detectado. Vuelve a suspensión para la siguiente rep.';
+    return;
+  }
+
+  if (
+    m.home &&
+    now - a.start > r.minDuration
+  ) {
+    noRep('no se observó apoyo suficiente sobre la barra');
+    resetAdvanced();
+    judgeMuscleup(pose, now);
+    return;
+  }
+
+  $('advLive').textContent =
+    m.level > 0
+      ? 'Completa el apoyo sobre la barra.'
+      : 'Continúa la tracción hacia la barra.';
+};
+
+/* ---------- Tracking V9.3: reacople seguro si MoveNet cambia el ID ---------- */
+const selectAthleteV93 = selectAthlete;
+
+selectAthlete = function (poses, t) {
+  const precisionExercise =
+    ['muscleup', 'frontlever'].includes(exerciseSelect.value);
+
+  /* En un video con una sola persona no esperes 650 ms para fijarla.
+     Esto evita perder el inicio de una primera rep rápida. */
+  if (precisionExercise && !athleteTrack) {
+    const items = poses
+      .map(poseDescriptor)
+      .filter(Boolean);
+
+    lastAthleteList = items;
+    lastAthleteFrame = video.currentTime;
+    lastAthleteAt = performance.now();
+
+    if (items.length === 1) {
+      return lockAthlete(items[0], t);
+    }
+  }
+
+  const before = athleteTrack
+    ? {
+        center: { ...athleteTrack.center },
+        scale: athleteTrack.scale,
+        box: { ...athleteTrack.box },
+        id: athleteTrack.id
+      }
+    : null;
+
+  const selected = selectAthleteV93(poses, t);
+  if (selected || !precisionExercise || !before) {
+    return selected;
+  }
+
+  /* Si desapareció el ID pero sigue una persona en prácticamente la misma
+     posición/escala, reasocia SIN resetear el estado del muscle-up. */
+  const candidates = (lastAthleteList || [])
+    .map(item => {
+      const ratio = item.scale / before.scale;
+      const d =
+        distance(item.center, before.center) /
+        Math.max(item.scale, before.scale);
+      const overlap = boxOverlap(item.box, before.box);
+
+      return {
+        item,
+        ratio,
+        d,
+        overlap,
+        score:
+          d +
+          Math.abs(Math.log(Math.max(.01, ratio))) * .45 -
+          overlap * .35
+      };
+    })
+    .filter(x =>
+      x.ratio > .50 &&
+      x.ratio < 2.0 &&
+      (
+        x.d < 1.20 ||
+        x.overlap > .12
+      )
+    )
+    .sort((a, b) => a.score - b.score);
+
+  if (!candidates.length) return null;
+
+  const best = candidates[0];
+  const second = candidates[1];
+
+  const unambiguous =
+    !second ||
+    best.score + .22 < second.score;
+
+  if (!unambiguous) return null;
+
+  athleteTrack = {
+    ...best.item,
+    lastSeen: t
+  };
+
+  missingSince = null;
+
+  return best.item.pose;
+};
+
+/* Alinea continuidad de pose con el nuevo margen temporal. */
+const continuousPoseV93 = continuousPose;
+
+continuousPose = function (pose, t) {
+  if (exerciseSelect.value !== 'muscleup') {
+    return continuousPoseV93(pose, t);
+  }
+
+  const item = poseDescriptor(pose);
+  if (!item) return false;
+
+  const prev = trackingSample;
+  trackingSample = {
+    center: item.center,
+    scale: item.scale,
+    t
+  };
+
+  if (!prev) return true;
+
+  const dt = t - prev.t;
+  const ratio = item.scale / prev.scale;
+
+  if (dt <= 0) return false;
+
+  if (dt > MU93.maxGap) {
+    if (!advPending) loseAttempt();
+    return true;
+  }
+
+  return (
+    ratio > .38 &&
+    ratio < 2.5 &&
+    distance(item.center, prev.center) <
+      Math.max(item.scale, prev.scale) * 2.15
+  );
+};
+
+/* ---------- UI/UX V9.3: guía compacta fuera del video central ---------- */
+if (typeof openGuide !== 'undefined' && typeof advPanel !== 'undefined') {
+  /* El botón se saca del panel grande y queda como acceso flotante pequeño. */
+  if (openGuide.parentElement !== $('app')) {
+    $('app').append(openGuide);
+  }
+
+  openGuide.textContent = 'Guía';
+  openGuide.setAttribute('aria-label', 'Guía y opciones');
+  openGuide.title = 'Guía y opciones';
+}
+
+const uiV93 = document.createElement('style');
+uiV93.textContent = `
+/* El panel experimental deja de tapar la cámara.
+   Solo se muestra la tarjeta de revisión cuando realmente hace falta. */
+#advancedPanel{
+  left:8px!important;
+  right:8px!important;
+  top:auto!important;
+  bottom:calc(max(8px,env(safe-area-inset-bottom)) + 92px)!important;
+  width:auto!important;
+  max-width:none!important;
+  max-height:none!important;
+  padding:0!important;
+  overflow:visible!important;
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+  pointer-events:none!important;
+}
+#advancedPanel #advLive{
+  display:none!important;
+}
+#advancedPanel #advReview{
+  pointer-events:auto!important;
+  margin:0!important;
+  padding:10px!important;
+  border:1px solid var(--yellow)!important;
+  border-radius:12px!important;
+  background:rgba(7,10,15,.94)!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.28)!important;
+}
+#advancedPanel #advReview[hidden]{
+  display:none!important;
+}
+
+/* Acceso compacto, alineado con Ajustes pero al lado derecho. */
+#openGuide{
+  position:absolute!important;
+  z-index:12!important;
+  top:calc(max(8px,env(safe-area-inset-top)) + 78px)!important;
+  right:8px!important;
+  left:auto!important;
+  width:auto!important;
+  min-width:68px!important;
+  max-width:108px!important;
+  min-height:40px!important;
+  margin:0!important;
+  padding:7px 11px!important;
+  border:1px solid #596679!important;
+  border-radius:11px!important;
+  background:rgba(16,25,37,.88)!important;
+  color:white!important;
+  font-size:12px!important;
+  font-weight:700!important;
+  line-height:1.1!important;
+  box-shadow:0 5px 18px rgba(0,0,0,.22)!important;
+  backdrop-filter:blur(8px)!important;
+  -webkit-backdrop-filter:blur(8px)!important;
+}
+body.tools-open #openGuide{
+  display:none!important;
+}
+@media(max-width:380px){
+  #openGuide{
+    min-width:62px!important;
+    max-width:86px!important;
+    padding:6px 8px!important;
+    font-size:11px!important;
+  }
+}
+`;
+document.head.append(uiV93);
+
+/* Mantén el botón sincronizado con ejercicios avanzados aunque ya no viva
+   dentro de advancedPanel. */
+const refreshAdvancedV93 = refreshAdvanced;
+refreshAdvanced = function () {
+  refreshAdvancedV93();
+  if (typeof openGuide !== 'undefined') {
+    openGuide.hidden = !ADVANCED[exerciseSelect.value];
+  }
+};
+
+/* Texto de estándar actualizado. */
+ADVANCED.muscleup.rule =
+  'Suspensión con extensión abajo → ascenso claro → hombros sobre el agarre → apoyo extendido. V9.3 usa memoria del pico y tolerancia 2D específica arriba para evitar falsos negativos entre reproducciones del mismo video.';
+
+ADVANCED.muscleup.guide =
+  'Muestra barra, hombros, codos y muñecas. No necesitas pausar abajo ni arriba. La validación provisional exige suspensión + recorrido + apoyo; VAR conserva la revisión oficial.';
+
+refreshAdvanced();
+</script>
+
+</body> en tu index.html actual.
 */
 document.title = 'Jueceo Calistenia AI · V9.2 beta';
 
