@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-JUECEO CALISTENIA AI — V9.0 BETA
+JUECEO CALISTENIA AI — V9.1 BETA (MUSCLE-UPS)
 Instalación: copia TODO este archivo en index.html de tu repositorio y guarda el cambio.
 No pegues el contenido dentro de otro documento HTML. No necesitas cambiar RULES.
 
@@ -20,7 +20,9 @@ Nunca pegues contraseñas, client secret ni tokens en este archivo o en GitHub.
 La integración crea una hoja por dispositivo; no es un backend multiestación.
 
 Alcance beta:
-- Reglas geométricas V8.6 conservadas; no incorpora todavía detección real de barbilla.
+- Cambios solo para muscle-ups; reglas de los otros ejercicios conservadas.
+- Muscle-ups: conteo provisional automático, seguimiento por agarre y resolución 384.
+- No incorpora detección real de barbilla.
 - Video SIN audio; grabación y sincronización requieren mantener la página abierta.
 - Datos locales en IndexedDB: no son respaldo permanente; no borres datos del sitio.
 - Pruebas de lógica con DOM, almacenamiento y respuestas de Google simuladas realizadas.
@@ -31,7 +33,12 @@ Alcance beta:
 - No hay clasificación automática multiestación ni autenticación de jueces en esta beta.
 - Una decisión «oficial» es una confirmación manual local; el historial no es inalterable.
 Base GitHub: Charlyred1507/Jueceo-Calistenia, index.html
-SHA de base: aec747a957173505eb326b42600a8d09734855a4
+SHA de base: c0d1b022f4c1be5129c592a1435ec8ebd28e50be
+Validación V9.1: 1000191287.mp4, 105 muestras a 10 Hz.
+MoveNet MultiPose Lightning, dimensión máxima 384; replay de poses: 3 reps.
+Base V9.0, dimensión 256 y auto-conteo activado: 0 reps en el mismo muestreo.
+Pruebas negativas sintéticas: inicio en apoyo, apoyo sin extensión, pérdida larga,
+y ausencia de duplicados. Falta validación de rendimiento en teléfono real.
 -->
 <html lang="es">
 <head>
@@ -41,7 +48,7 @@ SHA de base: aec747a957173505eb326b42600a8d09734855a4
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Jueceo Calistenia AI · V9.0 beta</title>
+<title>Jueceo Calistenia AI · V9.1 beta</title>
 <style>
 :root{--bg:#070a0f;--panel:rgba(7,10,15,.9);--line:rgba(255,255,255,.13);--text:#f6f7f9;--muted:#aeb7c4;--green:#46f59a;--red:#ff6577;--yellow:#ffd166;--blue:#62a8ff}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}button,select,input{font:inherit}button{cursor:pointer}[hidden]{display:none!important}body:not([data-mode="camera"]) #app{display:none}
@@ -98,7 +105,7 @@ const $=id=>document.getElementById(id);const video=$('video'),canvas=$('overlay
 
 /* V7.4: strict judging + backward-compatible pairing + Apple/Android camera tuning. */
 const CONF=.22,DRAW_CONF=.20,JUDGE_CONF=.30,MISSING_FRAMES_BEFORE_WARNING=6;
-const BUILD_ID='V8.6-beta';
+const BUILD_ID='V9.1-muscleup-beta';
 const PAIR_PREFIXES=['calistenia-v5-','calistenia-v6-','calistenia-'];
 const PEER_PROTOCOLS=[2,3];
 const PEER_OPTIONS={debug:1,pingInterval:5000,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}]}};
@@ -729,6 +736,7 @@ function judgeAdvanced(pose,now=judgeTime()){
  if(advPending){$('advLive').textContent='Confirme o rechace antes de continuar.';return;}
  const id=exerciseSelect.value;
  if(id==='onearmpullup'){judgeOneArm(pose,now);return;}
+ if(id==='muscleup'){judgeMuscleup(pose,now);return;}
  const m=advancedMetrics(pose,id);
  if(id==='hspu'){judgeHspu(m,now);return;}
  if(!m){if(isHold(id)){adv.holdMs=0;adv.credited=0;adv.holdValid=false;}missingWarning(['las articulaciones del ejercicio']);$('advLive').textContent='Muestra las articulaciones del ejercicio.';return;}markVisible();
@@ -746,12 +754,7 @@ function judgeAdvanced(pose,now=judgeTime()){
  const hang=m.locked&&sides.every(p=>p.wrist.y<p.shoulder.y-scale*.2);
  const support=m.locked&&sides.every(p=>p.shoulder.y<p.wrist.y-scale*.2);
  const confirm=(good)=>{adv.stable=good?(adv.stable||0)+1:0;return adv.stable>=2};
- if(id==='muscleup'){
-  if(adv.state==='ready'&&confirm(hang))advanceSequence('pull',now);
-  else if(adv.state==='pull'&&arms.every(a=>a<140))advanceSequence('transition',now);
-  else if(adv.state==='transition'&&sides.every(p=>p.shoulder.y<p.wrist.y)&&arms.some(a=>a<155))advanceSequence('support',now);
-  else if(adv.state==='support'&&confirm(support)){advanceSequence('ready',now);candidateAdvanced(1);}
- }else if(id==='lunge'){
+ if(id==='lunge'){
   if(adv.state==='ready'&&confirm(m.stand)){adv.startFeet=[l.ankle.x,r.ankle.x];advanceSequence('down',now);}
   else if(adv.state==='down'&&Math.min(...knees)<=100&&Math.abs(l.ankle.x-r.ankle.x)>scale*.45){adv.leg=l.knee.y>r.knee.y?'L':'R';advanceSequence('up',now);}
   else if(adv.state==='up'&&confirm(m.stand&&Math.abs(l.ankle.x-r.ankle.x)<scale*.4)){
@@ -899,7 +902,7 @@ function createJudgeDetector(){
  return poseDetection.createDetector(poseDetection.SupportedModels.MoveNet,{
   modelType:poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
   enableSmoothing:true,enableTracking:true,trackerType:poseDetection.TrackerType.BoundingBox,
-  minPoseScore:.15,multiPoseMaxDimension:256
+  minPoseScore:.15,multiPoseMaxDimension:exerciseSelect.value==='muscleup'?384:256
  });
 }
 let athleteTrack=null,athleteCandidates=new Map(),athleteSearchAt=null,lastAthleteList=[],lastAthleteFrame=-1,lastAthleteAt=0;
@@ -1127,6 +1130,87 @@ function exportInitialPosition(){
 const positionPreview=document.createElement('canvas');positionPreview.id='positionPreview';positionPreview.setAttribute('role','img');positionPreview.style.cssText='display:block;width:100%;height:auto;border-radius:12px;margin:12px 0';guideDialog.insertBefore(positionPreview,$('advGuide'));
 const guideOpenV83=openGuide.onclick;openGuide.onclick=()=>{drawInitialIllustration(positionPreview,exerciseSelect.value);positionPreview.setAttribute('aria-label','Ejemplo posición inicial. '+initialHint(exerciseSelect.value));guideOpenV83();};
 
+/* V9.1: muscle-up only. A complete observed hang-to-support cycle is provisional.
+ * Fast transitions may skip the bent-over-bar frame; require shoulder travel,
+ * elbow excursion, a stable grip reference and two observed support samples.
+ * Starting above the bar never counts. Same arm supplies the whole cycle.
+ */
+const MUSCLEUP_RULES={home:150,top:150,depart:140,minExcursion:30,minTravel:.90,hangLevel:-.42,supportLevel:.38,maxGap:650,minDuration:240,maxDuration:12000};
+function muscleupMetrics(pose){
+ const options=['L','R'].map(side=>{
+  const p=sidePoints(pose,side),arm=[p.shoulder,p.elbow,p.wrist];
+  if(arm.some(v=>!v||v.score<JUDGE_CONF))return null;
+  const upper=distance(p.shoulder,p.elbow),lower=distance(p.elbow,p.wrist),length=upper+lower;
+  if(Math.min(upper,lower)<8||Math.min(upper,lower)/Math.max(upper,lower)<.22)return null;
+  const hip=p.hip||sidePoints(pose,side==='L'?'R':'L').hip;
+  if(!hip||hip.score<CONF||hip.y<p.shoulder.y+length*.15)return null;
+  const elbow=angle(...arm),level=(p.wrist.y-p.shoulder.y)/length;
+  return {side,p,hip,elbow,level,length,confidence:Math.min(...arm.map(v=>v.score)),
+   home:elbow>=MUSCLEUP_RULES.home&&level<=MUSCLEUP_RULES.hangLevel,
+   support:elbow>=MUSCLEUP_RULES.top&&level>=MUSCLEUP_RULES.supportLevel&&p.wrist.y<=hip.y+length*.4};
+ }).filter(Boolean);
+ if(adv.mu?.side){
+  // Match the physical grip when the pose model swaps left/right labels.
+  const a=adv.mu;return options.filter(m=>distance(m.p.wrist,a.wrist)<a.length*.55).sort((x,y)=>distance(x.p.wrist,a.wrist)-distance(y.p.wrist,a.wrist))[0]||null;
+ }
+ return options.filter(m=>m.home).sort((a,b)=>b.confidence-a.confidence)[0]||options.sort((a,b)=>b.confidence-a.confidence)[0]||null;
+}
+function judgeMuscleup(pose,now){
+ const r=MUSCLEUP_RULES;
+ if(adv.mu&&(!Number.isFinite(now)||now<adv.mu.last||now-adv.mu.last>r.maxGap))resetAdvanced();
+ const m=muscleupMetrics(pose);
+ if(!m){if(!adv.mu)missingWarning(['un brazo completo y la cadera']);else setStatus('Brazo oculto brevemente: esperando evidencia visible.','warn');$('advLive').textContent='Muestra hombro, codo y muñeca del mismo brazo. No se valida con articulaciones ocultas.';return;}
+ markVisible();updateMetrics(m.confidence,m.elbow,m.level*100,'Hombro / agarre','%');
+ if(!adv.mu){
+  if(m.home){adv.mu={side:m.side,last:now,start:now,startAngle:m.elbow,minAngle:m.elbow,startLevel:m.level,length:m.length,wrist:{x:m.p.wrist.x,y:m.p.wrist.y},active:false,topSamples:0,credited:false};adv.state='pull';resetAttemptMetrics();setStatus('Listo. Sube sobre la barra sin detenerte.','ok');$('advLive').textContent='Suspensión detectada. Sube sobre la barra.';}
+  else $('advLive').textContent='Comienza colgado con el brazo extendido. Estar arriba al iniciar no suma una rep.';
+  return;
+ }
+ const a=adv.mu;a.last=now;
+ if(a.credited){if(m.home){resetAdvanced();judgeMuscleup(pose,now);}else $('advLive').textContent='Repetición registrada. Vuelve a suspensión para la siguiente.';return;}
+ if(m.length/a.length<.5||m.length/a.length>1.8||distance(m.p.wrist,a.wrist)>a.length*.55){resetAdvanced();$('advLive').textContent='Se perdió la referencia del agarre. Retoma la suspensión.';return;}
+ if(!a.active){
+  if(m.home){a.startAngle=m.elbow;a.startLevel=m.level;a.minAngle=m.elbow;a.length=m.length;a.wrist={x:m.p.wrist.x,y:m.p.wrist.y};}
+  if(m.elbow<r.depart||m.level-a.startLevel>.2){a.active=true;a.start=now;adv.started=now;}
+  else return;
+ }
+ if(now-a.start>r.maxDuration){resetAdvanced();return;}
+ a.minAngle=Math.min(a.minAngle,m.elbow);trackMinAngle(m.elbow);
+ const excursion=a.startAngle-a.minAngle,travel=m.level-a.startLevel;
+ setProgress((m.level-a.startLevel)/(r.supportLevel-a.startLevel)*100,m.level>0?'Extiende sobre la barra':'Tracción');
+ const top=m.support&&travel>=r.minTravel&&excursion>=r.minExcursion;
+ a.topSamples=top?(a.lastSupportAt!=null&&now-a.lastSupportAt<=250?a.topSamples+1:1):0;a.lastSupportAt=top?now:null;
+ if(a.topSamples>=2&&now-a.start>=r.minDuration){
+  a.credited=true;adv.state='return';adv.started=null;
+  // The visible geometric cycle counts immediately. Official validation remains in VAR.
+  acceptAdvanced(1,'Muscle-up: suspensión, ascenso sobre el agarre y extensión · provisional');
+  $('advLive').textContent='Muscle-up registrado. Resultado provisional; revisa apoyo y extensión de ambos brazos en VAR.';
+  return;
+ }
+ if(m.home&&now-a.start>r.minDuration){noRep('no se observó apoyo extendido sobre la barra');resetAdvanced();judgeMuscleup(pose,now);return;}
+ $('advLive').textContent=m.level>0?'Completa la extensión arriba de la barra.':'Sube desde la suspensión; no necesitas detenerte en la transición.';
+}
+
+// Higher pose resolution only for muscle-ups; preserve original 256 for other exercises.
+const detectorCreateMu91=createJudgeDetector;
+createJudgeDetector=async function(){const mu=exerciseSelect.value==='muscleup';const next=await detectorCreateMu91();next.__muscleupResolution=mu;return next;};
+exerciseSelect.addEventListener('change',async()=>{
+ if(!running||!detector||startingCamera||detector.__muscleupResolution===(exerciseSelect.value==='muscleup'))return;
+ const previous=detector;startingCamera=true;running=false;poseEpoch++;exerciseSelect.disabled=true;
+ setStatus('Ajustando resolución del detector…','info');
+ try{
+  const deadline=performance.now()+15000;
+  while(busy){if(performance.now()>deadline)throw new Error('El detector sigue ocupado. Reinicia la cámara.');await new Promise(resolve=>setTimeout(resolve,25));}
+  detector=await startupTimeout(createJudgeDetector(),60000,'DetectorTimeout','No se pudo ajustar el detector.',m=>m.dispose());previous.dispose();resetAthleteTracking();loseAttempt();lastVideoTime=-1;
+  setStatus(initialHint(exerciseSelect.value),'info');
+ }catch(e){detector=previous;setStatus(e.message,'warn');}
+ finally{startingCamera=false;exerciseSelect.disabled=!!circuit;running=true;requestAnimationFrame(loop);}
+});
+
+// Muscle-ups count provisional cycles automatically; other exercise controls are unchanged.
+const refreshMu91=refreshAdvanced;refreshAdvanced=function(){refreshMu91();$('advAuto').parentElement.hidden=exerciseSelect.value==='muscleup';};
+ADVANCED.muscleup.rule='Suspensión con extensión proyectada ≥150° → ascenso del hombro sobre el agarre → apoyo con extensión ≥150°. Sin pausa obligatoria. Conteo automático provisional; el juez revisa ambos brazos, apoyo y ayudas en VAR.';
+ADVANCED.muscleup.guide='Vista lateral-oblicua; mantén visibles un brazo completo y la cadera. La grabación debe incluir la suspensión inicial. Evita que la barra o el cuerpo oculten el codo.';
 renderBuilder();resetJudge();renderSetupMode();
 </script>
 <script>
@@ -1141,7 +1225,7 @@ renderBuilder();resetJudge();renderSetupMode();
  */
 (()=>{
 'use strict';
-const VERSION='V9.0-beta', DB_NAME='calistenia-var-v1', CONFIG_KEY='calistenia-var-config-v1';
+const VERSION='V9.1-beta', DB_NAME='calistenia-var-v1', CONFIG_KEY='calistenia-var-config-v1';
 const uid=()=>crypto.randomUUID(), copy=x=>structuredClone(x), finite=x=>Number.isFinite(x)?x:null;
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
 const button=(text,fn)=>{const b=el('button',text);b.type='button';b.onclick=()=>Promise.resolve().then(fn).catch(showError);return b;};
@@ -1213,7 +1297,7 @@ async function begin(){
  starting=true;try{await captureLock();await openDB();if(navigator.storage?.estimate){const s=await navigator.storage.estimate();if(s.quota&&s.quota-s.usage<80*1024*1024)throw new Error('Hay menos de 80 MB disponibles. Libera espacio o respalda grabaciones anteriores.');}navigator.storage?.persist?.().catch(()=>{});
  const mime=['video/webm;codecs=vp8','video/webm','video/mp4'].find(t=>MediaRecorder.isTypeSupported(t));
  recorder=new MediaRecorder(stream,mime?{mimeType:mime,videoBitsPerSecond:1600000}:{videoBitsPerSecond:1600000});
- active={id:uid(),schema:1,version:VERSION,baseBuild:BUILD_ID,createdAt:new Date().toISOString(),participant:{meet:config.meet,test:config.test,name:config.athlete,id:config.athleteId,category:config.category,roundName:config.roundName,attempt:config.attempt,judge:config.judge},scoring:circuit?config.scoring:'reps',plan:circuit?copy(circuit.plan):[{exercise:exerciseSelect.value,target:null}],rounds:circuit?.rounds||1,capMs:circuit?.capMs||0,rules:copy(RULES),advancedRules:copy(ADVANCED),hspuRules:copy(HSPU_RULES),events:[],audit:[],status:'recording',revision:1,syncRevision:0,duration:0,offset:0,mime:recorder.mimeType||mime||'video/webm',recordingInfo:{audio:false,timestampMode:'source-video-time; MediaRecorder alignment approximate',width:video.videoWidth,height:video.videoHeight},cloud:{folderId:config.folderId||null,sheetId:config.sheetId||null}};
+ active={id:uid(),schema:1,version:VERSION,baseBuild:BUILD_ID,createdAt:new Date().toISOString(),participant:{meet:config.meet,test:config.test,name:config.athlete,id:config.athleteId,category:config.category,roundName:config.roundName,attempt:config.attempt,judge:config.judge},scoring:circuit?config.scoring:'reps',plan:circuit?copy(circuit.plan):[{exercise:exerciseSelect.value,target:null}],rounds:circuit?.rounds||1,capMs:circuit?.capMs||0,rules:copy(RULES),advancedRules:copy(ADVANCED),hspuRules:copy(HSPU_RULES),muscleupRules:copy(MUSCLEUP_RULES),events:[],audit:[],status:'recording',revision:1,syncRevision:0,duration:0,offset:0,mime:recorder.mimeType||mime||'video/webm',recordingInfo:{audio:false,timestampMode:'source-video-time; MediaRecorder alignment approximate',width:video.videoWidth,height:video.videoHeight},cloud:{folderId:config.folderId||null,sheetId:config.sheetId||null}};
  await putSession(active);const id=active.id;storageError=null;chunkSeq=0;sampleSeq=0;activeSamples=[];sampleBuffer=[];lastSample=null;lastEnd=0;pendingAttempt=null;missingOpen=null;recordStartMedia=video.currentTime;runtimeBlobs.set(id,[]);
  recorder.ondataavailable=e=>{if(!e.data.size)return;runtimeBlobs.get(id)?.push(e.data);const item={sessionId:id,seq:chunkSeq++,blob:e.data};queueWrite(()=>dbOp('chunks','readwrite',st=>st.put(item)));};
  recorder.onerror=e=>{notify('La grabación se interrumpió; se guardará lo disponible.',true);if(active)finish('interrupted').catch(showError)};
@@ -1344,6 +1428,8 @@ openDB().then(allSessions).then(all=>{if(all.some(s=>s.status==='recording'))not
 </script>
 </body>
 </html>
+
+
 
 
 
