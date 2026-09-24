@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-JUECEO CALISTENIA AI — V9.7 BETA (HANDSTAND ENTRY)
+JUECEO CALISTENIA AI — V10 BETA (TEMPORAL ROBUSTNESS)
 Instalación: copia TODO este archivo en index.html de tu repositorio y guarda el cambio.
 No pegues el contenido dentro de otro documento HTML. No necesitas cambiar RULES.
 
@@ -48,7 +48,7 @@ y ausencia de duplicados. Falta validación de rendimiento en teléfono real.
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Jueceo Calistenia AI · V9.6 beta</title>
+<title>Jueceo Calistenia AI · V10 beta</title>
 <style>
 :root{--bg:#070a0f;--panel:rgba(7,10,15,.9);--line:rgba(255,255,255,.13);--text:#f6f7f9;--muted:#aeb7c4;--green:#46f59a;--red:#ff6577;--yellow:#ffd166;--blue:#62a8ff}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}button,select,input{font:inherit}button{cursor:pointer}[hidden]{display:none!important}body:not([data-mode="camera"]) #app{display:none}
@@ -105,7 +105,7 @@ const $=id=>document.getElementById(id);const video=$('video'),canvas=$('overlay
 
 /* V7.4: strict judging + backward-compatible pairing + Apple/Android camera tuning. */
 const CONF=.22,DRAW_CONF=.20,JUDGE_CONF=.30,MISSING_FRAMES_BEFORE_WARNING=6;
-const BUILD_ID='V9.7-handstand-entry';
+const BUILD_ID='V10-temporal-robustness';
 const PAIR_PREFIXES=['calistenia-v5-','calistenia-v6-','calistenia-'];
 const PEER_PROTOCOLS=[2,3];
 const PEER_OPTIONS={debug:1,pingInterval:5000,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}]}};
@@ -1225,7 +1225,7 @@ renderBuilder();resetJudge();renderSetupMode();
  */
 (()=>{
 'use strict';
-const VERSION='V9.6-beta', DB_NAME='calistenia-var-v1', CONFIG_KEY='calistenia-var-config-v1';
+const VERSION='V10-beta', DB_NAME='calistenia-var-v1', CONFIG_KEY='calistenia-var-config-v1';
 const uid=()=>crypto.randomUUID(), copy=x=>structuredClone(x), finite=x=>Number.isFinite(x)?x:null;
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
 const button=(text,fn)=>{const b=el('button',text);b.type='button';b.onclick=()=>Promise.resolve().then(fn).catch(showError);return b;};
@@ -3306,6 +3306,765 @@ ADVANCED.handstand.guide=
 INITIAL_HINTS.handstand=
   'Sube a handstand y mantén el apoyo sobre las manos; no necesitas una línea corporal perfecta.';
 
+refreshAdvanced();
+</script>
+
+
+<script>
+/* ============================================================
+   JUECEO CALISTENIA AI — V10 TEMPORAL ROBUSTNESS
+   Objetivo: aplicar a otros ejercicios los principios que
+   funcionaron en muscle-up, front lever y handstand:
+   - memoria temporal de extremos;
+   - tolerancia a microcortes de keypoints;
+   - reenganche espacial del atleta;
+   - histéresis de estados;
+   - articulaciones críticas por ejercicio.
+   IMPORTANTE: muscle-up, front lever y handstand NO se modifican.
+   ============================================================ */
+
+const V10_IDS=new Set([
+  'pushup','dip','pullup','squat','hspu','onearmpullup',
+  'lunge','burpee','boxjump','squatboxjump'
+]);
+const V10_ADV_PHASE_IDS=new Set(['lunge','burpee','boxjump','squatboxjump']);
+const V10_GAPS={
+  pushup:700,dip:700,pullup:850,squat:700,hspu:700,onearmpullup:850,
+  lunge:800,burpee:850,boxjump:850,squatboxjump:850
+};
+const V10_BRIDGE={
+  pushup:300,dip:300,pullup:380,squat:300,hspu:320,onearmpullup:380,
+  lunge:350,burpee:380,boxjump:380,squatboxjump:380
+};
+function v10Gap(id=exerciseSelect.value){return V10_GAPS[id]||650;}
+function v10Bridge(id=exerciseSelect.value){return V10_BRIDGE[id]||300;}
+function v10RawPoint(pose,index,min=.20){
+  const p=pose?.keypoints?.[index];
+  return p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&(p.score??0)>=min?p:null;
+}
+function v10ArmPoints(pose,side,min=.20){
+  const L=side==='L';
+  return {
+    shoulder:v10RawPoint(pose,L?IDX.leftShoulder:IDX.rightShoulder,min),
+    elbow:v10RawPoint(pose,L?IDX.leftElbow:IDX.rightElbow,min),
+    wrist:v10RawPoint(pose,L?IDX.leftWrist:IDX.rightWrist,min),
+    hip:v10RawPoint(pose,L?IDX.leftHip:IDX.rightHip,min),
+    knee:v10RawPoint(pose,L?IDX.leftKnee:IDX.rightKnee,min),
+    ankle:v10RawPoint(pose,L?IDX.leftAnkle:IDX.rightAnkle,min),
+    nose:v10RawPoint(pose,IDX.nose,min)
+  };
+}
+
+/* ------------------------------------------------------------
+   1) Grace period genérico para articulaciones que desaparecen
+   durante unos pocos frames. No altera holds ya calibrados.
+   ------------------------------------------------------------ */
+const missingWarningV10Base=missingWarning;
+missingWarning=function(parts){
+  const id=exerciseSelect.value;
+  if(!V10_IDS.has(id) || id==='handstand' || id==='frontlever' || id==='muscleup'){
+    return missingWarningV10Base(parts);
+  }
+  const t=judgeTime();
+  missingPoseFrames++;
+  if(missingSince==null)missingSince=t;
+  const elapsed=t-missingSince;
+  if(elapsed>v10Gap(id)&&!advPending)loseAttempt();
+  if(missingPoseFrames>=3){
+    const names=Array.isArray(parts)?parts.join(', '):String(parts||'articulaciones');
+    setStatus(
+      elapsed<=v10Bridge(id)
+        ? 'Seguimiento parcial · mantén el movimiento.'
+        : 'Muestra '+names+'.',
+      elapsed<=v10Bridge(id)?'info':'warn'
+    );
+  }
+};
+
+/* ------------------------------------------------------------
+   2) Seguimiento del atleta: si MoveNet cambia el pose ID durante
+   una rep, intenta reenganchar espacialmente al mismo atleta.
+   Se excluyen MU/FL/HS porque ya tienen su calibración propia.
+   ------------------------------------------------------------ */
+const selectAthleteV10Base=selectAthlete;
+selectAthlete=function(poses,t){
+  const id=exerciseSelect.value;
+  if(!V10_IDS.has(id) || id==='handstand' || id==='frontlever' || id==='muscleup'){
+    return selectAthleteV10Base(poses,t);
+  }
+
+  const items=poses.map(poseDescriptor).filter(Boolean);
+  lastAthleteList=items;
+  lastAthleteFrame=video.currentTime;
+  lastAthleteAt=performance.now();
+
+  if(athleteTrack){
+    const same=items.find(x=>x.id===athleteTrack.id);
+    if(same){
+      const dt=t-athleteTrack.lastSeen;
+      const ratio=same.scale/athleteTrack.scale;
+      const d=distance(same.center,athleteTrack.center)/Math.max(same.scale,athleteTrack.scale);
+      if(dt>=0&&dt<=v10Gap(id)&&ratio>.42&&ratio<2.35&&d<2.0){
+        athleteTrack={...same,lastSeen:t};
+        missingSince=null;
+        return same.pose;
+      }
+    }
+
+    const previous=athleteTrack;
+    const candidates=items.map(item=>{
+      const ratio=item.scale/previous.scale;
+      const d=distance(item.center,previous.center)/Math.max(item.scale,previous.scale);
+      const overlap=typeof boxOverlap==='function'?boxOverlap(item.box,previous.box):0;
+      const score=d+Math.abs(Math.log(Math.max(.01,ratio)))*.45-overlap*.28;
+      return {item,ratio,d,overlap,score};
+    }).filter(x=>
+      x.ratio>.45&&x.ratio<2.2&&(x.d<1.25||x.overlap>.10)
+    ).sort((a,b)=>a.score-b.score);
+
+    if(candidates.length&&(candidates.length===1||candidates[0].score+.18<candidates[1].score)){
+      athleteTrack={...candidates[0].item,lastSeen:t};
+      missingSince=null;
+      return candidates[0].item.pose;
+    }
+    return null;
+  }
+
+  if(items.length===1)return lockAthlete(items[0],t);
+  return selectAthleteV10Base(poses,t);
+};
+
+/* Continuidad espacial/temporal un poco más robusta para reps rápidas. */
+const continuousPoseV10Base=continuousPose;
+continuousPose=function(pose,t){
+  const id=exerciseSelect.value;
+  if(!V10_IDS.has(id) || id==='handstand' || id==='frontlever' || id==='muscleup'){
+    return continuousPoseV10Base(pose,t);
+  }
+  const item=poseDescriptor(pose);
+  if(!item)return false;
+  const prev=trackingSample;
+  trackingSample={center:item.center,scale:item.scale,t};
+  if(!prev)return true;
+  const dt=t-prev.t,ratio=item.scale/prev.scale;
+  if(dt<=0)return false;
+  if(dt>v10Gap(id)){
+    if(!advPending)loseAttempt();
+    return true;
+  }
+  return ratio>.38&&ratio<2.55&&
+    distance(item.center,prev.center)<Math.max(item.scale,prev.scale)*2.25;
+};
+
+const trackingGapV10Base=trackingGap;
+trackingGap=function(message){
+  const id=exerciseSelect.value;
+  if(!V10_IDS.has(id) || id==='handstand' || id==='frontlever' || id==='muscleup'){
+    return trackingGapV10Base(message);
+  }
+  if(advPending)return;
+  const t=judgeTime();
+  if(missingSince==null)missingSince=t;
+  const elapsed=t-missingSince;
+  if(elapsed>v10Gap(id)){
+    loseAttempt();
+    trackingSample=null;
+  }
+  setStatus(
+    elapsed<=v10Bridge(id)?'Seguimiento parcial · continúa el movimiento.':message,
+    elapsed<=v10Bridge(id)?'info':'warn'
+  );
+};
+
+/* ------------------------------------------------------------
+   3) PUSH-UPS / DIPS
+   - mismos ángulos oficiales de RULES;
+   - memoria del punto más profundo;
+   - cada brazo se sigue de forma independiente;
+   - microcortes ya no destruyen una rep válida.
+   ------------------------------------------------------------ */
+function v10PressMetrics(pose,id,side){
+  const r=RULES[id],p=v10ArmPoints(pose,side,.20);
+  const arm=[p.shoulder,p.elbow,p.wrist];
+  if(arm.some(v=>!v))return null;
+  const avg=arm.reduce((s,v)=>s+(v.score||0),0)/arm.length;
+  if(avg<.24)return null;
+  const upper=distance(p.shoulder,p.elbow),lower=distance(p.elbow,p.wrist);
+  if(!upper||!lower||Math.min(upper,lower)<8||Math.min(upper,lower)/Math.max(upper,lower)<.22)return null;
+  const elbow=angle(p.shoulder,p.elbow,p.wrist);
+  if(elbow==null)return null;
+  const length=upper+lower,reach=distance(p.shoulder,p.wrist);
+  let align=0,tilt=0,depth=(p.shoulder.y-p.elbow.y)/upper,form=true;
+  if(id==='pushup'){
+    if(!p.hip||!p.ankle)return null;
+    align=bodyLineError(p.shoulder,p.hip,p.ankle);
+    tilt=lineTilt(p.shoulder,p.ankle);
+    if(align==null||tilt==null)return null;
+    form=align<=r.alignAway&&tilt<=r.maxTilt;
+  }
+  return {
+    side,p,elbow,length,reach,confidence:Math.min(...arm.map(v=>v.score||0)),
+    align,depth,form,
+    home:elbow>=r.home&&form&&(id==='dip'||align<=r.alignHome),
+    away:elbow<=r.away&&form
+  };
+}
+function v10SeedPress(m,id,now){
+  return {
+    kind:'v10press',exercise:id,last:now,active:false,hit:false,
+    startAngle:m.elbow,extreme:m.elbow,length:m.length,
+    startReach:m.reach,minReach:m.reach,samples:0,
+    badFormMs:0,lastFormAt:m.form?now:null,started:null
+  };
+}
+function v10FollowPress(track,m,id,now){
+  const r=RULES[id];
+  if(!track){
+    if(m.home)return {track:v10SeedPress(m,id,now),result:null};
+    return {track:null,result:null};
+  }
+  const dt=Math.max(0,now-track.last);
+  if(dt>v10Gap(id)||now<track.last)return {track:null,result:null};
+  track.last=now;
+
+  if(!track.active){
+    if(m.home){
+      track.startAngle=m.elbow;
+      track.startReach=m.reach;
+      track.length=m.length;
+      track.extreme=m.elbow;
+      track.minReach=m.reach;
+    }
+    if(m.elbow>=r.depart)return {track,result:null};
+    track.active=true;
+    track.started=now;
+    track.samples=0;
+    track.hit=false;
+    track.badFormMs=0;
+  }
+
+  if(now-track.started>10000||m.length/track.length<.58||m.length/track.length>1.75){
+    return {track:null,result:null};
+  }
+
+  track.samples++;
+  track.extreme=Math.min(track.extreme,m.elbow);
+  track.minReach=Math.min(track.minReach,m.reach);
+  if(m.form)track.lastFormAt=now;
+  else track.badFormMs+=Math.min(dt,100);
+  if(track.badFormMs>=180)track.badForm=true;
+
+  const excursion=track.startAngle-track.extreme;
+  const travel=(track.startReach-track.minReach)/track.length;
+
+  /* El frame más profundo queda guardado aunque el siguiente frame sea
+     el que muestre mejor la alineación. */
+  if(track.extreme<=r.away&&travel>=.10&&
+     track.lastFormAt!=null&&now-track.lastFormAt<=320){
+    track.hit=true;
+  }
+
+  if(m.home){
+    const good=track.hit&&!track.badForm&&track.samples>=3&&now-track.started>=180;
+    const result={
+      good,
+      reason:track.badForm?'se perdió la alineación':
+        !track.hit?'faltó profundidad o recorrido':'recorrido demasiado breve',
+      min:track.extreme
+    };
+    return {track:v10SeedPress(m,id,now),result};
+  }
+  return {track,result:null};
+}
+function judgePressV10(pose,id){
+  const now=judgeTime();
+  let pair=cycle?.kind==='v10presspair'&&cycle.exercise===id
+    ?cycle:{kind:'v10presspair',exercise:id,tracks:{},last:now};
+  const visible=[],outcomes=[];
+
+  for(const side of ['L','R']){
+    let track=pair.tracks[side]||null;
+    if(track&&now-track.last>v10Gap(id))track=null;
+    const m=v10PressMetrics(pose,id,side);
+    if(m){
+      visible.push(m);
+      const out=v10FollowPress(track,m,id,now);
+      track=out.track;
+      if(out.result)outcomes.push(out.result);
+    }
+    pair.tracks[side]=track;
+  }
+
+  cycle=pair;lockedSide=null;pair.last=now;
+  if(!visible.length){
+    missingWarning(['brazo visible y articulaciones del ejercicio']);
+    return;
+  }
+  markVisible();
+  const m=visible.sort((a,b)=>b.confidence-a.confidence)[0];
+  updateMetrics(
+    m.confidence,m.elbow,
+    id==='pushup'?m.align:m.depth*100,
+    id==='pushup'?'Alineación':'Hombro',
+    id==='pushup'?'°':'%'
+  );
+
+  const accepted=outcomes.find(o=>o.good);
+  if(accepted){
+    pair.tracks={};
+    for(const vm of visible){
+      if(vm.home)pair.tracks[vm.side]=v10SeedPress(vm,id,now);
+    }
+    trackMinAngle(accepted.min);
+    validRep();
+  }else if(outcomes.length&&!Object.values(pair.tracks).some(c=>c?.active)){
+    noRep(outcomes[0].reason);
+  }else{
+    const active=Object.values(pair.tracks).find(c=>c?.active);
+    if(active){
+      const r=RULES[id];
+      setProgress((r.home-m.elbow)/(r.home-r.away)*100,active.hit?'Subiendo':'Bajando');
+      trackMinAngle(m.elbow);
+    }
+  }
+}
+judgePushup=function(pose){return judgePressV10(pose,'pushup');};
+judgeDip=function(pose){return judgePressV10(pose,'dip');};
+
+/* ------------------------------------------------------------
+   4) PULL-UP
+   Elbow peak y altura de cabeza pueden aparecer en frames vecinos.
+   Se combinan solo si ocurrieron dentro de una ventana corta.
+   ------------------------------------------------------------ */
+let pullV10Bar={left:null,right:null,at:null};
+function pullupMetricsV10(pose,now){
+  let lw=v10RawPoint(pose,IDX.leftWrist,.18),rw=v10RawPoint(pose,IDX.rightWrist,.18);
+  const nose=v10RawPoint(pose,IDX.nose,.20);
+  if(lw&&rw&&distance(lw,rw)>=12){
+    pullV10Bar={left:lw,right:rw,at:now};
+  }else if(pullV10Bar.at!=null&&now-pullV10Bar.at<=380){
+    lw=pullV10Bar.left;rw=pullV10Bar.right;
+  }
+  if(!lw||!rw||!nose)return null;
+  const hands=distance(lw,rw);
+  if(!hands||hands<12)return null;
+  const dx=rw.x-lw.x,dy=rw.y-lw.y;
+  let normal={x:-dy/hands,y:dx/hands};
+  if(normal.y<0){normal.x*=-1;normal.y*=-1;}
+  if(normal.y<.45)return null;
+  const below=p=>(p.x-lw.x)*normal.x+(p.y-lw.y)*normal.y;
+
+  const arms=['L','R'].map(side=>{
+    const p=v10ArmPoints(pose,side,.20);
+    if(!p.shoulder||!p.elbow||!p.wrist)return null;
+    const scores=[p.shoulder.score,p.elbow.score,p.wrist.score];
+    if(scores.reduce((a,b)=>a+b,0)/3<.24)return null;
+    const upper=distance(p.shoulder,p.elbow),forearm=distance(p.elbow,p.wrist);
+    if(!upper||!forearm||Math.min(upper,forearm)<9||
+       Math.min(upper,forearm)/Math.max(upper,forearm)<.22)return null;
+    const elbow=angle(p.shoulder,p.elbow,p.wrist);
+    if(elbow==null)return null;
+    return {
+      side,p,elbow,forearm,length:upper+forearm,
+      score:Math.min(...scores),
+      shoulderBelow:below(p.shoulder)
+    };
+  }).filter(Boolean);
+
+  const chosen=lockedSide?arms.find(a=>a.side===lockedSide):
+    arms.sort((a,b)=>b.score-a.score)[0];
+  if(!chosen||hands<chosen.length*.12)return null;
+  const other=arms.find(a=>a.side!==chosen.side);
+  const clearance=-below(nose)/chosen.forearm;
+
+  return {
+    side:chosen.side,elbow:chosen.elbow,clearance,length:chosen.length,
+    confidence:Math.min(nose.score||0,chosen.score),
+    home:chosen.elbow>=RULES.pullup.home&&
+      (!other||other.elbow>=RULES.pullup.home-5)&&
+      chosen.shoulderBelow>chosen.forearm*.12
+  };
+}
+function v10SeedPullup(m,now){
+  cycle={
+    kind:'v10pullup',last:now,active:false,hit:false,
+    startAngle:m.elbow,minElbow:m.elbow,minElbowAt:now,
+    startClearance:m.clearance,maxClearance:m.clearance,maxClearanceAt:now,
+    length:m.length,samples:0,started:null
+  };
+  lockedSide=m.side;phase='BOTTOM';resetAttemptMetrics();
+}
+function followPullupV10(m,now){
+  const r=RULES.pullup;
+  if(cycle&&(cycle.kind!=='v10pullup'||now-cycle.last>v10Gap('pullup')||now<cycle.last)){
+    loseAttempt();
+  }
+  if(!cycle){
+    if(m.home){
+      v10SeedPullup(m,now);
+      setStatus('Listo. Sube sin detenerte.','ok');
+    }else setStatus('Extiende los brazos para iniciar; no necesitas quedarte quieto.','warn');
+    return;
+  }
+  if(lockedSide!==m.side){
+    /* No mezclamos dos brazos; esperamos un breve reenganche del lado original. */
+    if(now-cycle.last>v10Bridge('pullup'))loseAttempt();
+    return;
+  }
+
+  const c=cycle;c.last=now;
+  if(!c.active){
+    if(m.home){
+      c.startAngle=m.elbow;c.minElbow=m.elbow;c.minElbowAt=now;
+      c.startClearance=m.clearance;c.maxClearance=m.clearance;c.maxClearanceAt=now;
+      c.length=m.length;
+    }
+    if(m.elbow>=r.depart)return;
+    c.active=true;c.started=now;c.samples=0;resetAttemptMetrics();
+  }
+
+  if(now-c.started>10000||m.length/c.length<.58||m.length/c.length>1.75){
+    loseAttempt();
+    setStatus('Retoma la extensión: se perdió el recorrido visible.','warn');
+    return;
+  }
+
+  c.samples++;
+  if(m.elbow<c.minElbow){c.minElbow=m.elbow;c.minElbowAt=now;}
+  if(m.clearance>c.maxClearance){c.maxClearance=m.clearance;c.maxClearanceAt=now;}
+  trackMinAngle(m.elbow);
+
+  const excursion=c.startAngle-c.minElbow;
+  const peakClose=Math.abs(c.minElbowAt-c.maxClearanceAt)<=450;
+  if(c.minElbow<=r.away&&c.maxClearance>=r.minClearance&&
+     c.maxClearance-c.startClearance>=.30&&excursion>=r.minExcursion&&peakClose){
+    c.hit=true;
+    setStatus('Altura de cabeza alcanzada. Baja a extensión.','ok');
+  }
+
+  phase=c.hit?'DOWN':'UP';
+  setProgress((c.startAngle-m.elbow)/(c.startAngle-r.away)*100,phaseLabel());
+
+  if(m.home){
+    const good=c.hit&&excursion>=r.minExcursion&&c.samples>=3&&now-c.started>=180;
+    const min=c.minElbow;
+    v10SeedPullup(m,now);trackMinAngle(min);
+    if(good)validRep();
+    else noRep(c.hit?'recorrido demasiado breve o incompleto':'faltó altura de cabeza o flexión del codo');
+  }
+}
+judgePullup=function(pose){
+  const now=judgeTime();
+  if(cycle?.kind==='v10pullup'&&now-cycle.last>v10Gap('pullup'))loseAttempt();
+  const m=pullupMetricsV10(pose,now);
+  if(!m){
+    missingWarning(['muñecas, cabeza y un brazo completo']);
+    return;
+  }
+  markVisible();
+  updateMetrics(m.confidence,m.elbow,m.clearance*100,'Cabeza / manos','%');
+  followPullupV10(m,now);
+};
+
+
+/* ------------------------------------------------------------
+   5) SQUAT
+   Mismos ángulos. Profundidad de rodilla y altura de cadera
+   pueden confirmarse en frames vecinos de la misma bajada.
+   ------------------------------------------------------------ */
+function squatMetricsV10(pose,side){
+  const p=v10ArmPoints(pose,side,.20);
+  if(!p.hip||!p.knee||!p.ankle)return null;
+  const avg=((p.hip.score||0)+(p.knee.score||0)+(p.ankle.score||0))/3;
+  if(avg<.24)return null;
+  const knee=angle(p.hip,p.knee,p.ankle);
+  const thigh=distance(p.hip,p.knee);
+  if(knee==null||!thigh||thigh<10)return null;
+  const depth=(p.hip.y-p.knee.y)/thigh;
+  return {side,p,knee,depth,confidence:Math.min(p.hip.score,p.knee.score,p.ankle.score)};
+}
+function judgeSquatV10(pose){
+  const now=judgeTime(),r=RULES.squat;
+  let c=cycle?.kind==='v10squat'?cycle:null;
+
+  if(c&&now-c.last>v10Gap('squat'))c=null;
+  const side=c?.side||bestLegSide(pose);
+  const m=squatMetricsV10(pose,side);
+
+  if(!m){
+    cycle=c;
+    missingWarning(['cadera, rodilla y tobillo']);
+    return;
+  }
+  markVisible();
+  updateMetrics(m.confidence,m.knee,m.depth*100,'Cadera','%');
+  trackMinAngle(m.knee);
+
+  if(!c){
+    c={
+      kind:'v10squat',side:m.side,last:now,ready:0,active:false,
+      startKnee:m.knee,minKnee:m.knee,minKneeAt:now,
+      maxDepth:m.depth,maxDepthAt:now,samples:0,hit:false
+    };
+  }
+  c.last=now;
+
+  const top=m.knee>=r.home;
+  if(!c.active){
+    c.ready=top?Math.min(3,(c.ready||0)+1):0;
+    if(top){
+      c.startKnee=m.knee;c.minKnee=m.knee;c.minKneeAt=now;
+      c.maxDepth=m.depth;c.maxDepthAt=now;
+    }
+    if(c.ready<2){
+      cycle=c;phase='WAITING';
+      setStatus('Completa la extensión para iniciar.','warn');
+      return;
+    }
+    phase='TOP';
+    if(m.knee>=r.depart){
+      cycle=c;setStatus('Listo. Baja.','ok');return;
+    }
+    c.active=true;c.started=now;c.samples=0;c.hit=false;resetAttemptMetrics();
+  }
+
+  if(now-c.started>10000){cycle=null;phase='WAITING';return;}
+  c.samples++;
+  if(m.knee<c.minKnee){c.minKnee=m.knee;c.minKneeAt=now;}
+  if(m.depth>c.maxDepth){c.maxDepth=m.depth;c.maxDepthAt=now;}
+
+  const peakClose=Math.abs(c.minKneeAt-c.maxDepthAt)<=450;
+  if(c.minKnee<=r.away&&c.maxDepth>=r.minDepth&&peakClose)c.hit=true;
+
+  phase=c.hit?'UP':'DOWN';
+  setProgress((r.home-m.knee)/(r.home-r.away)*100,phaseLabel());
+
+  if(top){
+    const excursion=c.startKnee-c.minKnee;
+    const good=c.hit&&excursion>=r.minExcursion&&c.samples>=3&&now-c.started>=180;
+    const min=c.minKnee;
+    cycle={
+      kind:'v10squat',side:m.side,last:now,ready:2,active:false,
+      startKnee:m.knee,minKnee:m.knee,minKneeAt:now,
+      maxDepth:m.depth,maxDepthAt:now,samples:0,hit:false
+    };
+    phase='TOP';trackMinAngle(min);
+    if(good)validRep();
+    else noRep(c.hit?'recorrido demasiado breve o incompleto':'faltó profundidad o extensión completa');
+  }else cycle=c;
+}
+judgeSquat=function(pose){return judgeSquatV10(pose);};
+
+/* ------------------------------------------------------------
+   6) HSPU
+   Mantiene exactamente los ángulos HSPU_RULES ya calibrados.
+   Solo mejora continuidad y memoria de frames vecinos.
+   ------------------------------------------------------------ */
+function judgeHspuV10(m,now){
+  const r=HSPU_RULES,maxGap=v10Gap('hspu');
+  if(adv.last!=null&&(now-adv.last>maxGap||now<adv.last))resetAdvanced();
+
+  if(!m){
+    if(adv.hsV10MissingAt==null)adv.hsV10MissingAt=now;
+    if(now-adv.hsV10MissingAt>maxGap)resetAdvanced();
+    missingWarning(['hombro, codo, muñeca y posición del cuerpo']);
+    $('advLive').textContent='Seguimiento parcial del brazo · mantén la posición.';
+    return;
+  }
+
+  markVisible();adv.hsV10MissingAt=null;adv.last=now;
+  updateMetrics(m.confidence,m.elbow,null,'Posición','');
+  mAlign.textContent=m.inverted?'Pino':'Reubícate';
+
+  if(!m.inverted){
+    if(adv.contextLostAt==null)adv.contextLostAt=now;
+    if(now-adv.contextLostAt>450){
+      adv.topFrames=0;adv.bottomFrames=0;
+    }
+    if(now-adv.contextLostAt>maxGap)resetAdvanced();
+    $('advLive').textContent='Muestra el cuerpo invertido sobre las manos.';
+    return;
+  }
+  adv.contextLostAt=null;
+
+  const top=m.elbow>=r.home;
+  if(adv.state==='ready'){
+    adv.hspuSide=m.side;
+    if(top){
+      adv.topFrames=(adv.lastTopAtV10!=null&&now-adv.lastTopAtV10<=320)?(adv.topFrames||0)+1:1;
+      adv.lastTopAtV10=now;
+    }
+    if((adv.topFrames||0)>=2){
+      advanceSequence('down',now);
+      adv.startAngle=m.elbow;adv.startReach=m.reach;adv.armLength=m.armLength;
+      adv.minAngle=m.elbow;adv.minReach=m.reach;adv.samples=0;
+      adv.topFrames=0;adv.bottomFrames=0;adv.lastBottomAtV10=null;
+      resetAttemptMetrics();setStatus('Listo. Baja.','ok');
+    }else $('advLive').textContent=initialHint('hspu');
+    return;
+  }
+
+  if(adv.hspuSide!==m.side)return;
+  if(adv.started==null){
+    if(top){adv.startAngle=m.elbow;adv.startReach=m.reach;adv.armLength=m.armLength;}
+    if(m.elbow>=r.depart)return;
+    adv.started=now;
+  }
+  if(now-adv.started>15000){resetAdvanced();return;}
+
+  adv.samples++;
+  adv.minAngle=Math.min(adv.minAngle,m.elbow);
+  adv.minReach=Math.min(adv.minReach,m.reach);
+  trackMinAngle(m.elbow);
+  setProgress((r.home-m.elbow)/(r.home-r.away)*100,adv.state==='up'?'Subiendo':'Bajando');
+
+  const excursion=adv.startAngle-adv.minAngle;
+  const travel=(adv.startReach-adv.minReach)/adv.armLength;
+
+  if(adv.state==='down'&&m.elbow<=r.away+5){
+    adv.bottomFrames=(adv.lastBottomAtV10!=null&&now-adv.lastBottomAtV10<=330)
+      ?(adv.bottomFrames||0)+1:1;
+    adv.lastBottomAtV10=now;
+  }
+  if(adv.state==='down'&&adv.minAngle<=r.away&&(adv.bottomFrames||0)>=2&&
+     excursion>=r.minExcursion&&travel>=r.minShoulderTravel){
+    advanceSequence('up',now);adv.topFrames=0;adv.lastTopAtV10=null;
+  }
+
+  if(top){
+    adv.topFrames=(adv.lastTopAtV10!=null&&now-adv.lastTopAtV10<=320)
+      ?(adv.topFrames||0)+1:1;
+    adv.lastTopAtV10=now;
+  }
+
+  if((adv.topFrames||0)>=2){
+    const complete=adv.state==='up'&&adv.samples>=4&&now-adv.started>=220;
+    resetAdvanced();
+    if(complete)candidateAdvanced(1);
+    else noRep('faltó profundidad o recorrido de hombros y codos');
+    return;
+  }
+  $('advLive').textContent=adv.state==='up'
+    ?'Profundidad lista. Extiende los brazos.'
+    :'Baja con control.';
+}
+
+/* ------------------------------------------------------------
+   7) ONE ARM PULL-UP
+   Misma geometría; altura y flexión pueden venir de frames vecinos.
+   ------------------------------------------------------------ */
+function judgeOneArmV10(pose,now){
+  const maxGap=v10Gap('onearmpullup');
+  if(adv.last!=null&&(now-adv.last>maxGap||now<adv.last))resetAdvanced();
+
+  const m=oneArmMetrics(pose);
+  if(!m){
+    if(adv.oaV10MissingAt==null)adv.oaV10MissingAt=now;
+    if(now-adv.oaV10MissingAt>maxGap)resetAdvanced();
+    missingWarning(['brazo de apoyo, cabeza y muñeca libre al iniciar']);
+    $('advLive').textContent=adv.oneSide
+      ?'Seguimiento parcial · continúa la repetición.'
+      :'Extiende el brazo de apoyo y separa la mano libre para iniciar.';
+    return;
+  }
+  adv.oaV10MissingAt=null;
+
+  if(adv.oneSide&&(m.length/adv.length<.55||m.length/adv.length>1.80)){
+    missingWarning(['brazo de apoyo sin oclusión']);return;
+  }
+  markVisible();adv.last=now;
+  updateMetrics(m.quality,m.elbow,m.clearance*100,'Cabeza / mano','%');
+
+  if(!adv.oneSide){
+    adv.oneSide=m.side;adv.started=now;adv.startAngle=m.elbow;
+    adv.startClearance=m.clearance;adv.length=m.length;
+    adv.extreme=m.elbow;adv.minElbowAt=now;
+    adv.maxClearance=m.clearance;adv.maxClearanceAt=now;
+    adv.samples=0;adv.state='pull';resetAttemptMetrics();
+    return;
+  }
+
+  if(now-adv.started>10000){resetAdvanced();return;}
+  adv.samples++;
+  if(m.elbow<adv.extreme){adv.extreme=m.elbow;adv.minElbowAt=now;}
+  if(adv.maxClearance==null||m.clearance>adv.maxClearance){
+    adv.maxClearance=m.clearance;adv.maxClearanceAt=now;
+  }
+  trackMinAngle(m.elbow);
+  if(!m.separated)adv.reviewFreeHand=true;
+
+  if(adv.state==='return'){
+    if(m.home){resetAdvanced();judgeOneArmV10(pose,now);}
+    return;
+  }
+
+  setProgress((adv.startAngle-m.elbow)/(adv.startAngle-125)*100,'Subiendo');
+  const peakClose=Math.abs((adv.minElbowAt??now)-(adv.maxClearanceAt??now))<=450;
+  const reached=
+    adv.extreme<=125 &&
+    (adv.maxClearance??-Infinity)>=-.05 &&
+    adv.startAngle-adv.extreme>=40 &&
+    (adv.maxClearance??m.clearance)-adv.startClearance>=.30 &&
+    peakClose;
+
+  if(reached&&adv.samples>=3&&now-adv.started>=180){
+    adv.state='return';
+    $('advLive').textContent='Altura detectada. Revisa agarre, barbilla y mano libre.';
+    candidateAdvanced(1);
+  }else{
+    $('advLive').textContent='Sube. El brazo libre puede moverse; el juez revisa que no ayude.';
+  }
+}
+
+/* ------------------------------------------------------------
+   8) Fases lunge/burpee/box jump:
+   la fase no se borra por un microcorte de 350 ms.
+   No se cambian sus criterios geométricos.
+   ------------------------------------------------------------ */
+const judgeAdvancedV10Base=judgeAdvanced;
+judgeAdvanced=function(pose,now=judgeTime()){
+  const id=exerciseSelect.value;
+  if(id==='hspu')return judgeHspuV10(hspuMetrics(pose),now);
+  if(id==='onearmpullup')return judgeOneArmV10(pose,now);
+
+  if(V10_ADV_PHASE_IDS.has(id)&&adv.last!=null){
+    const gap=now-adv.last;
+    if(gap>350&&gap<=v10Gap(id)){
+      /* El juez V8 usa 350 ms como corte duro. Aquí conservamos el estado
+         durante una pérdida breve, sin regalar una transición de fase. */
+      adv.last=now-1;
+    }
+  }
+  return judgeAdvancedV10Base(pose,now);
+};
+
+/* Reset de caches V10 al cambiar de ejercicio o reiniciar. */
+const loseAttemptV10Base=loseAttempt;
+loseAttempt=function(){
+  pullV10Bar={left:null,right:null,at:null};
+  return loseAttemptV10Base();
+};
+exerciseSelect.addEventListener('change',()=>{
+  pullV10Bar={left:null,right:null,at:null};
+});
+
+/* Textos actualizados; no cambian estándares. */
+EXERCISES.pushup.guide=
+ 'Vista lateral u oblicua moderada. La profundidad y la extensión se conservan durante frames vecinos para evitar falsos negativos por ruido 2D; se mantienen los ángulos del estándar.';
+EXERCISES.dip.guide=
+ 'Vista lateral u oblicua moderada. Se mantiene el mismo estándar de extensión/profundidad, con memoria temporal y tolerancia a microcortes de pose.';
+EXERCISES.pullup.guide=
+ 'Muestra las muñecas, la cabeza y al menos un brazo completo. El sistema conserva por unos milisegundos la línea de agarre y combina el pico de flexión con la altura de cabeza solo cuando ocurren dentro de la misma fase superior.';
+ADVANCED.hspu.guide=
+ 'Muestra hombro, codo y muñeca de un brazo. Se mantienen los ángulos ya calibrados; frames vecinos pueden confirmar el fondo o la extensión y un microcorte no cancela la rep.';
+ADVANCED.onearmpullup.guide=
+ 'Muestra el brazo de apoyo, cabeza y la mano libre al iniciar. Se conserva el mismo estándar; el pico de flexión y la altura pueden confirmarse en frames vecinos de la misma subida.';
+ADVANCED.lunge.rule+=' La fase se conserva ante pérdidas breves de keypoints.';
+ADVANCED.burpee.rule+=' La secuencia no se reinicia por microcortes breves de pose.';
+ADVANCED.boxjump.rule+=' La fase se conserva ante microcortes breves de pose.';
+ADVANCED.squatboxjump.rule+=' La fase se conserva ante microcortes breves de pose.';
+
+document.title='Jueceo Calistenia AI · V10 beta';
 refreshAdvanced();
 </script>
 
