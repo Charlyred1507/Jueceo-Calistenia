@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-JUECEO CALISTENIA AI — V9.6 BETA (HANDSTAND HOLD)
+JUECEO CALISTENIA AI — V9.7 BETA (HANDSTAND ENTRY)
 Instalación: copia TODO este archivo en index.html de tu repositorio y guarda el cambio.
 No pegues el contenido dentro de otro documento HTML. No necesitas cambiar RULES.
 
@@ -105,7 +105,7 @@ const $=id=>document.getElementById(id);const video=$('video'),canvas=$('overlay
 
 /* V7.4: strict judging + backward-compatible pairing + Apple/Android camera tuning. */
 const CONF=.22,DRAW_CONF=.20,JUDGE_CONF=.30,MISSING_FRAMES_BEFORE_WARNING=6;
-const BUILD_ID='V9.6-handstand-hold';
+const BUILD_ID='V9.7-handstand-entry';
 const PAIR_PREFIXES=['calistenia-v5-','calistenia-v6-','calistenia-'];
 const PEER_PROTOCOLS=[2,3];
 const PEER_OPTIONS={debug:1,pingInterval:5000,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}]}};
@@ -2530,7 +2530,7 @@ refreshAdvanced();
 </script>
 
 <script>
-/* Jueceo Calistenia AI — V9.6
+/* Jueceo Calistenia AI — V9.7
    Ajuste dirigido únicamente a HANDSTAND HOLD.
 
    Referencias positivas suministradas:
@@ -2540,7 +2540,7 @@ refreshAdvanced();
    - 1000191332.mp4
    - 1000191334.mp4
 
-   Criterio V9.6:
+   Criterio V9.7:
    - Un handstand NO necesita una línea corporal perfecta.
    - Se permiten arco/banana, ligera pica, separación o pequeñas correcciones
      de piernas mientras el atleta siga claramente invertido y sostenido
@@ -2562,7 +2562,14 @@ const HS96 = {
     armTilt: 50,
     supportRise: .34,
     hipRise: .24,
-    lowerRise: .05
+
+    /* V9.7: la preparación en pike puede tener manos apoyadas, codos
+       extendidos y cadera alta. Para iniciar el reloj exigimos además
+       que el torso ya tenga orientación invertida y que las piernas
+       hayan abandonado claramente la posición de preparación. */
+    torsoTilt: 52,
+    kneeAboveHip: .05,
+    ankleAboveHip: .14
   },
 
   /* Continuidad: solo después de entrar correctamente al hold. */
@@ -2573,7 +2580,7 @@ const HS96 = {
     hipRise: .04
   },
 
-  entryMs: 180,
+  entryMs: 320,
   strictRefresh: 2200,
   bridge: 450,
   resetGrace: 1250,
@@ -2761,21 +2768,61 @@ function handstandMetricsV96(pose) {
     ? Math.min(...lower.map(p=>p.y))
     : null;
 
-  /* Evidencia de que la parte inferior del cuerpo ya pasó realmente arriba.
-     Si pies/rodillas están recortados, una cadera claramente elevada basta. */
   const lowerRise=highestLower==null
     ? null
     : (torso.shoulder.y-highestLower)/scale;
 
-  const bodyUp=
-    (lowerRise!=null && lowerRise>=HS96.strict.lowerRise) ||
-    torso.hipRise>=.55;
+  /* V9.7 — confirmación específica de ENTRADA.
+     El error observado en 1000191338.mp4 era que la preparación en pike
+     satisfacía brazo extendido + manos abajo + cadera alta. Ahora cada
+     lado visible debe mostrar que su pierna ya se elevó por encima de la
+     cadera. Si solo un lado es visible usamos un fallback más estricto
+     de torso; si no vemos piernas, el fallback es todavía más exigente.
+
+     Esta comprobación SOLO decide cuándo arranca el reloj. Una vez que el
+     handstand ya fue establecido, sustainValid conserva la tolerancia V9.6
+     para banana, separación de piernas y pequeñas correcciones. */
+  const legState=[L,R].map(p=>{
+    if (!p.hip) return {visible:false,raised:false};
+
+    const kneeRise=p.knee
+      ? (p.hip.y-p.knee.y)/scale
+      : null;
+    const ankleRise=p.ankle
+      ? (p.hip.y-p.ankle.y)/scale
+      : null;
+
+    const visible=!!(p.knee||p.ankle);
+    const raised=
+      (kneeRise!=null && kneeRise>=HS96.strict.kneeAboveHip) ||
+      (ankleRise!=null && ankleRise>=HS96.strict.ankleAboveHip);
+
+    return {visible,raised,kneeRise,ankleRise};
+  });
+
+  const visibleLegSides=legState.filter(s=>s.visible).length;
+  const raisedLegSides=legState.filter(s=>s.visible&&s.raised).length;
+
+  const torsoEntry=
+    torso.torsoTilt>=HS96.strict.torsoTilt &&
+    torso.hipRise>=HS96.strict.hipRise;
+
+  const legsEntry=
+    visibleLegSides>=2
+      ? raisedLegSides>=2
+      : visibleLegSides===1
+        ? raisedLegSides===1 &&
+          torso.torsoTilt>=60 &&
+          torso.hipRise>=.45
+        : torso.torsoTilt>=72 &&
+          torso.hipRise>=.65;
+
+  const bodyUp=torsoEntry&&legsEntry;
 
   const strictValid=
     arm.elbow>=HS96.strict.elbow &&
     arm.armTilt>=HS96.strict.armTilt &&
     arm.supportRise>=HS96.strict.supportRise &&
-    torso.hipRise>=HS96.strict.hipRise &&
     bodyUp;
 
   const sustainValid=
@@ -2793,6 +2840,11 @@ function handstandMetricsV96(pose) {
     lower,
     lowerRise,
     bodyUp,
+    torsoEntry,
+    legsEntry,
+    visibleLegSides,
+    raisedLegSides,
+    legState,
     confidence:Math.min(arm.confidence,torso.confidence),
     missing:{arm:false,torso:false}
   };
@@ -2805,6 +2857,8 @@ function handstandReasonV96(m) {
   if (m.arm.elbow<HS96.sustain.elbow) return 'Mantén el apoyo sobre las manos';
   if (m.arm.supportRise<HS96.sustain.supportRise) return 'Coloca los hombros sobre las manos';
   if (m.torso.hipRise<HS96.sustain.hipRise) return 'Mantén la cadera por encima de los hombros';
+  if (!adv.holdValid && !m.torsoEntry) return 'Sube el torso hasta quedar claramente invertido';
+  if (!adv.holdValid && !m.legsEntry) return 'Eleva ambas piernas antes de iniciar el hold';
   if (!m.bodyUp && !adv.holdValid) return 'Completa la entrada al handstand';
   return 'Recupera el equilibrio sobre las manos';
 }
@@ -3244,7 +3298,7 @@ trackingGap=function(message) {
 };
 
 ADVANCED.handstand.rule=
-  'Handstand válido = mantener el cuerpo invertido y sostenido sobre las manos. No se exige una línea corporal perfectamente recta: se permiten arco/banana, separación de piernas y pequeñas correcciones de equilibrio. Cada 5 s válidos se acreditan automáticamente como resultado provisional.';
+  'Handstand válido = mantener el cuerpo invertido y sostenido sobre las manos. El reloj inicia solo después de confirmar torso invertido y piernas elevadas; apoyar las manos o preparar la subida no suma tiempo. No se exige una línea corporal perfectamente recta: se permiten arco/banana, separación de piernas y pequeñas correcciones de equilibrio. Cada 5 s válidos se acreditan automáticamente como resultado provisional.';
 
 ADVANCED.handstand.guide=
   'Muestra las manos, al menos un brazo, hombros y cadera. Los pies pueden estar algo recortados y las piernas no necesitan permanecer juntas ni perfectamente extendidas. El sistema exige una entrada invertida clara y después tolera pequeñas correcciones sin detener el reloj.';
