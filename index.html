@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-JUECEO CALISTENIA AI — V9.3 BETA (MUSCLE-UP CONSISTENCY + UI)
+JUECEO CALISTENIA AI — V9.4 BETA (FRONT LEVER RELIABILITY)
 Instalación: copia TODO este archivo en index.html de tu repositorio y guarda el cambio.
 No pegues el contenido dentro de otro documento HTML. No necesitas cambiar RULES.
 
@@ -48,7 +48,7 @@ y ausencia de duplicados. Falta validación de rendimiento en teléfono real.
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Jueceo Calistenia AI · V9.3 beta</title>
+<title>Jueceo Calistenia AI · V9.4 beta</title>
 <style>
 :root{--bg:#070a0f;--panel:rgba(7,10,15,.9);--line:rgba(255,255,255,.13);--text:#f6f7f9;--muted:#aeb7c4;--green:#46f59a;--red:#ff6577;--yellow:#ffd166;--blue:#62a8ff}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}button,select,input{font:inherit}button{cursor:pointer}[hidden]{display:none!important}body:not([data-mode="camera"]) #app{display:none}
@@ -105,7 +105,7 @@ const $=id=>document.getElementById(id);const video=$('video'),canvas=$('overlay
 
 /* V7.4: strict judging + backward-compatible pairing + Apple/Android camera tuning. */
 const CONF=.22,DRAW_CONF=.20,JUDGE_CONF=.30,MISSING_FRAMES_BEFORE_WARNING=6;
-const BUILD_ID='V9.3-muscleup-consistency-ui';
+const BUILD_ID='V9.4-frontlever-reliability';
 const PAIR_PREFIXES=['calistenia-v5-','calistenia-v6-','calistenia-'];
 const PEER_PROTOCOLS=[2,3];
 const PEER_OPTIONS={debug:1,pingInterval:5000,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}]}};
@@ -1225,7 +1225,7 @@ renderBuilder();resetJudge();renderSetupMode();
  */
 (()=>{
 'use strict';
-const VERSION='V9.3-beta', DB_NAME='calistenia-var-v1', CONFIG_KEY='calistenia-var-config-v1';
+const VERSION='V9.4-beta', DB_NAME='calistenia-var-v1', CONFIG_KEY='calistenia-var-config-v1';
 const uid=()=>crypto.randomUUID(), copy=x=>structuredClone(x), finite=x=>Number.isFinite(x)?x:null;
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
 const button=(text,fn)=>{const b=el('button',text);b.type='button';b.onclick=()=>Promise.resolve().then(fn).catch(showError);return b;};
@@ -1426,15 +1426,8 @@ openDB().then(allSessions).then(all=>{if(all.some(s=>s.status==='recording'))not
 })();
 
 </script>
-<script>
-/* Jueceo Calistenia AI — V9.2 patch
-   Calibrado con:
-   - 1000191289.mp4: 4 muscle-ups válidos
-   - 1000191287.mp4: 3 muscle-ups válidos
-   - 1000187881.mp4: front lever válido
 
-   Alcance: únicamente muscle-up y front lever.
-   Pega este bloque inmediatamente ANTES de <script>
+<script>
 /* Jueceo Calistenia AI — V9.3
    Ajuste dirigido a consistencia de muscle-up + UI compacta.
 
@@ -2043,630 +2036,437 @@ ADVANCED.muscleup.guide =
 refreshAdvanced();
 </script>
 
-</body> en tu index.html actual.
+<script>
+/* Jueceo Calistenia AI — V9.4
+   Ajuste dirigido únicamente a FRONT LEVER.
+
+   Referencias positivas:
+   - 1000191316.mp4: hold válido prolongado.
+   - 1000187881.mp4: hold válido prolongado.
+
+   Hallazgo:
+   la lógica anterior exigía hombro+codo+muñeca+cadera+rodilla+tobillo del MISMO
+   lado con confianza suficiente en el mismo frame. En front lever esto falla
+   frecuentemente por manos superpuestas a la barra, piernas solapadas, postes,
+   perspectiva y oclusiones breves. V9.4 separa la evidencia en brazo, torso,
+   cadera y pierna, elige la proyección más confiable de cada grupo y mantiene
+   continuidad temporal sin regalar el tiempo de frames perdidos.
 */
-document.title = 'Jueceo Calistenia AI · V9.2 beta';
 
-const MU92 = {
-  pointConf: .20,
-  home: 145,
-  top: 145,
-  depart: 136,
-  hangLevel: -.28,
-  supportLevel: .20,
-  minTravel: .68,
-  strongTravel: .98,
-  minExcursion: 18,
-  maxGap: 1200,
-  minDuration: 160,
-  maxDuration: 12000,
-  wristDrift: .90
+const FL94 = {
+  pointConf: .11,
+  arm: 145,
+  hip: 145,
+  knee: 150,
+  torsoTilt: 22,
+  thighTilt: 25,
+  legTilt: 24,
+  wristRise: -.02,
+  grace: 1000,
+  maxGap: 1800,
+  minFrames: 2
 };
 
-const FL92 = {
-  pointConf: .20,
-  arm: 150,
-  knee: 155,
-  hip: 150,
-  horizontal: 18,
-  align: 22,
-  wristRise: .05,
-  grace: 700,
-  maxGap: 1100
-};
-
-/* ---------- detector de mayor resolución para MU + front lever ---------- */
+/* Front lever se beneficia de la misma resolución que muscle-up al iniciar cámara. */
+const createJudgeDetectorV94 = createJudgeDetector;
 createJudgeDetector = async function () {
-  const precision = ['muscleup', 'frontlever'].includes(exerciseSelect.value);
-  const next = await poseDetection.createDetector(
+  if (exerciseSelect.value !== 'frontlever') {
+    const d = await createJudgeDetectorV94();
+    d.__v94Frontlever = false;
+    return d;
+  }
+
+  const d = await poseDetection.createDetector(
     poseDetection.SupportedModels.MoveNet,
     {
       modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
       enableSmoothing: true,
       enableTracking: true,
       trackerType: poseDetection.TrackerType.BoundingBox,
-      minPoseScore: .15,
-      multiPoseMaxDimension: precision ? 384 : 256
+      minPoseScore: .12,
+      multiPoseMaxDimension: 384
     }
   );
-  next.__muscleupResolution = exerciseSelect.value === 'muscleup';
-  next.__v92Precision = precision;
-  return next;
+  d.__muscleupResolution = false;
+  d.__v94Frontlever = true;
+  return d;
 };
 
-/* Si se cambia desde/hacia front lever con la cámara abierta, recrea el detector. */
-exerciseSelect.addEventListener('change', async () => {
-  if (!running || !detector || startingCamera) return;
-  const precision = ['muscleup', 'frontlever'].includes(exerciseSelect.value);
-  if (detector.__v92Precision === precision) return;
-
-  const previous = detector;
-  startingCamera = true;
-  running = false;
-  poseEpoch++;
-  exerciseSelect.disabled = true;
-  setStatus('Ajustando precisión del detector…', 'info');
-
-  try {
-    const deadline = performance.now() + 15000;
-    while (busy) {
-      if (performance.now() > deadline) throw new Error('El detector sigue ocupado. Reinicia la cámara.');
-      await new Promise(resolve => setTimeout(resolve, 25));
-    }
-    detector = await startupTimeout(
-      createJudgeDetector(),
-      60000,
-      'DetectorTimeout',
-      'No se pudo ajustar el detector.',
-      m => m.dispose()
-    );
-    previous.dispose();
-    resetAthleteTracking();
-    loseAttempt();
-    lastVideoTime = -1;
-    setStatus(initialHint(exerciseSelect.value), 'info');
-  } catch (e) {
-    detector = previous;
-    setStatus(e.message, 'warn');
-  } finally {
-    startingCamera = false;
-    exerciseSelect.disabled = !!circuit;
-    running = true;
-    requestAnimationFrame(loop);
-  }
-});
-
-/* ---------- MUSCLE-UP V9.2 ---------- */
-function muscleupMetricsV92(pose) {
-  const options = ['L', 'R'].map(side => {
-    const p = sidePoints(pose, side);
-    const arm = [p.shoulder, p.elbow, p.wrist];
-
-    if (arm.some(v => !v || (v.score ?? 0) < MU92.pointConf)) return null;
-
-    const upper = distance(p.shoulder, p.elbow);
-    const lower = distance(p.elbow, p.wrist);
-    const length = upper + lower;
-
-    if (
-      Math.min(upper, lower) < 7 ||
-      Math.min(upper, lower) / Math.max(upper, lower) < .18
-    ) return null;
-
-    const other = sidePoints(pose, side === 'L' ? 'R' : 'L');
-    const hip = (p.hip && (p.hip.score ?? 0) >= CONF) ? p.hip : other.hip;
-    if (!hip || (hip.score ?? 0) < .18) return null;
-
-    const elbow = angle(...arm);
-    if (elbow == null || !Number.isFinite(elbow)) return null;
-
-    const level = (p.wrist.y - p.shoulder.y) / length;
-    const confidence = Math.min(...arm.map(v => v.score ?? 0), hip.score ?? 0);
-
-    return {
-      side, p, hip, elbow, level, length, confidence,
-      home: elbow >= MU92.home && level <= MU92.hangLevel,
-      support: elbow >= MU92.top && level >= MU92.supportLevel
-    };
-  }).filter(Boolean);
-
-  if (adv.mu) {
-    const a = adv.mu;
-
-    /* Mantiene el mismo lado si sigue visible; solo permite swap L/R si MoveNet
-       cambió la etiqueta durante la transición. */
-    const same = options.find(m =>
-      m.side === a.side &&
-      distance(m.p.wrist, a.wrist) < a.length * MU92.wristDrift
-    );
-    if (same) return same;
-
-    return options
-      .filter(m => distance(m.p.wrist, a.wrist) < a.length * MU92.wristDrift)
-      .sort((x, y) =>
-        distance(x.p.wrist, a.wrist) - distance(y.p.wrist, a.wrist)
-      )[0] || null;
-  }
-
-  return options
-    .filter(m => m.home)
-    .sort((a, b) => b.confidence - a.confidence)[0]
-    || options.sort((a, b) => b.confidence - a.confidence)[0]
-    || null;
+function fl94Point(p) {
+  return !!p &&
+    Number.isFinite(p.x) &&
+    Number.isFinite(p.y) &&
+    (p.score ?? 0) >= FL94.pointConf;
 }
 
-judgeMuscleup = function (pose, now) {
-  const r = MU92;
+function fl94Arm(p, side) {
+  if (![p.shoulder,p.elbow,p.wrist].every(fl94Point)) return null;
 
-  if (
-    adv.mu &&
-    (!Number.isFinite(now) || now < adv.mu.last || now - adv.mu.last > r.maxGap)
-  ) resetAdvanced();
+  const upper = distance(p.shoulder,p.elbow);
+  const lower = distance(p.elbow,p.wrist);
+  if (Math.min(upper,lower) < 6) return null;
 
-  const m = muscleupMetricsV92(pose);
-
-  if (!m) {
-    if (!adv.mu) {
-      missingWarning(['hombro, codo y muñeca de un brazo']);
-    } else {
-      if (adv.mu.missingSince == null) adv.mu.missingSince = now;
-      if (now - adv.mu.missingSince > r.maxGap) resetAdvanced();
-      setStatus('Ocultamiento breve del brazo: mantén el agarre visible.', 'warn');
-    }
-
-    $('advLive').textContent =
-      'Mantén visible al menos un brazo completo; una pérdida breve no cancela la rep.';
-    return;
-  }
-
-  markVisible();
-  updateMetrics(m.confidence, m.elbow, m.level * 100, 'Hombro / agarre', '%');
-
-  if (!adv.mu) {
-    if (m.home) {
-      adv.mu = {
-        side: m.side,
-        last: now,
-        start: now,
-        startAngle: m.elbow,
-        minAngle: m.elbow,
-        startLevel: m.level,
-        maxLevel: m.level,
-        length: m.length,
-        wrist: { x: m.p.wrist.x, y: m.p.wrist.y },
-        active: false,
-        credited: false,
-        topSamples: 0,
-        lastSupportAt: null,
-        missingSince: null
-      };
-
-      adv.state = 'pull';
-      resetAttemptMetrics();
-      setStatus('Suspensión detectada. Sube sobre la barra.', 'ok');
-      $('advLive').textContent =
-        'Inicio válido detectado; no necesitas pausar abajo.';
-    } else {
-      $('advLive').textContent =
-        'Comienza desde suspensión con el brazo extendido.';
-    }
-    return;
-  }
-
-  const a = adv.mu;
-  a.last = now;
-  a.missingSince = null;
-
-  if (a.credited) {
-    if (m.home) {
-      resetAdvanced();
-      judgeMuscleup(pose, now);
-    } else {
-      $('advLive').textContent =
-        'Rep registrada. Vuelve a suspensión para iniciar la siguiente.';
-    }
-    return;
-  }
-
-  const ratio = m.length / a.length;
-  if (
-    ratio < .42 ||
-    ratio > 2.20 ||
-    distance(m.p.wrist, a.wrist) > a.length * r.wristDrift
-  ) {
-    resetAdvanced();
-    $('advLive').textContent =
-      'Se perdió la referencia del agarre. Retoma la suspensión.';
-    return;
-  }
-
-  if (!a.active) {
-    if (m.home) {
-      a.startAngle = m.elbow;
-      a.startLevel = m.level;
-      a.minAngle = m.elbow;
-      a.maxLevel = m.level;
-      a.length = m.length;
-      a.wrist = { x: m.p.wrist.x, y: m.p.wrist.y };
-    }
-
-    if (m.elbow < r.depart || m.level - a.startLevel > .15) {
-      a.active = true;
-      a.start = now;
-      adv.started = now;
-    } else {
-      return;
-    }
-  }
-
-  if (now - a.start > r.maxDuration) {
-    resetAdvanced();
-    return;
-  }
-
-  a.minAngle = Math.min(a.minAngle, m.elbow);
-  a.maxLevel = Math.max(a.maxLevel, m.level);
-  trackMinAngle(m.elbow);
-
-  const excursion = a.startAngle - a.minAngle;
-  const travel = a.maxLevel - a.startLevel;
-
-  setProgress(
-    (m.level - a.startLevel) / (r.supportLevel - a.startLevel) * 100,
-    m.level > 0 ? 'Apoyo sobre barra' : 'Tracción'
-  );
-
-  const enoughPull =
-    excursion >= r.minExcursion ||
-    travel >= r.strongTravel;
-
-  const top =
-    m.support &&
-    travel >= r.minTravel &&
-    enoughPull;
-
-  if (top) {
-    a.topSamples =
-      (a.lastSupportAt != null && now - a.lastSupportAt <= 900)
-        ? a.topSamples + 1
-        : 1;
-    a.lastSupportAt = now;
-  } else if (a.lastSupportAt != null && now - a.lastSupportAt > 900) {
-    a.topSamples = 0;
-    a.lastSupportAt = null;
-  }
-
-  /* No hay pausa obligatoria arriba.
-     Un frame limpio de apoyo es suficiente DESPUÉS de haber visto:
-     suspensión + ascenso + recorrido vertical. */
-  if (a.topSamples >= 1 && now - a.start >= r.minDuration) {
-    a.credited = true;
-    adv.state = 'return';
-    adv.started = null;
-
-    acceptAdvanced(
-      1,
-      'Muscle-up: suspensión → ascenso → apoyo extendido · provisional'
-    );
-
-    $('advLive').textContent =
-      'Muscle-up válido detectado. Vuelve a suspensión para la siguiente rep.';
-    return;
-  }
-
-  if (m.home && now - a.start > r.minDuration) {
-    noRep('no se observó apoyo sobre la barra');
-    resetAdvanced();
-    judgeMuscleup(pose, now);
-    return;
-  }
-
-  $('advLive').textContent =
-    m.level > 0
-      ? 'Termina arriba con los brazos extendidos.'
-      : 'Continúa la tracción hacia la barra.';
-};
-
-/* ---------- FRONT LEVER V9.2 ---------- */
-function frontleverMetricsV92(pose) {
-  const candidates = ['L', 'R'].map(side => {
-    const p = sidePoints(pose, side);
-    const req = [p.shoulder, p.elbow, p.wrist, p.hip, p.knee, p.ankle];
-
-    if (req.some(v => !v || (v.score ?? 0) < FL92.pointConf)) return null;
-
-    const scale = distance(p.shoulder, p.hip);
-    if (scale < 10) return null;
-
-    const arm = angle(p.shoulder, p.elbow, p.wrist);
-    const knee = angle(p.hip, p.knee, p.ankle);
-    const hip = angle(p.shoulder, p.hip, p.knee);
-
-    if ([arm, knee, hip].some(v => v == null || !Number.isFinite(v))) return null;
-
-    const horizontal = lineTilt(p.shoulder, p.ankle);
-    const align = bodyLineError(p.shoulder, p.hip, p.ankle);
-    const wristRise = (p.shoulder.y - p.wrist.y) / scale;
-    const confidence = Math.min(...req.map(v => v.score ?? 0));
-
-    const valid =
-      arm >= FL92.arm &&
-      knee >= FL92.knee &&
-      hip >= FL92.hip &&
-      horizontal <= FL92.horizontal &&
-      align <= FL92.align &&
-      wristRise >= FL92.wristRise;
-
-    const margin =
-      Math.min(arm - FL92.arm, 40) +
-      Math.min(knee - FL92.knee, 25) +
-      Math.min(hip - FL92.hip, 30) +
-      Math.min(FL92.horizontal - horizontal, 18) +
-      Math.min(FL92.align - align, 22) +
-      Math.min((wristRise - FL92.wristRise) * 30, 15);
-
-    return {
-      side, p, scale, arm, knee, hip,
-      horizontal, align, wristRise,
-      confidence, valid, margin
-    };
-  }).filter(Boolean);
-
-  if (!candidates.length) return null;
-
-  /* Evita que la proyección del lado lejano invalide un hold bueno. */
-  candidates.sort((a, b) =>
-    (Number(b.valid) - Number(a.valid)) ||
-    (b.margin - a.margin) ||
-    (b.confidence - a.confidence)
-  );
-
-  const b = candidates[0];
+  const elbow = angle(p.shoulder,p.elbow,p.wrist);
+  if (elbow == null || !Number.isFinite(elbow)) return null;
 
   return {
-    confidence: b.confidence,
-    sides: [b.p],
-    l: b.side === 'L' ? b.p : null,
-    r: b.side === 'R' ? b.p : null,
-    scale: b.scale,
-    arms: [b.arm],
-    knees: [b.knee],
-    hips: [b.hip],
-    feet: b.p.ankle.y,
-    straight: b.knee >= FL92.knee && b.hip >= FL92.hip,
-    locked: b.arm >= FL92.arm,
-    horizontal: b.horizontal <= FL92.horizontal,
-    align: b.align <= FL92.align,
-    frontValid: b.valid,
-    front: {
-      side: b.side,
-      arm: b.arm,
-      knee: b.knee,
-      hip: b.hip,
-      horizontal: b.horizontal,
-      align: b.align,
-      wristRise: b.wristRise
-    }
+    side,
+    elbow,
+    wristRise: null,
+    p,
+    confidence: Math.min(
+      p.shoulder.score ?? 0,
+      p.elbow.score ?? 0,
+      p.wrist.score ?? 0
+    )
   };
 }
 
-const advancedMetricsV92 = advancedMetrics;
-advancedMetrics = function (pose, id = exerciseSelect.value) {
-  if (id === 'frontlever') return frontleverMetricsV92(pose);
-  return advancedMetricsV92(pose, id);
-};
+function fl94HipChain(p, side) {
+  if (![p.shoulder,p.hip,p.knee].every(fl94Point)) return null;
 
-function frontleverReasonV92(m) {
-  if (!m) return 'Muestra hombro, codo, muñeca, cadera, rodilla y tobillo';
-  if (!m.locked) return 'Extiende el codo';
-  if (!m.straight) return 'Extiende cadera y rodilla';
-  if (!m.align) return 'Alinea hombro, cadera y tobillo';
-  if (!m.horizontal) return 'Acerca el cuerpo a la horizontal';
-  if ((m.front?.wristRise ?? 0) < FL92.wristRise)
-    return 'Mantén las manos por encima de los hombros';
+  const hip = angle(p.shoulder,p.hip,p.knee);
+  if (hip == null || !Number.isFinite(hip)) return null;
+
+  return {
+    side,
+    hip,
+    torsoTilt: lineTilt(p.shoulder,p.hip),
+    thighTilt: lineTilt(p.hip,p.knee),
+    scale: distance(p.shoulder,p.hip),
+    p,
+    confidence: Math.min(
+      p.shoulder.score ?? 0,
+      p.hip.score ?? 0,
+      p.knee.score ?? 0
+    )
+  };
+}
+
+function fl94Leg(p, side) {
+  if (![p.hip,p.knee,p.ankle].every(fl94Point)) return null;
+
+  const knee = angle(p.hip,p.knee,p.ankle);
+  if (knee == null || !Number.isFinite(knee)) return null;
+
+  return {
+    side,
+    knee,
+    legTilt: lineTilt(p.hip,p.ankle),
+    shankTilt: lineTilt(p.knee,p.ankle),
+    p,
+    confidence: Math.min(
+      p.hip.score ?? 0,
+      p.knee.score ?? 0,
+      p.ankle.score ?? 0
+    )
+  };
+}
+
+function frontleverMetricsV94(pose) {
+  const sideL = sidePoints(pose,'L');
+  const sideR = sidePoints(pose,'R');
+  const sides = {L:sideL,R:sideR};
+
+  const arms = ['L','R']
+    .map(side => fl94Arm(sides[side],side))
+    .filter(Boolean);
+
+  const hips = ['L','R']
+    .map(side => fl94HipChain(sides[side],side))
+    .filter(Boolean);
+
+  const legs = ['L','R']
+    .map(side => fl94Leg(sides[side],side))
+    .filter(Boolean);
+
+  if (!arms.length || !hips.length || !legs.length) {
+    return {
+      valid:false,
+      missing:{
+        arm:!arms.length,
+        torso:!hips.length,
+        leg:!legs.length
+      },
+      arms,
+      hips,
+      legs
+    };
+  }
+
+  /* El brazo puede ser de un lado y la línea corporal del otro.
+     En vista lateral esto es más estable que exigir seis puntos del mismo lado. */
+  for (const a of arms) {
+    const hp = sides[a.side];
+    const h = hips.find(x => x.side === a.side) || hips[0];
+    const scale = Math.max(8,h.scale || distance(h.p.shoulder,h.p.hip));
+    a.wristRise = (hp.shoulder.y - hp.wrist.y) / scale;
+  }
+
+  arms.sort((a,b) => {
+    const av = (a.elbow >= FL94.arm && a.wristRise >= FL94.wristRise) ? 1 : 0;
+    const bv = (b.elbow >= FL94.arm && b.wristRise >= FL94.wristRise) ? 1 : 0;
+    return (bv-av) || (b.elbow-a.elbow) || (b.confidence-a.confidence);
+  });
+
+  hips.sort((a,b) => {
+    const av = (
+      a.hip >= FL94.hip &&
+      a.torsoTilt <= FL94.torsoTilt &&
+      a.thighTilt <= FL94.thighTilt
+    ) ? 1 : 0;
+    const bv = (
+      b.hip >= FL94.hip &&
+      b.torsoTilt <= FL94.torsoTilt &&
+      b.thighTilt <= FL94.thighTilt
+    ) ? 1 : 0;
+    return (bv-av) ||
+      ((a.torsoTilt+a.thighTilt)-(b.torsoTilt+b.thighTilt)) ||
+      (b.confidence-a.confidence);
+  });
+
+  legs.sort((a,b) => {
+    const av = (a.knee >= FL94.knee && a.legTilt <= FL94.legTilt) ? 1 : 0;
+    const bv = (b.knee >= FL94.knee && b.legTilt <= FL94.legTilt) ? 1 : 0;
+    return (bv-av) ||
+      (a.legTilt-b.legTilt) ||
+      (b.knee-a.knee) ||
+      (b.confidence-a.confidence);
+  });
+
+  const arm = arms[0];
+  const hip = hips[0];
+  const leg = legs[0];
+
+  const armGood =
+    arm.elbow >= FL94.arm &&
+    arm.wristRise >= FL94.wristRise;
+
+  const hipGood =
+    hip.hip >= FL94.hip &&
+    hip.torsoTilt <= FL94.torsoTilt &&
+    hip.thighTilt <= FL94.thighTilt;
+
+  const legGood =
+    leg.knee >= FL94.knee &&
+    leg.legTilt <= FL94.legTilt;
+
+  return {
+    valid: armGood && hipGood && legGood,
+    armGood,
+    hipGood,
+    legGood,
+    arm,
+    hip,
+    leg,
+    confidence: Math.min(arm.confidence,hip.confidence,leg.confidence),
+    missing:{arm:false,torso:false,leg:false}
+  };
+}
+
+function frontleverReasonV94(m) {
+  if (!m) return 'No se pudo estimar la pose';
+  if (m.missing?.arm) return 'Mantén visible hombro, codo y una muñeca';
+  if (m.missing?.torso) return 'Mantén visible hombro, cadera y una rodilla';
+  if (m.missing?.leg) return 'Mantén visible una pierna hasta el tobillo';
+  if (!m.armGood) return 'Extiende el brazo y mantén el agarre por encima del hombro';
+  if (!m.hipGood) return 'Mantén torso, cadera y muslo en línea horizontal';
+  if (!m.legGood) return 'Extiende la rodilla y mantén la pierna horizontal';
   return 'Mantén la posición';
 }
 
-function judgeFrontleverV92(pose, now) {
+function resetFrontleverV94Hard() {
+  adv.holdMs = 0;
+  adv.credited = 0;
+  adv.holdValid = false;
+  adv.fl94GoodFrames = 0;
+  adv.fl94BadSince = null;
+  adv.fl94LastAt = null;
+}
+
+function judgeFrontleverV94(pose, now) {
   advLastPose = pose;
   advLastPoseAt = performance.now();
 
-  if (advPending) {
-    $('advLive').textContent = 'Candidato de hold pendiente de juez.';
-    return;
+  /* Front lever V9.4 cuenta automáticamente bloques provisionales de 5 s.
+     No detiene el detector esperando confirmación manual. */
+  if (advPending && advPending.exercise === 'frontlever') {
+    advPending = null;
+    $('advReview').hidden = true;
   }
 
-  const m = frontleverMetricsV92(pose);
-  const previous = adv.last;
-  let dt = previous == null ? 0 : now - previous;
+  const m = frontleverMetricsV94(pose);
+  const prevAt = adv.fl94LastAt;
+  let dt = prevAt == null ? 0 : now - prevAt;
 
-  if (dt < 0 || dt > FL92.maxGap) {
-    resetAdvanced();
+  if (!Number.isFinite(dt) || dt < 0 || dt > FL94.maxGap) {
+    resetFrontleverV94Hard();
     dt = 0;
   }
-  adv.last = now;
+  adv.fl94LastAt = now;
 
-  if (!m) {
+  if (!m || !m.valid) {
     adv.holdValid = false;
-    if (adv.holdBadSince == null) adv.holdBadSince = now;
+    adv.fl94GoodFrames = 0;
 
-    if (now - adv.holdBadSince > FL92.grace) {
+    if (adv.fl94BadSince == null) adv.fl94BadSince = now;
+
+    /* Un fallo corto del pose model no destruye un hold real.
+       Ese intervalo NO se suma al reloj. */
+    if (now - adv.fl94BadSince > FL94.grace) {
       adv.holdMs = 0;
       adv.credited = 0;
-      adv.holdStarted = null;
     }
 
-    if (adv.holdStarted == null) {
-      missingWarning(['el cuerpo completo en vista lateral']);
-    } else {
-      setStatus(
-        'Punto oculto brevemente; el reloj no suma ese intervalo.',
-        'warn'
-      );
-    }
-
+    const reason = frontleverReasonV94(m);
     $('advLive').textContent =
-      'Mantén el cuerpo completo visible. Se tolera una pérdida breve del detector.';
+      reason +
+      (now - adv.fl94BadSince <= FL94.grace
+        ? ' · tolerando pérdida breve de detección'
+        : ' · bloque reiniciado');
+
+    if (now - adv.fl94BadSince > 250) {
+      setStatus(reason,'warn');
+    }
     return;
   }
 
   markVisible();
+  adv.fl94BadSince = null;
+  adv.fl94GoodFrames = (adv.fl94GoodFrames || 0) + 1;
+
   updateMetrics(
     m.confidence,
-    m.arms[0],
-    m.front.horizontal,
-    'Horizontal',
+    m.arm.elbow,
+    Math.max(m.hip.torsoTilt,m.leg.legTilt),
+    'Inclinación',
     '°'
   );
 
-  if (!m.frontValid) {
-    adv.holdValid = false;
-    if (adv.holdBadSince == null) adv.holdBadSince = now;
-
-    if (now - adv.holdBadSince > FL92.grace) {
-      adv.holdMs = 0;
-      adv.credited = 0;
-      adv.holdStarted = null;
-    }
-
-    $('advLive').textContent =
-      frontleverReasonV92(m) +
-      (now - adv.holdBadSince <= FL92.grace
-        ? ' · margen breve de detección'
-        : ' · bloque reiniciado');
-    return;
-  }
-
-  if (adv.holdStarted == null) adv.holdStarted = now;
-  adv.holdBadSince = null;
-
-  /* Solo suma tiempo entre DOS muestras válidas consecutivas.
-     La tolerancia a ruido evita reiniciar, pero nunca regala tiempo. */
-  if (adv.holdValid && dt > 0 && dt <= FL92.maxGap) {
+  /* Dos frames buenos arman el hold; después solo se suma tiempo entre
+     muestras válidas consecutivas. */
+  if (adv.holdValid && dt > 0 && dt <= FL94.maxGap) {
     adv.holdMs += dt;
+  } else if (adv.fl94GoodFrames >= FL94.minFrames) {
+    adv.holdValid = true;
   }
-  adv.holdValid = true;
 
   const blocks = Math.floor(adv.holdMs / 5000);
+  const inBlock = adv.holdMs % 5000;
 
-  setProgress((adv.holdMs % 5000) / 50, 'Front lever hold');
+  setProgress(inBlock / 50,'Front lever');
   mProgress.textContent =
-    'Bloque: ' + ((adv.holdMs % 5000) / 1000).toFixed(1) + ' / 5 s';
+    'Hold válido: ' +
+    (adv.holdMs/1000).toFixed(1) +
+    ' s · siguiente bloque ' +
+    (inBlock/1000).toFixed(1) +
+    ' / 5 s';
 
   $('advLive').textContent =
-    (adv.holdMs / 1000).toFixed(1) +
-    ' s válidos continuos · tolerancia solo a ruido breve del detector';
+    (adv.holdMs/1000).toFixed(1) +
+    ' s válidos continuos';
 
   if (blocks > adv.credited) {
+    const newBlocks = blocks - adv.credited;
     adv.credited = blocks;
-    candidateAdvanced(5);
+
+    for (let i=0;i<newBlocks;i++) {
+      acceptAdvanced(
+        5,
+        'Front lever: 5 s válidos detectados automáticamente · provisional V9.4'
+      );
+    }
+
+    setStatus(
+      'Front lever válido · ' + (blocks*5) + ' s acreditados',
+      'ok'
+    );
   }
 }
 
-const judgeAdvancedV92 = judgeAdvanced;
+/* Intercepta front lever ANTES de la lógica antigua que emitía
+   “Muestra las articulaciones del ejercicio”. Los demás ejercicios, incluido
+   muscle-up V9.3, permanecen intactos. */
+const judgeAdvancedV94Base = judgeAdvanced;
 judgeAdvanced = function (pose, now = judgeTime()) {
   if (exerciseSelect.value === 'frontlever') {
-    return judgeFrontleverV92(pose, now);
+    return judgeFrontleverV94(pose,now);
   }
-  return judgeAdvancedV92(pose, now);
+  return judgeAdvancedV94Base(pose,now);
 };
 
-/* ---------- continuidad temporal para detectores lentos ---------- */
-const continuousPoseV92 = continuousPose;
-continuousPose = function (pose, t) {
-  if (!['muscleup', 'frontlever'].includes(exerciseSelect.value)) {
-    return continuousPoseV92(pose, t);
+/* La continuidad original de 350 ms era demasiado corta para un hold con
+   oclusiones de manos/piernas. Solo front lever recibe este margen. */
+const continuousPoseV94Base = continuousPose;
+continuousPose = function (pose,t) {
+  if (exerciseSelect.value !== 'frontlever') {
+    return continuousPoseV94Base(pose,t);
   }
 
   const item = poseDescriptor(pose);
   if (!item) return false;
 
   const prev = trackingSample;
-  trackingSample = { center: item.center, scale: item.scale, t };
+  trackingSample = {center:item.center,scale:item.scale,t};
 
   if (!prev) return true;
 
-  const dt = t - prev.t;
-  const ratio = item.scale / prev.scale;
+  const dt = t-prev.t;
+  const ratio = item.scale/prev.scale;
+
   if (dt <= 0) return false;
 
-  const maxGap =
-    exerciseSelect.value === 'muscleup'
-      ? MU92.maxGap
-      : FL92.maxGap;
-
-  if (dt > maxGap) {
-    if (!advPending) loseAttempt();
+  if (dt > FL94.maxGap) {
+    resetFrontleverV94Hard();
     return true;
   }
 
   return (
-    ratio > .40 &&
-    ratio < 2.4 &&
-    distance(item.center, prev.center) <
-      Math.max(item.scale, prev.scale) * 2.0
+    ratio > .36 &&
+    ratio < 2.6 &&
+    distance(item.center,prev.center) <
+      Math.max(item.scale,prev.scale)*2.25
   );
 };
 
-const trackingGapV92 = trackingGap;
+const trackingGapV94Base = trackingGap;
 trackingGap = function (message) {
-  const id = exerciseSelect.value;
-
-  if (!['muscleup', 'frontlever'].includes(id)) {
-    return trackingGapV92(message);
+  if (exerciseSelect.value !== 'frontlever') {
+    return trackingGapV94Base(message);
   }
-  if (advPending) return;
 
   const t = judgeTime();
-  const grace = id === 'muscleup' ? MU92.maxGap : FL92.maxGap;
-
   if (missingSince == null) missingSince = t;
+  if (adv.fl94BadSince == null) adv.fl94BadSince = t;
 
-  if (id === 'frontlever') {
-    adv.holdValid = false;
-    if (adv.holdBadSince == null) adv.holdBadSince = t;
+  adv.holdValid = false;
+  adv.fl94GoodFrames = 0;
 
-    if (t - adv.holdBadSince > FL92.grace) {
-      adv.holdMs = 0;
-      adv.credited = 0;
-      adv.holdStarted = null;
-    }
+  if (t-adv.fl94BadSince > FL94.grace) {
+    adv.holdMs = 0;
+    adv.credited = 0;
   }
 
-  if (t - missingSince > grace) {
-    loseAttempt();
+  if (t-missingSince > FL94.maxGap) {
+    resetFrontleverV94Hard();
     trackingSample = null;
   }
 
-  setStatus(message, 'warn');
+  setStatus(
+    'Pose parcial: mantén barra y cuerpo completo dentro del encuadre.',
+    'warn'
+  );
 };
 
-/* ---------- texto de estándar actualizado ---------- */
-ADVANCED.muscleup.rule =
-  'Suspensión con codo extendido → ascenso claro por encima del agarre → apoyo con extensión. Sin pausa obligatoria. V9.2 tolera muestreo lento y oclusiones breves; VAR conserva la revisión oficial.';
-
-ADVANCED.muscleup.guide =
-  'Vista frontal-oblicua o lateral-oblicua; muestra barra, hombros, codos y muñecas. Se usa un brazo coherente por ciclo y se toleran cambios de etiqueta izquierda/derecha.';
-
 ADVANCED.frontlever.rule =
-  'Cuerpo aproximadamente horizontal, codo ≥150°, rodilla ≥155° y cadera ≥150°. Cada 5 s válidos genera un bloque. El ruido breve del detector no reinicia el hold y ese intervalo no suma.';
+  'Hold horizontal con brazo extendido, cadera y rodilla extendidas. V9.4 evalúa brazo y línea corporal por grupos independientes para tolerar oclusiones 2D. Cada 5 s válidos se acreditan automáticamente como resultado provisional.';
 
 ADVANCED.frontlever.guide =
-  'Vista lateral; muestra barra y cuerpo completo. V9.2 usa el lado corporal con mejor proyección y tolera oclusiones breves sin unir holds separados.';
+  'Vista lateral. Mantén barra, hombros, cadera y al menos una pierna completa visibles. Si una muñeca o el lado lejano se ocultan brevemente, el hold no se reinicia de inmediato; ese tiempo oculto no se suma.';
 
 refreshAdvanced();
-</script>
 
+</script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
 
