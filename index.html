@@ -9887,6 +9887,205 @@ refreshAdvanced();
 })();
 </script>
 
+
+<script>
+/* ============================================================
+   V10.13 — FIX APERTURA CÁMARA / MODOS
+   Corrige regresión de V10.12 sin tocar validación de ejercicios.
+   ============================================================ */
+
+(() => {
+  const choose = document.getElementById('chooseCamera');
+  const setupBox = document.getElementById('v9Setup');
+  const stationSetup = document.getElementById('stationSetup');
+  const cameraToolsBox = document.getElementById('cameraTools');
+
+  if (!choose || !setupBox || !stationSetup || !cameraToolsBox) return;
+
+  /* 1) Restaurar la estructura DOM original.
+     El código antiguo espera v9Setup como hermano de chooseCamera. */
+  if (setupBox.parentElement?.id === 'circuitBuilder') {
+    choose.before(setupBox);
+  }
+
+  function selectedModeV1013() {
+    return document.querySelector(
+      'input[name="workoutMode"]:checked'
+    )?.value === 'circuit'
+      ? 'circuit'
+      : 'free';
+  }
+
+  function inInitialScreenV1013() {
+    return !stationSetup.hidden;
+  }
+
+  function effectiveModeV1013() {
+    /* En la pantalla inicial manda SIEMPRE el radio seleccionado.
+       Ya dentro de cámara sí usamos la sesión activa. */
+    if (inInitialScreenV1013()) return selectedModeV1013();
+    return circuit ? 'circuit' : 'free';
+  }
+
+  function competitionCompleteV1013() {
+    const meet = $('v9Meet')?.value.trim();
+    const test = $('v9Test')?.value.trim();
+    const athlete = $('v9Athlete')?.value.trim();
+    return !!(meet && test && athlete);
+  }
+
+  function disableEvidenceV1013(message='') {
+    if ($('v9Enabled')) $('v9Enabled').checked = false;
+    if ($('v9Fields')) $('v9Fields').hidden = true;
+
+    if (typeof config === 'object' && config) {
+      config.enabled = false;
+      try { saveConfig(); } catch (_) {}
+    }
+
+    if (message && $('setupMessage')) {
+      $('setupMessage').textContent = message;
+    }
+  }
+
+  function syncSetupV1013() {
+    const mode = effectiveModeV1013();
+    const circuitMode = mode === 'circuit';
+
+    document.body.dataset.workoutKind = mode;
+
+    /* Competencia y evidencia SOLO se ve al configurar Circuito. */
+    setupBox.hidden = !(
+      inInitialScreenV1013() &&
+      selectedModeV1013() === 'circuit'
+    );
+
+    if (
+      inInitialScreenV1013() &&
+      selectedModeV1013() === 'free'
+    ) {
+      disableEvidenceV1013();
+    }
+
+    /* Herramientas de cámara */
+    const historyBtn =
+      document.getElementById('v1012HistoryButton') ||
+      [...cameraToolsBox.querySelectorAll('button')].find(
+        b => /historial\s*\/?\s*var/i.test(b.textContent || '')
+      );
+
+    const freeRecordBtn =
+      document.getElementById('v1012FreeStartButton') ||
+      [...cameraToolsBox.querySelectorAll('button')].find(
+        b => /grabar nueva serie/i.test(b.textContent || '')
+      );
+
+    if (historyBtn) {
+      historyBtn.hidden = !circuitMode;
+      historyBtn.style.display = circuitMode ? '' : 'none';
+    }
+
+    if (freeRecordBtn) {
+      freeRecordBtn.hidden = true;
+      freeRecordBtn.style.display = 'none';
+    }
+
+    /* Etiqueta inequívoca */
+    if ($('resetCount')) {
+      $('resetCount').textContent =
+        circuitMode ? 'Reiniciar circuito' : 'Reiniciar contador';
+    }
+  }
+
+  /* 2) Corregir apertura.
+     Conservamos el handler completo anterior, pero saneamos el estado
+     ANTES de ejecutarlo para que la parte opcional de evidencia no bloquee. */
+  const previousChooseHandler = choose.onclick;
+
+  choose.onclick = function(ev) {
+    const selected = selectedModeV1013();
+
+    if (selected === 'free') {
+      /* Ejercicio libre nunca debe intentar validar datos de competencia. */
+      disableEvidenceV1013();
+    } else if (
+      $('v9Enabled')?.checked &&
+      !competitionCompleteV1013()
+    ) {
+      /* Evidencia es opcional: datos incompletos no deben impedir abrir cámara. */
+      disableEvidenceV1013(
+        'Cámara abierta sin evidencia de competencia. Completa los datos si quieres guardar VAR.'
+      );
+    }
+
+    try {
+      if (typeof previousChooseHandler === 'function') {
+        previousChooseHandler.call(this, ev);
+      }
+    } catch (err) {
+      console.error(err);
+      if ($('setupMessage')) {
+        $('setupMessage').textContent =
+          'No se pudo abrir el modo seleccionado. Intenta nuevamente.';
+      }
+      return;
+    }
+
+    /* Refuerzo tras todos los listeners heredados de V10.11/V10.12. */
+    setTimeout(syncSetupV1013, 0);
+  };
+
+  /* 3) Mientras estamos en setup, el radio seleccionado siempre manda. */
+  document
+    .querySelectorAll('input[name="workoutMode"]')
+    .forEach(radio => {
+      radio.addEventListener('change', () => {
+        setTimeout(syncSetupV1013, 0);
+      });
+    });
+
+  /* 4) Si volvemos a setup desde otra pantalla, resincronizar. */
+  const setupObserver = new MutationObserver(() => {
+    setTimeout(syncSetupV1013, 0);
+  });
+  setupObserver.observe(stationSetup, {
+    attributes: true,
+    attributeFilter: ['hidden']
+  });
+
+  /* 5) CSS de refuerzo sin reordenar DOM. */
+  const style = document.createElement('style');
+  style.textContent = `
+    body[data-workout-kind="free"] #v9Setup{
+      display:none!important;
+    }
+
+    body[data-workout-kind="free"] #v1012HistoryButton,
+    body[data-workout-kind="free"] #v1012FreeStartButton{
+      display:none!important;
+    }
+
+    #v1012FreeStartButton{
+      display:none!important;
+    }
+
+    /* Los dibujos internos de guía permanecen visibles. */
+    #positionPreview{
+      display:block;
+      width:100%;
+      height:auto;
+      max-height:48dvh;
+      object-fit:contain;
+    }
+  `;
+  document.head.appendChild(style);
+
+  syncSetupV1013();
+
+  document.title = 'Jueceo Calistenia AI · V10.13 Fix cámara';
+})();
+</script>
+
 </body>
 </html>
 
