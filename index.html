@@ -9163,6 +9163,443 @@ document.title='Jueceo Calistenia AI · V10.10 Lunges';
 refreshAdvanced();
 </script>
 
+
+<script>
+/* ============================================================
+   V10.11 — UX/UI CLEANUP
+   Solo interfaz y flujo. No modifica la lógica de validación.
+   ============================================================ */
+
+(() => {
+  const commonsImage = file =>
+    'https://commons.wikimedia.org/wiki/Special:Redirect/file/' +
+    encodeURIComponent(file) + '?width=900';
+
+  const commonsPage = file =>
+    'https://commons.wikimedia.org/wiki/File:' + encodeURIComponent(file);
+
+  const QUICK_GUIDE = {
+    pushup: {
+      camera: 'Lateral u oblicua · cuerpo completo visible.',
+      valid: 'Brazos extendidos → baja con codo ~90° → vuelve arriba.',
+      image: 'Airman executing a push-up as part of the United States Air Force Fitness Test.jpg'
+    },
+    dip: {
+      camera: 'Lateral u oblicua · hombro, codo y muñeca visibles.',
+      valid: 'Extensión arriba → baja cerca de 90° → vuelve a extensión.',
+      image: 'Fitness Through the Holidays DVIDS346620.jpg'
+    },
+    pullup: {
+      camera: 'Frontal-oblicua · barra, manos, cara y un brazo completo.',
+      valid: 'Extensión abajo → cabeza llega a la altura de las manos → vuelve abajo.',
+      image: 'Marine Pull-ups.jpg'
+    },
+    squat: {
+      camera: 'Lateral u oblicua · cadera, rodilla y tobillo visibles.',
+      valid: 'De pie → cadera al nivel o debajo de rodilla → vuelve arriba.',
+      image: 'Squatting.jpg'
+    },
+    muscleup: {
+      camera: 'Lateral-oblicua 20–30° · barra y brazos completos.',
+      valid: 'Suspensión → pasa sobre la barra → extensión arriba.',
+      image: 'MUSCLE UP.jpg'
+    },
+    frontlever: {
+      camera: 'Lateral 90° · barra y cuerpo completo.',
+      valid: 'Mantén el cuerpo horizontal con brazos extendidos.',
+      image: 'Front lever - Serhii Solodkyi 18280.jpg'
+    },
+    handstand: {
+      camera: 'Lateral-oblicua · manos y cuerpo completo.',
+      valid: 'Mantente invertido sobre las manos; no exige línea perfecta.',
+      image: 'Guy doing handstand.jpg'
+    },
+    hspu: {
+      camera: 'Lateral u oblicua · hombro, codo y muñeca visibles.',
+      valid: 'Extensión → baja → vuelve a extensión.',
+      image: 'Handstand pushup.jpg'
+    },
+    onearmpullup: {
+      camera: 'Frontal-oblicua 30–45° · brazo de trabajo y cara visibles.',
+      valid: 'Extensión a un brazo → cabeza llega a la mano/barra → vuelve abajo.',
+      image: 'Onearmpullup.gif'
+    },
+    lunge: {
+      camera: 'Lateral u oblicua · ambas piernas visibles.',
+      valid: 'Paso adelante o atrás → rodilla y cadera ~90° → vuelve arriba.',
+      image: 'Girl doing lunges.jpg'
+    },
+    burpee: {
+      camera: 'Lateral-oblicua · cuerpo completo de manos a pies.',
+      valid: 'Fondo → recuperación → salto claro + manos sobre hombros.',
+      image: 'Airborne Burpee.jpg'
+    },
+    boxjump: {
+      camera: 'Lateral-oblicua · caja y ambos pies completos.',
+      valid: 'Salto → ambos pies en caja → extensión arriba.',
+      image: 'Capt. Jacob Lopez demonstrates a box jump at Joint Base Balad.jpg'
+    },
+    squatboxjump: {
+      camera: 'Lateral-oblicua · cuerpo, suelo y caja completos.',
+      valid: 'Sentadilla profunda → salto a caja → extensión arriba.',
+      image: 'Capt. Jacob Lopez demonstrates a box jump at Joint Base Balad.jpg'
+    },
+    pistolsquat: {
+      camera: 'Lateral u oblicua · pierna de apoyo completa.',
+      valid: 'Una pierna → profundidad → vuelve a extensión; la libre no apoya.',
+      image: 'Pistol squat.jpg'
+    }
+  };
+
+  /* ---------- Guía rápida y visual ---------- */
+  const oldGeneric = [...guideDialog.querySelectorAll('p')].find(
+    p => !p.id && p.textContent.includes('tolerancias de visión 2D')
+  );
+  if (oldGeneric) oldGeneric.hidden = true;
+
+  if ($('advAuto')) {
+    $('advAuto').checked = true; // auto-conteo queda como comportamiento, no opción visible.
+    if ($('advAuto').parentElement) $('advAuto').parentElement.hidden = true;
+  }
+
+  if ($('exportJudge')) $('exportJudge').hidden = true;
+  if ($('positionPreview')) $('positionPreview').hidden = true;
+
+  /* Oculta cualquier segundo botón de descarga creado por versiones previas. */
+  document.querySelectorAll('button').forEach(btn => {
+    if (/descargar posición inicial/i.test(btn.textContent || '')) btn.hidden = true;
+  });
+
+  let reference = $('guideReference');
+  if (!reference) {
+    reference = document.createElement('figure');
+    reference.id = 'guideReference';
+    reference.innerHTML = `
+      <div id="guidePhotoWrap">
+        <img id="guidePhoto" alt="" loading="lazy" decoding="async">
+        <div id="guidePhotoFallback" hidden>Referencia visual no disponible.</div>
+      </div>
+      <figcaption>
+        <strong id="guideAngle"></strong>
+        <a id="guidePhotoSource" target="_blank" rel="noopener noreferrer">Referencia visual · Wikimedia Commons</a>
+      </figcaption>`;
+    guideDialog.insertBefore(reference, $('advGuide'));
+  }
+
+  const guidePhoto = $('guidePhoto');
+  const guideSource = $('guidePhotoSource');
+
+  function currentExerciseName(id) {
+    return EXERCISES[id]?.name || ADVANCED[id]?.name || id;
+  }
+
+  function updateGuideUX() {
+    const id = exerciseSelect.value;
+    const q = QUICK_GUIDE[id];
+    if (!q) return;
+
+    $('guideTitle').textContent = currentExerciseName(id) + ' · guía rápida';
+    $('advGuide').textContent = 'Cámara · ' + q.camera;
+    $('advRule').textContent = 'Rep válida · ' + q.valid;
+
+    $('advGuide').className = 'guideQuickLine';
+    $('advRule').className = 'guideQuickLine';
+
+    $('guideAngle').textContent = q.camera;
+    guidePhoto.alt =
+      'Referencia realista del ángulo recomendado para ' + currentExerciseName(id);
+    guidePhoto.hidden = false;
+    $('guidePhotoFallback').hidden = true;
+
+    if ($('positionPreview')) $('positionPreview').hidden = true;
+
+    guidePhoto.onload = () => {
+      guidePhoto.hidden = false;
+      $('guidePhotoFallback').hidden = true;
+      if ($('positionPreview')) $('positionPreview').hidden = true;
+    };
+
+    guidePhoto.onerror = () => {
+      guidePhoto.hidden = true;
+      $('guidePhotoFallback').hidden = true;
+      if ($('positionPreview')) {
+        $('positionPreview').hidden = false;
+        try {
+          drawInitialIllustration($('positionPreview'), id);
+        } catch (_) {
+          $('guidePhotoFallback').hidden = false;
+        }
+      } else {
+        $('guidePhotoFallback').hidden = false;
+      }
+    };
+
+    guidePhoto.src = commonsImage(q.image);
+    guideSource.href = commonsPage(q.image);
+
+    /* Auto-conteo fuera de la interfaz, pero siempre activo. */
+    if ($('advAuto')) {
+      $('advAuto').checked = true;
+      if ($('advAuto').parentElement) $('advAuto').parentElement.hidden = true;
+    }
+
+    /* Calibración visible solo cuando realmente se necesita. */
+    const needsBoxCalibration = id === 'boxjump' || id === 'squatboxjump';
+    if ($('calFloor')) {
+      $('calFloor').hidden = !needsBoxCalibration;
+      $('calFloor').textContent = 'Calibrar suelo';
+    }
+    if ($('calBox')) {
+      $('calBox').hidden = !needsBoxCalibration;
+      $('calBox').textContent = 'Calibrar caja';
+    }
+    if ($('calState')) $('calState').hidden = !needsBoxCalibration;
+  }
+
+  /* La guía ahora está disponible también para ejercicios básicos. */
+  const refreshAdvancedV1011 = refreshAdvanced;
+  refreshAdvanced = function () {
+    refreshAdvancedV1011();
+    if (typeof openGuide !== 'undefined') openGuide.hidden = false;
+    updateGuideUX();
+    syncModeUX();
+  };
+
+  openGuide.textContent = 'Guía';
+  openGuide.setAttribute('aria-label', 'Abrir guía rápida del ejercicio');
+  openGuide.title = 'Guía rápida';
+  openGuide.onclick = () => {
+    updateGuideUX();
+    if (!guideDialog.open) guideDialog.showModal();
+  };
+
+  exerciseSelect.addEventListener('change', updateGuideUX);
+
+  /* ---------- Cámara / ejercicio libre ---------- */
+  if ($('guide')) $('guide').hidden = true;
+
+  function setResetLabel() {
+    if ($('resetCount')) {
+      $('resetCount').textContent = circuit ? 'Reiniciar circuito' : 'Reiniciar contador';
+    }
+  }
+
+  /* ---------- Competencia solo en Circuito ---------- */
+  function isCircuitSelected() {
+    return document.querySelector('input[name="workoutMode"]:checked')?.value === 'circuit';
+  }
+
+  function derivedAthleteId(name) {
+    const s = (name || '').trim().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return s || 'atleta';
+  }
+
+  function syncParticipantDerived() {
+    if (!$('v9Athlete')) return;
+    if ($('v9AthleteId')) $('v9AthleteId').value = derivedAthleteId($('v9Athlete').value);
+    if ($('v9Round')) $('v9Round').value = 'Circuito';
+    if ($('v9Attempt')) $('v9Attempt').value = '1';
+  }
+
+  /* Conserva los campos internamente para compatibilidad con historial,
+     pero los elimina de la interfaz. */
+  ['v9AthleteId', 'v9Round', 'v9Attempt'].forEach(id => {
+    const input = $(id);
+    if (input?.closest('label')) input.closest('label').hidden = true;
+  });
+
+  if ($('v9Athlete')) {
+    const label = $('v9Athlete').closest('label');
+    if (label?.firstChild?.nodeType === Node.TEXT_NODE) {
+      label.firstChild.nodeValue = 'Nombre completo del atleta';
+    }
+    $('v9Athlete').placeholder = 'Nombre y apellidos';
+    $('v9Athlete').addEventListener('input', () => {
+      syncParticipantDerived();
+      try { readSetup(); } catch (_) {}
+    });
+  }
+
+  /* Evita que las funciones antiguas requieran ID/ronda/intento visibles. */
+  const readSetupV1011 = readSetup;
+  readSetup = function () {
+    syncParticipantDerived();
+    return readSetupV1011();
+  };
+
+  validateParticipant = function () {
+    syncParticipantDerived();
+    readSetup();
+    if (!config.meet || !config.test || !config.athlete) {
+      throw new Error('Completa competencia, prueba y nombre completo del atleta.');
+    }
+  };
+
+  /* Texto más corto en la tarjeta de competencia. */
+  const setupSmall = setup.querySelector('.v9-small');
+  if (setupSmall) {
+    setupSmall.textContent =
+      'En circuito, guarda video y resultado provisional para revisión posterior.';
+  }
+
+  function syncCompetitionSetup() {
+    const circuitMode = isCircuitSelected();
+    setup.hidden = !circuitMode;
+
+    if (!circuitMode && $('v9Enabled')) {
+      $('v9Enabled').checked = false;
+      config.enabled = false;
+      if ($('v9Fields')) $('v9Fields').hidden = true;
+      try { saveConfig(); } catch (_) {}
+    }
+
+    syncParticipantDerived();
+  }
+
+  document.querySelectorAll('input[name="workoutMode"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      queueMicrotask(() => {
+        syncCompetitionSetup();
+        syncModeUX();
+      });
+    });
+  });
+
+  /* ---------- Controles visibles según modo ---------- */
+  function syncModeUX() {
+    const inCircuit = !!circuit || isCircuitSelected();
+
+    setResetLabel();
+
+    if (typeof chooseAthlete !== 'undefined') {
+      chooseAthlete.hidden = !inCircuit;
+    }
+    if (typeof historyButton !== 'undefined') {
+      historyButton.hidden = !inCircuit;
+    }
+    if (typeof freeStart !== 'undefined') {
+      /* El circuito ya inicia evidencia con su propio flujo.
+         En ejercicio libre se elimina por solicitud de UX. */
+      freeStart.hidden = true;
+    }
+
+    if ($('guide')) $('guide').hidden = true;
+
+    if ($('advAuto')?.parentElement) $('advAuto').parentElement.hidden = true;
+  }
+
+  /* Después de abrir cámara, circuit ya quedó resuelto. */
+  $('chooseCamera')?.addEventListener('click', () => {
+    setTimeout(syncModeUX, 0);
+  });
+
+  const renderPhoneCircuitV1011 = renderPhoneCircuit;
+  renderPhoneCircuit = function () {
+    renderPhoneCircuitV1011();
+    syncModeUX();
+  };
+
+  /* ---------- Historial ---------- */
+  if ($('v9HistoryActions')) {
+    [...$('v9HistoryActions').querySelectorAll('button')].forEach(btn => {
+      if (/importar evidencia json/i.test(btn.textContent || '')) btn.remove();
+    });
+  }
+
+  /* ---------- Limpieza visual ---------- */
+  const uxStyle = document.createElement('style');
+  uxStyle.textContent = `
+    #guide{display:none!important}
+
+    #guideDialog{
+      width:min(560px,calc(100vw - 20px));
+      padding:14px;
+    }
+    #guideDialog #advGuide,
+    #guideDialog #advRule{
+      margin:8px 0;
+      padding:10px 12px;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:12px;
+      background:#0c1420;
+      color:#eef4fb;
+      font-size:13px;
+      line-height:1.35;
+    }
+    #guideReference{
+      margin:4px 0 12px;
+    }
+    #guidePhotoWrap{
+      width:100%;
+      aspect-ratio:16/9;
+      background:#05080d;
+      border:1px solid #394353;
+      border-radius:14px;
+      overflow:hidden;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    #guidePhoto{
+      display:block;
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      background:#05080d;
+    }
+    #guidePhotoFallback{
+      color:var(--muted);
+      padding:18px;
+      text-align:center;
+    }
+    #guideReference figcaption{
+      display:flex;
+      flex-direction:column;
+      gap:3px;
+      margin-top:7px;
+      font-size:11px;
+      color:var(--muted);
+    }
+    #guideReference figcaption strong{
+      color:#f3f7fb;
+      font-size:12px;
+    }
+    #guideReference a{
+      color:#86c7ff;
+      text-decoration:none;
+    }
+    #positionPreview{
+      margin:4px 0 12px!important;
+      border-radius:14px!important;
+    }
+
+    #v9Setup[hidden]{display:none!important}
+
+    /* Campos internos conservados solo por compatibilidad de datos. */
+    label:has(#v9AthleteId),
+    label:has(#v9Round),
+    label:has(#v9Attempt){
+      display:none!important;
+    }
+
+    /* Evita que controles removidos reaparezcan por estilos antiguos. */
+    #advAuto{display:none!important}
+    #exportJudge{display:none!important}
+  `;
+  document.head.append(uxStyle);
+
+  syncCompetitionSetup();
+  syncModeUX();
+  updateGuideUX();
+  setResetLabel();
+
+  document.title = 'Jueceo Calistenia AI · V10.11 UX';
+})();
+</script>
+
 </body>
 </html>
 
