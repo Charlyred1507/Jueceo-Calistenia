@@ -322,7 +322,7 @@ function judge(pose){expireCircuit();if(circuit&&circuit.state!=='active'){setSt
 const CIRCUIT_NAMES={pushup:'Push-ups',dip:'Dips / fondos',pullup:'Pull-ups',squat:'Squats'};let circuit=null,controlRevision=0,remoteCircuit=null,circuitDraft=[{exercise:'pushup',target:20},{exercise:'dip',target:20},{exercise:'pullup',target:20}];
 function renderBuilder(){$('circuitRows').replaceChildren();circuitDraft.forEach((item,index)=>{const row=document.createElement('div');row.className='stageRow';const l=document.createElement('label');l.textContent='Ejercicio '+(index+1);const sel=document.createElement('select');Object.entries(CIRCUIT_NAMES).forEach(([value,name])=>{const o=document.createElement('option');o.value=value;o.textContent=name;sel.append(o)});sel.value=item.exercise;sel.onchange=()=>{item.exercise=sel.value;updateBuilderTotal()};l.append(sel);const tl=document.createElement('label');tl.textContent='Reps';const input=document.createElement('input');input.type='number';input.min='1';input.max='500';input.step='1';input.inputMode='numeric';input.value=item.target;input.oninput=()=>{item.target=Number(input.value);updateBuilderTotal()};tl.append(input);const actions=document.createElement('div');actions.className='rowActions';const add=(text,disabled,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=text;b.disabled=disabled;b.onclick=fn;actions.append(b)};add('↑',index===0,()=>{[circuitDraft[index-1],circuitDraft[index]]=[item,circuitDraft[index-1]];renderBuilder()});add('↓',index===circuitDraft.length-1,()=>{[circuitDraft[index+1],circuitDraft[index]]=[item,circuitDraft[index+1]];renderBuilder()});add('Eliminar',circuitDraft.length===1,()=>{circuitDraft.splice(index,1);renderBuilder()});row.append(l,tl,actions);$('circuitRows').append(row)});$('addStage').disabled=circuitDraft.length>=8;updateBuilderTotal()}
 function validCircuitPlan(plan,rounds){return Array.isArray(plan)&&plan.length>=1&&plan.length<=8&&Number.isInteger(rounds)&&rounds>=1&&rounds<=20&&plan.every(x=>Object.hasOwn(CIRCUIT_NAMES,x.exercise)&&Number.isInteger(x.target)&&x.target>=1&&x.target<=500)}function updateBuilderTotal(){const rounds=Number($('roundsInput').value);$('builderTotal').textContent=validCircuitPlan(circuitDraft,rounds)?circuitDraft.reduce((a,x)=>a+x.target,0)*rounds+' reps en total · '+rounds+' ronda(s)':'Usa 1–500 reps por ejercicio y 1–20 rondas.'}function circuitGoal(){return circuit?.plan[circuit.index]?.target??Infinity}function circuitView(){if(!circuit)return null;const{plan,index,round,rounds,state,completed}=circuit,nextIndex=index+1<plan.length?index+1:0,hasNext=index+1<plan.length||round<rounds;return{state,capMs:circuit.capMs,remainingMs:Math.max(0,circuit.capMs-circuitElapsed()),elapsedMs:circuitElapsed(),clockStarted:circuit.startedAt!==null,revision:controlRevision,index,round,rounds,target:plan[index].target,total:completed.reduce((n,x)=>n+x.reps,0)+(state==='transition'||state==='complete'||circuit.expiredFrom==='transition'?0:reps),goal:plan.reduce((n,x)=>n+x.target,0)*rounds,next:state==='complete'?'':hasNext?CIRCUIT_NAMES[plan[nextIndex].exercise]+' · '+plan[nextIndex].target+' reps':'Última estación',steps:plan.map((x,i)=>({name:CIRCUIT_NAMES[x.exercise],target:x.target,count:i<index?x.target:i===index?reps:0,current:i===index})),canStart:running&&!document.hidden}}function circuitMessage(v){if(!v)return'';if(v.state==='timecap')return `⏱ Timecap terminado. ${v.total} de ${v.goal} reps válidas. Resultado cerrado.`;if(v.state==='complete')return`✅ Circuito completado. ${v.total} de ${v.goal} reps válidas.`;if(v.state==='transition')return'✅ Meta completada. Prepara la siguiente estación; el conteo está detenido.';if(v.state==='ready')return'Ajusta la cámara y pulsa Iniciar estación. Después adopta la posición inicial.';if(v.state==='paused')return'⏸ Circuito en pausa. Al reanudar, retoma la posición inicial.';return''}function actionLabel(v){return v.state==='transition'?'Preparar siguiente':v.state==='paused'?'Reanudar':'Iniciar estación'}
-function renderPhoneCircuit(){const v=circuitView();renderClock('phone',v);$('phoneCircuit').hidden=!v;exerciseSelect.disabled=!!v;$('repLabel').textContent=v?'de '+v.target+' reps':'reps';$('resetCount').textContent=v?'Reiniciar circuito':'Reiniciar';if(!v)return;$('phoneRound').textContent=`Ronda ${v.round}/${v.rounds} · Estación ${v.index+1}/${v.steps.length}`;$('phoneTotal').textContent=v.state==='timecap'?'Timecap terminado':v.state==='complete'?'Circuito completado':`${v.total} / ${v.goal} reps totales`;$('phoneProgress').max=v.goal;$('phoneProgress').value=v.total;$('phoneNext').textContent=v.state==='timecap'?'Resultado cerrado · reinicia para volver a intentar':v.state==='complete'?'Todas las metas alcanzadas':'Siguiente: '+v.next;$('phoneAction').textContent=actionLabel(v);$('phoneAction').hidden=['active','complete','timecap'].includes(v.state);$('phoneAction').disabled=!v.canStart;$('phonePause').hidden=v.state!=='active'}
+function renderPhoneCircuit(){const v=circuitView();renderClock('phone',v);$('phoneCircuit').hidden=!v;exerciseSelect.disabled=!!v;$('repLabel').textContent=v?'de '+v.target+' reps':'reps';$('resetCount').textContent=v?'Reiniciar circuito':'Reiniciar contador';if(!v)return;$('phoneRound').textContent=`Ronda ${v.round}/${v.rounds} · Estación ${v.index+1}/${v.steps.length}`;$('phoneTotal').textContent=v.state==='timecap'?'Timecap terminado':v.state==='complete'?'Circuito completado':`${v.total} / ${v.goal} reps totales`;$('phoneProgress').max=v.goal;$('phoneProgress').value=v.total;$('phoneNext').textContent=v.state==='timecap'?'Resultado cerrado · reinicia para volver a intentar':v.state==='complete'?'Todas las metas alcanzadas':'Siguiente: '+v.next;$('phoneAction').textContent=actionLabel(v);$('phoneAction').hidden=['active','complete','timecap'].includes(v.state);$('phoneAction').disabled=!v.canStart;$('phonePause').hidden=v.state!=='active'}
 function createCircuit(plan,rounds,capMs=0){if(!validCircuitPlan(plan,rounds)||!Number.isSafeInteger(capMs)||capMs<0||capMs>10800000)return false;circuit={plan:plan.map(x=>({...x})),rounds,round:1,index:0,state:'ready',completed:[],capMs,startedAt:null,startedMono:null,elapsedMs:0,finalElapsed:null};controlRevision++;exerciseSelect.value=circuit.plan[0].exercise;resetJudge();return true}function circuitControl(action,revision=controlRevision){if(expireCircuit())return false;if(!circuit||revision!==controlRevision)return false;if(action==='pause'&&circuit.state==='active')circuit.state='paused';else if(action==='advance'&&circuit.state==='transition'){if(circuit.index+1<circuit.plan.length)circuit.index++;else{circuit.index=0;circuit.round++}circuit.state='ready';exerciseSelect.value=circuit.plan[circuit.index].exercise;resetJudge()}else if(action==='start'&&['ready','paused'].includes(circuit.state)&&running&&!document.hidden){circuit.state='active';if(circuit.startedAt===null){circuit.startedAt=Date.now();circuit.startedMono=performance.now()}}else return false;controlRevision++;poseEpoch++;loseAttempt();latestEvent=null;renderPhoneCircuit();setStatus(circuitMessage(circuitView())||'🟢 Retoma la posición inicial.','info');broadcast();return true}function circuitRepAccepted(){if(!circuit)return;if(reps>=circuitGoal()){reps=circuitGoal();repNum.textContent=String(reps);circuit.completed.push({round:circuit.round,index:circuit.index,exercise:exerciseSelect.value,reps});circuit.state=circuit.index===circuit.plan.length-1&&circuit.round===circuit.rounds?'complete':'transition';if(circuit.state==='complete')circuit.finalElapsed=circuitElapsed();controlRevision++;poseEpoch++;setStatus(circuitMessage(circuitView()),'ok');if(latestEvent)latestEvent.message=circuit.state==='complete'?'CIRCUITO COMPLETADO':'META COMPLETADA'}renderPhoneCircuit();broadcast()}
 function renderScoreCircuit(v){remoteCircuit=v;remoteClockAt=performance.now();renderClock('score',v);$('scoreCircuit').hidden=!v;$('scoreAction').hidden=!v||['active','complete','timecap'].includes(v.state);$('scorePause').hidden=!v||v.state!=='active';$('scoreRound').textContent=v?`Ronda ${v.round}/${v.rounds} · Estación ${v.index+1}/${v.steps.length}`:'';$('scoreTarget').textContent=v?(['complete','timecap'].includes(v.state)?'REPETICIONES TOTALES':'DE '+v.target+' REPETICIONES'):'REPETICIONES';if(!v)return;$('scoreAction').textContent=actionLabel(v);$('scoreAction').disabled=!v.canStart;$('scorePause').disabled=false;$('scoreTotal').textContent=`${v.total} / ${v.goal} reps totales`;$('scoreNext').textContent=v.state==='timecap'?'Resultado cerrado · reinicia para volver a intentar':v.state==='complete'?'Todas las metas alcanzadas':'Siguiente: '+v.next;$('scoreProgress').max=v.goal;$('scoreProgress').value=v.total;$('scoreStages').replaceChildren();v.steps.forEach(x=>{const li=document.createElement('li');li.textContent=(x.count===x.target?'✓ ':x.current?'Actual · ':'')+x.name+' · '+x.count+'/'+x.target;if(x.current)li.className='current';$('scoreStages').append(li)});if(['complete','timecap'].includes(v.state)){$('scoreCount').textContent=String(v.total);$('scoreExercise').textContent=v.state==='timecap'?'Timecap terminado':'Circuito completado'}}function validRemoteCircuit(v){return v===null||(v&&(v.capMs===undefined||(Number.isSafeInteger(v.capMs)&&v.capMs>=0&&v.capMs<=10800000&&Number.isFinite(v.remainingMs)&&v.remainingMs>=0&&v.remainingMs<=v.capMs&&Number.isFinite(v.elapsedMs)&&v.elapsedMs>=0&&typeof v.clockStarted==='boolean'))&&['ready','active','paused','transition','complete','timecap'].includes(v.state)&&Number.isSafeInteger(v.revision)&&Number.isSafeInteger(v.round)&&Number.isSafeInteger(v.rounds)&&v.round>=1&&v.round<=v.rounds&&v.rounds<=20&&Number.isSafeInteger(v.index)&&Array.isArray(v.steps)&&v.steps.length>=1&&v.steps.length<=8&&v.index>=0&&v.index<v.steps.length&&Number.isSafeInteger(v.target)&&v.target>=1&&v.target<=500&&Number.isSafeInteger(v.goal)&&v.goal>=1&&v.goal<=80000&&Number.isSafeInteger(v.total)&&v.total>=0&&v.total<=v.goal&&typeof v.next==='string'&&typeof v.canStart==='boolean'&&v.steps.every(x=>typeof x.name==='string'&&Number.isSafeInteger(x.target)&&Number.isSafeInteger(x.count)))}
 function sendCircuitCommand(action){if(!remoteCircuit||!connection?.open)return;PEER_PROTOCOLS.forEach(version=>{try{connection.send({kind:'control',version,session,action,revision:remoteCircuit.revision})}catch(_){}})}function receiveCircuitCommand(s){if(!s||!PEER_PROTOCOLS.includes(s.version)||s.kind!=='control'||s.session!==session||!Number.isSafeInteger(s.revision)||!['start','pause','advance'].includes(s.action))return;circuitControl(s.action,s.revision)}
@@ -9166,228 +9166,47 @@ refreshAdvanced();
 
 <script>
 /* ============================================================
-   V10.11 — UX/UI CLEANUP
-   Solo interfaz y flujo. No modifica la lógica de validación.
+   V10.15 — UI/UX SOBRE BASE ESTABLE V10.10
+   IMPORTANTE:
+   - NO reemplaza start()
+   - NO reemplaza startReferenceClip()
+   - NO mueve ni elimina nodos usados por cámara/video
+   - Solo modifica visibilidad, textos y guía
    ============================================================ */
 
 (() => {
-  const commonsImage = file =>
-    'https://commons.wikimedia.org/wiki/Special:Redirect/file/' +
-    encodeURIComponent(file) + '?width=900';
-
-  const commonsPage = file =>
-    'https://commons.wikimedia.org/wiki/File:' + encodeURIComponent(file);
-
   const QUICK_GUIDE = {
-    pushup: {
-      camera: 'Lateral u oblicua · cuerpo completo visible.',
-      valid: 'Brazos extendidos → baja con codo ~90° → vuelve arriba.',
-      image: 'Airman executing a push-up as part of the United States Air Force Fitness Test.jpg'
-    },
-    dip: {
-      camera: 'Lateral u oblicua · hombro, codo y muñeca visibles.',
-      valid: 'Extensión arriba → baja cerca de 90° → vuelve a extensión.',
-      image: 'Fitness Through the Holidays DVIDS346620.jpg'
-    },
-    pullup: {
-      camera: 'Frontal-oblicua · barra, manos, cara y un brazo completo.',
-      valid: 'Extensión abajo → cabeza llega a la altura de las manos → vuelve abajo.',
-      image: 'Marine Pull-ups.jpg'
-    },
-    squat: {
-      camera: 'Lateral u oblicua · cadera, rodilla y tobillo visibles.',
-      valid: 'De pie → cadera al nivel o debajo de rodilla → vuelve arriba.',
-      image: 'Squatting.jpg'
-    },
-    muscleup: {
-      camera: 'Lateral-oblicua 20–30° · barra y brazos completos.',
-      valid: 'Suspensión → pasa sobre la barra → extensión arriba.',
-      image: 'MUSCLE UP.jpg'
-    },
-    frontlever: {
-      camera: 'Lateral 90° · barra y cuerpo completo.',
-      valid: 'Mantén el cuerpo horizontal con brazos extendidos.',
-      image: 'Front lever - Serhii Solodkyi 18280.jpg'
-    },
-    handstand: {
-      camera: 'Lateral-oblicua · manos y cuerpo completo.',
-      valid: 'Mantente invertido sobre las manos; no exige línea perfecta.',
-      image: 'Guy doing handstand.jpg'
-    },
-    hspu: {
-      camera: 'Lateral u oblicua · hombro, codo y muñeca visibles.',
-      valid: 'Extensión → baja → vuelve a extensión.',
-      image: 'Handstand pushup.jpg'
-    },
-    onearmpullup: {
-      camera: 'Frontal-oblicua 30–45° · brazo de trabajo y cara visibles.',
-      valid: 'Extensión a un brazo → cabeza llega a la mano/barra → vuelve abajo.',
-      image: 'Onearmpullup.gif'
-    },
-    lunge: {
-      camera: 'Lateral u oblicua · ambas piernas visibles.',
-      valid: 'Paso adelante o atrás → rodilla y cadera ~90° → vuelve arriba.',
-      image: 'Girl doing lunges.jpg'
-    },
-    burpee: {
-      camera: 'Lateral-oblicua · cuerpo completo de manos a pies.',
-      valid: 'Fondo → recuperación → salto claro + manos sobre hombros.',
-      image: 'Airborne Burpee.jpg'
-    },
-    boxjump: {
-      camera: 'Lateral-oblicua · caja y ambos pies completos.',
-      valid: 'Salto → ambos pies en caja → extensión arriba.',
-      image: 'Capt. Jacob Lopez demonstrates a box jump at Joint Base Balad.jpg'
-    },
-    squatboxjump: {
-      camera: 'Lateral-oblicua · cuerpo, suelo y caja completos.',
-      valid: 'Sentadilla profunda → salto a caja → extensión arriba.',
-      image: 'Capt. Jacob Lopez demonstrates a box jump at Joint Base Balad.jpg'
-    },
-    pistolsquat: {
-      camera: 'Lateral u oblicua · pierna de apoyo completa.',
-      valid: 'Una pierna → profundidad → vuelve a extensión; la libre no apoya.',
-      image: 'Pistol squat.jpg'
-    }
+    pushup: ['Lateral u oblicua · cuerpo completo visible.',
+      'Extensión → baja cerca de 90° → vuelve arriba.'],
+    dip: ['Lateral u oblicua · hombro, codo y muñeca visibles.',
+      'Extensión → baja cerca de 90° → vuelve arriba.'],
+    pullup: ['Frontal-oblicua · barra, manos, cara y brazo visibles.',
+      'Extensión abajo → cabeza a la altura de las manos → vuelve abajo.'],
+    squat: ['Lateral u oblicua · cadera, rodilla y tobillo visibles.',
+      'Cadera al nivel o debajo de rodilla → vuelve arriba.'],
+    muscleup: ['Lateral-oblicua · barra y brazos completos.',
+      'Suspensión → pasa sobre la barra → extensión arriba.'],
+    frontlever: ['Lateral · barra y cuerpo completo.',
+      'Mantén el cuerpo horizontal con brazos extendidos.'],
+    handstand: ['Lateral-oblicua · manos y cuerpo completo.',
+      'Mantente invertido sobre las manos.'],
+    hspu: ['Lateral u oblicua · hombro, codo y muñeca visibles.',
+      'Extensión → baja → vuelve a extensión.'],
+    onearmpullup: ['Frontal-oblicua · brazo de trabajo y cara visibles.',
+      'Extensión → cabeza llega a mano/barra → vuelve abajo.'],
+    lunge: ['Lateral u oblicua · ambas piernas visibles.',
+      'Paso adelante o atrás → rodilla y cadera ~90° → vuelve arriba.'],
+    burpee: ['Lateral-oblicua · cuerpo completo.',
+      'Fondo + salto claro + manos sobre hombros.'],
+    boxjump: ['Lateral-oblicua · caja y ambos pies visibles.',
+      'Salto → ambos pies en caja → extensión arriba.'],
+    squatboxjump: ['Lateral-oblicua · cuerpo, suelo y caja visibles.',
+      'Sentadilla → salto a caja → extensión arriba.'],
+    pistolsquat: ['Lateral u oblicua · pierna de apoyo completa.',
+      'Profundidad en una pierna → vuelve a extensión.']
   };
 
-  /* ---------- Guía rápida y visual ---------- */
-  const oldGeneric = [...guideDialog.querySelectorAll('p')].find(
-    p => !p.id && p.textContent.includes('tolerancias de visión 2D')
-  );
-  if (oldGeneric) oldGeneric.hidden = true;
-
-  if ($('advAuto')) {
-    $('advAuto').checked = true; // auto-conteo queda como comportamiento, no opción visible.
-    if ($('advAuto').parentElement) $('advAuto').parentElement.hidden = true;
-  }
-
-  if ($('exportJudge')) $('exportJudge').hidden = true;
-  if ($('positionPreview')) $('positionPreview').hidden = true;
-
-  /* Oculta cualquier segundo botón de descarga creado por versiones previas. */
-  document.querySelectorAll('button').forEach(btn => {
-    if (/descargar posición inicial/i.test(btn.textContent || '')) btn.hidden = true;
-  });
-
-  let reference = $('guideReference');
-  if (!reference) {
-    reference = document.createElement('figure');
-    reference.id = 'guideReference';
-    reference.innerHTML = `
-      <div id="guidePhotoWrap">
-        <img id="guidePhoto" alt="" loading="lazy" decoding="async">
-        <div id="guidePhotoFallback" hidden>Referencia visual no disponible.</div>
-      </div>
-      <figcaption>
-        <strong id="guideAngle"></strong>
-        <a id="guidePhotoSource" target="_blank" rel="noopener noreferrer">Referencia visual · Wikimedia Commons</a>
-      </figcaption>`;
-    guideDialog.insertBefore(reference, $('advGuide'));
-  }
-
-  const guidePhoto = $('guidePhoto');
-  const guideSource = $('guidePhotoSource');
-
-  function currentExerciseName(id) {
-    return EXERCISES[id]?.name || ADVANCED[id]?.name || id;
-  }
-
-  function updateGuideUX() {
-    const id = exerciseSelect.value;
-    const q = QUICK_GUIDE[id];
-    if (!q) return;
-
-    $('guideTitle').textContent = currentExerciseName(id) + ' · guía rápida';
-    $('advGuide').textContent = 'Cámara · ' + q.camera;
-    $('advRule').textContent = 'Rep válida · ' + q.valid;
-
-    $('advGuide').className = 'guideQuickLine';
-    $('advRule').className = 'guideQuickLine';
-
-    $('guideAngle').textContent = q.camera;
-    guidePhoto.alt =
-      'Referencia realista del ángulo recomendado para ' + currentExerciseName(id);
-    guidePhoto.hidden = false;
-    $('guidePhotoFallback').hidden = true;
-
-    if ($('positionPreview')) $('positionPreview').hidden = true;
-
-    guidePhoto.onload = () => {
-      guidePhoto.hidden = false;
-      $('guidePhotoFallback').hidden = true;
-      if ($('positionPreview')) $('positionPreview').hidden = true;
-    };
-
-    guidePhoto.onerror = () => {
-      guidePhoto.hidden = true;
-      $('guidePhotoFallback').hidden = true;
-      if ($('positionPreview')) {
-        $('positionPreview').hidden = false;
-        try {
-          drawInitialIllustration($('positionPreview'), id);
-        } catch (_) {
-          $('guidePhotoFallback').hidden = false;
-        }
-      } else {
-        $('guidePhotoFallback').hidden = false;
-      }
-    };
-
-    guidePhoto.src = commonsImage(q.image);
-    guideSource.href = commonsPage(q.image);
-
-    /* Auto-conteo fuera de la interfaz, pero siempre activo. */
-    if ($('advAuto')) {
-      $('advAuto').checked = true;
-      if ($('advAuto').parentElement) $('advAuto').parentElement.hidden = true;
-    }
-
-    /* Calibración visible solo cuando realmente se necesita. */
-    const needsBoxCalibration = id === 'boxjump' || id === 'squatboxjump';
-    if ($('calFloor')) {
-      $('calFloor').hidden = !needsBoxCalibration;
-      $('calFloor').textContent = 'Calibrar suelo';
-    }
-    if ($('calBox')) {
-      $('calBox').hidden = !needsBoxCalibration;
-      $('calBox').textContent = 'Calibrar caja';
-    }
-    if ($('calState')) $('calState').hidden = !needsBoxCalibration;
-  }
-
-  /* La guía ahora está disponible también para ejercicios básicos. */
-  const refreshAdvancedV1011 = refreshAdvanced;
-  refreshAdvanced = function () {
-    refreshAdvancedV1011();
-    if (typeof openGuide !== 'undefined') openGuide.hidden = false;
-    updateGuideUX();
-    syncModeUX();
-  };
-
-  openGuide.textContent = 'Guía';
-  openGuide.setAttribute('aria-label', 'Abrir guía rápida del ejercicio');
-  openGuide.title = 'Guía rápida';
-  openGuide.onclick = () => {
-    updateGuideUX();
-    if (!guideDialog.open) guideDialog.showModal();
-  };
-
-  exerciseSelect.addEventListener('change', updateGuideUX);
-
-  /* ---------- Cámara / ejercicio libre ---------- */
-  if ($('guide')) $('guide').hidden = true;
-
-  function setResetLabel() {
-    if ($('resetCount')) {
-      $('resetCount').textContent = circuit ? 'Reiniciar circuito' : 'Reiniciar contador';
-    }
-  }
-
-  /* ---------- Competencia solo en Circuito ---------- */
-  function isCircuitSelected() {
-    return document.querySelector('input[name="workoutMode"]:checked')?.value === 'circuit';
-  }
+  const nameOf = id => EXERCISES[id]?.name || ADVANCED[id]?.name || id;
 
   function derivedAthleteId(name) {
     const s = (name || '').trim().toLowerCase()
@@ -9397,452 +9216,188 @@ refreshAdvanced();
     return s || 'atleta';
   }
 
-  function syncParticipantDerived() {
+  function isCircuitSelected() {
+    return document.querySelector(
+      'input[name="workoutMode"]:checked'
+    )?.value === 'circuit';
+  }
+
+  function syncHiddenCompetitionFields() {
     if (!$('v9Athlete')) return;
-    if ($('v9AthleteId')) $('v9AthleteId').value = derivedAthleteId($('v9Athlete').value);
-    if ($('v9Round')) $('v9Round').value = 'Circuito';
+
+    if ($('v9AthleteId')) {
+      $('v9AthleteId').value = derivedAthleteId($('v9Athlete').value);
+    }
+    if ($('v9Round') && !$('v9Round').value.trim()) {
+      $('v9Round').value = 'Circuito';
+    }
     if ($('v9Attempt')) $('v9Attempt').value = '1';
   }
 
-  /* Conserva los campos internamente para compatibilidad con historial,
-     pero los elimina de la interfaz. */
-  ['v9AthleteId', 'v9Round', 'v9Attempt'].forEach(id => {
-    const input = $(id);
-    if (input?.closest('label')) input.closest('label').hidden = true;
-  });
+  function syncSetupVisibility() {
+    if (!$('v9Setup')) return;
 
-  if ($('v9Athlete')) {
-    const label = $('v9Athlete').closest('label');
-    if (label?.firstChild?.nodeType === Node.TEXT_NODE) {
-      label.firstChild.nodeValue = 'Nombre completo del atleta';
-    }
-    $('v9Athlete').placeholder = 'Nombre y apellidos';
-    $('v9Athlete').addEventListener('input', () => {
-      syncParticipantDerived();
-      try { readSetup(); } catch (_) {}
-    });
-  }
+    const show = isCircuitSelected() && !$('stationSetup').hidden;
+    $('v9Setup').hidden = !show;
 
-  /* Evita que las funciones antiguas requieran ID/ronda/intento visibles. */
-  const readSetupV1011 = readSetup;
-  readSetup = function () {
-    syncParticipantDerived();
-    return readSetupV1011();
-  };
-
-  validateParticipant = function () {
-    syncParticipantDerived();
-    readSetup();
-    if (!config.meet || !config.test || !config.athlete) {
-      throw new Error('Completa competencia, prueba y nombre completo del atleta.');
-    }
-  };
-
-  /* Texto más corto en la tarjeta de competencia. */
-  const setupSmall = setup.querySelector('.v9-small');
-  if (setupSmall) {
-    setupSmall.textContent =
-      'En circuito, guarda video y resultado provisional para revisión posterior.';
-  }
-
-  function syncCompetitionSetup() {
-    const circuitMode = isCircuitSelected();
-    setup.hidden = !circuitMode;
-
-    if (!circuitMode && $('v9Enabled')) {
+    if (!show && $('v9Enabled')) {
       $('v9Enabled').checked = false;
-      config.enabled = false;
       if ($('v9Fields')) $('v9Fields').hidden = true;
-      try { saveConfig(); } catch (_) {}
-    }
-
-    syncParticipantDerived();
-  }
-
-  document.querySelectorAll('input[name="workoutMode"]').forEach(radio => {
-    radio.addEventListener('change', () => {
-      queueMicrotask(() => {
-        syncCompetitionSetup();
-        syncModeUX();
-      });
-    });
-  });
-
-  /* ---------- Controles visibles según modo ---------- */
-  function syncModeUX() {
-    const inCircuit = !!circuit || isCircuitSelected();
-
-    setResetLabel();
-
-    if (typeof chooseAthlete !== 'undefined') {
-      chooseAthlete.hidden = !inCircuit;
-    }
-    if (typeof historyButton !== 'undefined') {
-      historyButton.hidden = !inCircuit;
-    }
-    if (typeof freeStart !== 'undefined') {
-      /* El circuito ya inicia evidencia con su propio flujo.
-         En ejercicio libre se elimina por solicitud de UX. */
-      freeStart.hidden = true;
-    }
-
-    if ($('guide')) $('guide').hidden = true;
-
-    if ($('advAuto')?.parentElement) $('advAuto').parentElement.hidden = true;
-  }
-
-  /* Después de abrir cámara, circuit ya quedó resuelto. */
-  $('chooseCamera')?.addEventListener('click', () => {
-    setTimeout(syncModeUX, 0);
-  });
-
-  const renderPhoneCircuitV1011 = renderPhoneCircuit;
-  renderPhoneCircuit = function () {
-    renderPhoneCircuitV1011();
-    syncModeUX();
-  };
-
-  /* ---------- Historial ---------- */
-  if ($('v9HistoryActions')) {
-    [...$('v9HistoryActions').querySelectorAll('button')].forEach(btn => {
-      if (/importar evidencia json/i.test(btn.textContent || '')) btn.remove();
-    });
-  }
-
-  /* ---------- Limpieza visual ---------- */
-  const uxStyle = document.createElement('style');
-  uxStyle.textContent = `
-    #guide{display:none!important}
-
-    #guideDialog{
-      width:min(560px,calc(100vw - 20px));
-      padding:14px;
-    }
-    #guideDialog #advGuide,
-    #guideDialog #advRule{
-      margin:8px 0;
-      padding:10px 12px;
-      border:1px solid rgba(255,255,255,.10);
-      border-radius:12px;
-      background:#0c1420;
-      color:#eef4fb;
-      font-size:13px;
-      line-height:1.35;
-    }
-    #guideReference{
-      margin:4px 0 12px;
-    }
-    #guidePhotoWrap{
-      width:100%;
-      aspect-ratio:16/9;
-      background:#05080d;
-      border:1px solid #394353;
-      border-radius:14px;
-      overflow:hidden;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-    }
-    #guidePhoto{
-      display:block;
-      width:100%;
-      height:100%;
-      object-fit:contain;
-      background:#05080d;
-    }
-    #guidePhotoFallback{
-      color:var(--muted);
-      padding:18px;
-      text-align:center;
-    }
-    #guideReference figcaption{
-      display:flex;
-      flex-direction:column;
-      gap:3px;
-      margin-top:7px;
-      font-size:11px;
-      color:var(--muted);
-    }
-    #guideReference figcaption strong{
-      color:#f3f7fb;
-      font-size:12px;
-    }
-    #guideReference a{
-      color:#86c7ff;
-      text-decoration:none;
-    }
-    #positionPreview{
-      margin:4px 0 12px!important;
-      border-radius:14px!important;
-    }
-
-    #v9Setup[hidden]{display:none!important}
-
-    /* Campos internos conservados solo por compatibilidad de datos. */
-    label:has(#v9AthleteId),
-    label:has(#v9Round),
-    label:has(#v9Attempt){
-      display:none!important;
-    }
-
-    /* Evita que controles removidos reaparezcan por estilos antiguos. */
-    #advAuto{display:none!important}
-    #exportJudge{display:none!important}
-  `;
-  document.head.append(uxStyle);
-
-  syncCompetitionSetup();
-  syncModeUX();
-  updateGuideUX();
-  setResetLabel();
-
-  document.title = 'Jueceo Calistenia AI · V10.11 UX';
-})();
-</script>
-
-
-<script>
-/* ============================================================
-   V10.12 — UX/UI CLEANUP 2
-   - Vuelve a dibujos internos.
-   - Competencia y evidencia vive físicamente dentro de Circuito.
-   - Historial/VAR y Grabar nueva serie se ocultan en Ejercicio libre.
-   - No modifica validación de movimientos.
-   ============================================================ */
-
-(() => {
-  /* ---------- 1) Guía: volver a dibujos internos ---------- */
-
-  const photoReference = document.getElementById('guideReference');
-  if (photoReference) photoReference.remove();
-
-  const preview = document.getElementById('positionPreview');
-  if (preview) {
-    preview.hidden = false;
-    preview.style.display = 'block';
-    preview.style.width = '100%';
-    preview.style.height = 'auto';
-    preview.style.maxHeight = '48dvh';
-    preview.style.objectFit = 'contain';
-    preview.style.margin = '6px auto 12px';
-    preview.style.borderRadius = '14px';
-    preview.style.background = '#05080d';
-  }
-
-  const QUICK_GUIDE_V1012 = {
-    pushup: {
-      camera: 'Lateral u oblicua · cuerpo completo visible.',
-      valid: 'Extensión → baja cerca de 90° → vuelve arriba.'
-    },
-    dip: {
-      camera: 'Lateral u oblicua · hombro, codo y muñeca visibles.',
-      valid: 'Extensión → baja cerca de 90° → vuelve arriba.'
-    },
-    pullup: {
-      camera: 'Frontal-oblicua · barra, manos, cara y brazo visibles.',
-      valid: 'Extensión abajo → cabeza llega a la altura de manos → vuelve abajo.'
-    },
-    squat: {
-      camera: 'Lateral u oblicua · cadera, rodilla y tobillo visibles.',
-      valid: 'Cadera al nivel o debajo de rodilla → vuelve arriba.'
-    },
-    muscleup: {
-      camera: 'Lateral-oblicua · barra y brazos completos.',
-      valid: 'Suspensión → pasa sobre barra → extensión arriba.'
-    },
-    frontlever: {
-      camera: 'Lateral · barra y cuerpo completo.',
-      valid: 'Mantén el cuerpo horizontal con brazos extendidos.'
-    },
-    handstand: {
-      camera: 'Lateral-oblicua · manos y cuerpo completo.',
-      valid: 'Mantente invertido sobre las manos.'
-    },
-    hspu: {
-      camera: 'Lateral u oblicua · hombro, codo y muñeca visibles.',
-      valid: 'Extensión → baja → vuelve a extensión.'
-    },
-    onearmpullup: {
-      camera: 'Frontal-oblicua · brazo de trabajo y cara visibles.',
-      valid: 'Extensión → cabeza llega a mano/barra → vuelve abajo.'
-    },
-    lunge: {
-      camera: 'Lateral u oblicua · ambas piernas visibles.',
-      valid: 'Paso adelante o atrás → rodilla y cadera ~90° → vuelve arriba.'
-    },
-    burpee: {
-      camera: 'Lateral-oblicua · cuerpo completo.',
-      valid: 'Fondo + salto claro + manos sobre hombros.'
-    },
-    boxjump: {
-      camera: 'Lateral-oblicua · caja y ambos pies visibles.',
-      valid: 'Salto → ambos pies en caja → extensión arriba.'
-    },
-    squatboxjump: {
-      camera: 'Lateral-oblicua · cuerpo, suelo y caja visibles.',
-      valid: 'Sentadilla → salto a caja → extensión arriba.'
-    },
-    pistolsquat: {
-      camera: 'Lateral u oblicua · pierna de apoyo completa.',
-      valid: 'Profundidad en una pierna → vuelve a extensión.'
-    }
-  };
-
-  function exerciseNameV1012(id) {
-    return EXERCISES[id]?.name || ADVANCED[id]?.name || id;
-  }
-
-  function updateGuideV1012() {
-    const id = exerciseSelect.value;
-    const q = QUICK_GUIDE_V1012[id];
-    if (!q) return;
-
-    if ($('guideTitle')) {
-      $('guideTitle').textContent = exerciseNameV1012(id) + ' · guía rápida';
-    }
-
-    if ($('advGuide')) {
-      $('advGuide').textContent = 'Cámara · ' + q.camera;
-      $('advGuide').className = 'guideQuickLine';
-    }
-
-    if ($('advRule')) {
-      $('advRule').textContent = 'Rep válida · ' + q.valid;
-      $('advRule').className = 'guideQuickLine';
-    }
-
-    const p = document.getElementById('positionPreview');
-    if (p) {
-      p.hidden = false;
-      p.style.display = 'block';
       try {
-        drawInitialIllustration(p, id);
-        p.setAttribute(
-          'aria-label',
-          'Referencia ilustrativa para ' + exerciseNameV1012(id)
-        );
+        config.enabled = false;
+        saveConfig();
       } catch (_) {}
     }
 
-    if ($('advAuto')?.parentElement) $('advAuto').parentElement.hidden = true;
-    if ($('exportJudge')) $('exportJudge').hidden = true;
+    syncHiddenCompetitionFields();
+  }
 
+  function cameraIsCircuit() {
+    return !!circuit;
+  }
+
+  function syncCameraButtons() {
+    /* Nunca borra botones: solo los oculta según modo. */
+    try {
+      chooseAthlete.hidden = !cameraIsCircuit();
+    } catch (_) {}
+
+    try {
+      historyButton.hidden = !cameraIsCircuit();
+      historyButton.style.display = cameraIsCircuit() ? '' : 'none';
+    } catch (_) {}
+
+    try {
+      freeStart.hidden = true;
+      freeStart.style.display = 'none';
+    } catch (_) {}
+
+    if ($('resetCount')) {
+      $('resetCount').textContent =
+        cameraIsCircuit() ? 'Reiniciar circuito' : 'Reiniciar contador';
+    }
+  }
+
+  function updateGuide() {
+    const id = exerciseSelect.value;
+    const q = QUICK_GUIDE[id];
+
+    /* Auto-conteo sigue activo internamente, solo quitamos la opción. */
+    if ($('advAuto')) {
+      $('advAuto').checked = true;
+      const label = $('advAuto').closest('label');
+      if (label) label.hidden = true;
+    }
+
+    /* Ocultar descarga SIN eliminar el nodo: otras funciones pueden referenciarlo. */
+    if ($('exportJudge')) $('exportJudge').hidden = true;
     document.querySelectorAll('button').forEach(btn => {
       if (/descargar posición inicial/i.test(btn.textContent || '')) {
         btn.hidden = true;
       }
     });
+
+    /* Dibujo interno original, con dimensiones adaptadas al modal. */
+    if ($('positionPreview')) {
+      $('positionPreview').hidden = false;
+      $('positionPreview').style.display = 'block';
+      try {
+        drawInitialIllustration($('positionPreview'), id);
+      } catch (_) {}
+    }
+
+    if (q) {
+      if ($('guideTitle')) $('guideTitle').textContent = nameOf(id) + ' · guía rápida';
+      if ($('advGuide')) $('advGuide').textContent = 'Cámara · ' + q[0];
+      if ($('advRule')) $('advRule').textContent = 'Rep válida · ' + q[1];
+    }
+
+    /* Calibraciones visibles solo donde realmente se necesitan. */
+    const box = id === 'boxjump' || id === 'squatboxjump';
+    if ($('calFloor')) $('calFloor').hidden = !box;
+    if ($('calBox')) $('calBox').hidden = !box;
+    if ($('calState')) $('calState').hidden = !box;
   }
 
+  /* Cambiar nombre del campo sin eliminar estructura. */
+  if ($('v9Athlete')) {
+    $('v9Athlete').placeholder = 'Nombre y apellidos';
+    const lab = $('v9Athlete').closest('label');
+    if (lab && lab.firstChild?.nodeType === Node.TEXT_NODE) {
+      lab.firstChild.nodeValue = 'Nombre completo del atleta';
+    }
+    $('v9Athlete').addEventListener('input', syncHiddenCompetitionFields);
+  }
+
+  /* Ocultar ID/dorsal, ronda e intento, manteniendo inputs en DOM. */
+  ['v9AthleteId', 'v9Round', 'v9Attempt'].forEach(id => {
+    const input = $(id);
+    const label = input?.closest('label');
+    if (label) label.hidden = true;
+  });
+
+  /* Ocultar Importar JSON, NO removerlo. */
+  if ($('v9HistoryActions')) {
+    [...$('v9HistoryActions').querySelectorAll('button')].forEach(btn => {
+      if (/importar evidencia json/i.test(btn.textContent || '')) {
+        btn.hidden = true;
+      }
+    });
+  }
+
+  /* La explicación larga debajo de Reiniciar/Salir permanece en DOM,
+     pero no se muestra. Así resetJudge puede seguir actualizándola. */
+  if ($('guide')) $('guide').hidden = true;
+
+  /* Guía compacta. No reemplazamos handlers internos de cámara/video. */
   if (typeof openGuide !== 'undefined') {
     openGuide.textContent = 'Guía';
-    openGuide.onclick = () => {
-      updateGuideV1012();
-      if (!guideDialog.open) guideDialog.showModal();
-    };
+    openGuide.addEventListener('click', () => {
+      setTimeout(updateGuide, 0);
+    });
   }
 
-  exerciseSelect.addEventListener('change', updateGuideV1012);
-
-  /* ---------- 2) Competencia y evidencia: SOLO Circuito ---------- */
-
-  const circuitBuilderV1012 = document.getElementById('circuitBuilder');
-  const setupV1012 = document.getElementById('v9Setup');
-
-  if (circuitBuilderV1012 && setupV1012) {
-    /* Mover físicamente la sección dentro de Circuito.
-       Así Ejercicio libre nunca la muestra aunque otra función cambie hidden. */
-    circuitBuilderV1012.appendChild(setupV1012);
-    setupV1012.hidden = false;
-  }
-
-  function selectedWorkoutV1012() {
-    return document.querySelector(
-      'input[name="workoutMode"]:checked'
-    )?.value || 'free';
-  }
-
-  function markWorkoutModeV1012() {
-    const mode = circuit
-      ? 'circuit'
-      : selectedWorkoutV1012();
-
-    document.body.dataset.workoutKind = mode;
-
-    if (setupV1012) {
-      /* Dentro de circuitBuilder. En free el padre está hidden.
-         En circuito debe permanecer disponible. */
-      setupV1012.hidden = mode !== 'circuit';
-    }
-
-    syncCameraToolsV1012();
-  }
-
-  /* ---------- 3) Historial/VAR y Grabar nueva serie ---------- */
-
-  function findCameraToolV1012(pattern) {
-    return [...document.querySelectorAll('#cameraTools button')]
-      .find(btn => pattern.test((btn.textContent || '').trim()));
-  }
-
-  const historyBtnV1012 =
-    typeof historyButton !== 'undefined'
-      ? historyButton
-      : findCameraToolV1012(/historial\s*\/?\s*var/i);
-
-  const freeStartBtnV1012 =
-    typeof freeStart !== 'undefined'
-      ? freeStart
-      : findCameraToolV1012(/grabar nueva serie/i);
-
-  if (historyBtnV1012) historyBtnV1012.id = 'v1012HistoryButton';
-  if (freeStartBtnV1012) freeStartBtnV1012.id = 'v1012FreeStartButton';
-
-  function syncCameraToolsV1012() {
-    const circuitActive =
-      !!circuit || selectedWorkoutV1012() === 'circuit';
-
-    if (historyBtnV1012) {
-      historyBtnV1012.hidden = !circuitActive;
-      historyBtnV1012.style.display = circuitActive ? '' : 'none';
-    }
-
-    if (freeStartBtnV1012) {
-      /* "Grabar nueva serie" no pertenece a Ejercicio libre.
-         En circuito el registro ya se controla desde el flujo de circuito,
-         por lo que tampoco hace falta mostrar este botón. */
-      freeStartBtnV1012.hidden = true;
-      freeStartBtnV1012.style.display = 'none';
-    }
-  }
+  exerciseSelect.addEventListener('change', () => {
+    setTimeout(updateGuide, 0);
+  });
 
   document.querySelectorAll('input[name="workoutMode"]').forEach(radio => {
     radio.addEventListener('change', () => {
-      requestAnimationFrame(markWorkoutModeV1012);
+      setTimeout(syncSetupVisibility, 0);
     });
   });
 
-  const chooseCameraV1012 = document.getElementById('chooseCamera');
-  if (chooseCameraV1012) {
-    chooseCameraV1012.addEventListener('click', () => {
-      requestAnimationFrame(markWorkoutModeV1012);
-    });
-  }
+  /* Solo listeners posteriores: NO reemplazamos onclick. */
+  $('chooseCamera')?.addEventListener('click', () => {
+    setTimeout(() => {
+      syncSetupVisibility();
+      syncCameraButtons();
+    }, 0);
+  });
 
-  /* Refuerzo durante render del circuito/teléfono. */
-  if (typeof renderPhoneCircuit === 'function') {
-    const renderPhoneCircuitV1012Base = renderPhoneCircuit;
-    renderPhoneCircuit = function () {
-      renderPhoneCircuitV1012Base();
-      markWorkoutModeV1012();
-    };
-  }
+  $('exitCamera')?.addEventListener('click', () => {
+    setTimeout(() => {
+      syncSetupVisibility();
+      syncCameraButtons();
+    }, 0);
+  });
 
-  /* ---------- 4) CSS de refuerzo ---------- */
+  const stationObserver = new MutationObserver(() => {
+    setTimeout(() => {
+      syncSetupVisibility();
+      syncCameraButtons();
+    }, 0);
+  });
 
-  const styleV1012 = document.createElement('style');
-  styleV1012.textContent = `
-    #guideReference{
+  stationObserver.observe($('stationSetup'), {
+    attributes: true,
+    attributeFilter: ['hidden']
+  });
+
+  /* CSS: no elimina ni reubica elementos funcionales. */
+  const style = document.createElement('style');
+  style.textContent = `
+    #guide{
       display:none!important;
     }
 
@@ -9850,23 +9405,26 @@ refreshAdvanced();
       display:block;
       width:100%;
       height:auto;
-      max-height:48dvh;
+      max-height:46dvh;
       object-fit:contain;
       margin:6px auto 12px;
       border-radius:14px;
       background:#05080d;
     }
 
-    body[data-workout-kind="free"] #v9Setup{
-      display:none!important;
+    #guideDialog #advGuide,
+    #guideDialog #advRule{
+      margin:7px 0;
+      padding:9px 11px;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:11px;
+      background:#0c1420;
+      line-height:1.35;
     }
 
-    body[data-workout-kind="free"] #v1012HistoryButton,
-    body[data-workout-kind="free"] #v1012FreeStartButton{
-      display:none!important;
-    }
-
-    #v1012FreeStartButton{
+    label:has(#v9AthleteId),
+    label:has(#v9Round),
+    label:has(#v9Attempt){
       display:none!important;
     }
 
@@ -9875,491 +9433,15 @@ refreshAdvanced();
       display:none!important;
     }
   `;
-  document.head.appendChild(styleV1012);
-
-  /* Asegura que la opción de guía vieja debajo de Reiniciar/Salir siga fuera. */
-  if ($('guide')) $('guide').hidden = true;
-
-  updateGuideV1012();
-  markWorkoutModeV1012();
-
-  document.title = 'Jueceo Calistenia AI · V10.12 UX';
-})();
-</script>
-
-
-<script>
-/* ============================================================
-   V10.13 — FIX APERTURA CÁMARA / MODOS
-   Corrige regresión de V10.12 sin tocar validación de ejercicios.
-   ============================================================ */
-
-(() => {
-  const choose = document.getElementById('chooseCamera');
-  const setupBox = document.getElementById('v9Setup');
-  const stationSetup = document.getElementById('stationSetup');
-  const cameraToolsBox = document.getElementById('cameraTools');
-
-  if (!choose || !setupBox || !stationSetup || !cameraToolsBox) return;
-
-  /* 1) Restaurar la estructura DOM original.
-     El código antiguo espera v9Setup como hermano de chooseCamera. */
-  if (setupBox.parentElement?.id === 'circuitBuilder') {
-    choose.before(setupBox);
-  }
-
-  function selectedModeV1013() {
-    return document.querySelector(
-      'input[name="workoutMode"]:checked'
-    )?.value === 'circuit'
-      ? 'circuit'
-      : 'free';
-  }
-
-  function inInitialScreenV1013() {
-    return !stationSetup.hidden;
-  }
-
-  function effectiveModeV1013() {
-    /* En la pantalla inicial manda SIEMPRE el radio seleccionado.
-       Ya dentro de cámara sí usamos la sesión activa. */
-    if (inInitialScreenV1013()) return selectedModeV1013();
-    return circuit ? 'circuit' : 'free';
-  }
-
-  function competitionCompleteV1013() {
-    const meet = $('v9Meet')?.value.trim();
-    const test = $('v9Test')?.value.trim();
-    const athlete = $('v9Athlete')?.value.trim();
-    return !!(meet && test && athlete);
-  }
-
-  function disableEvidenceV1013(message='') {
-    if ($('v9Enabled')) $('v9Enabled').checked = false;
-    if ($('v9Fields')) $('v9Fields').hidden = true;
-
-    if (typeof config === 'object' && config) {
-      config.enabled = false;
-      try { saveConfig(); } catch (_) {}
-    }
-
-    if (message && $('setupMessage')) {
-      $('setupMessage').textContent = message;
-    }
-  }
-
-  function syncSetupV1013() {
-    const mode = effectiveModeV1013();
-    const circuitMode = mode === 'circuit';
-
-    document.body.dataset.workoutKind = mode;
-
-    /* Competencia y evidencia SOLO se ve al configurar Circuito. */
-    setupBox.hidden = !(
-      inInitialScreenV1013() &&
-      selectedModeV1013() === 'circuit'
-    );
-
-    if (
-      inInitialScreenV1013() &&
-      selectedModeV1013() === 'free'
-    ) {
-      disableEvidenceV1013();
-    }
-
-    /* Herramientas de cámara */
-    const historyBtn =
-      document.getElementById('v1012HistoryButton') ||
-      [...cameraToolsBox.querySelectorAll('button')].find(
-        b => /historial\s*\/?\s*var/i.test(b.textContent || '')
-      );
-
-    const freeRecordBtn =
-      document.getElementById('v1012FreeStartButton') ||
-      [...cameraToolsBox.querySelectorAll('button')].find(
-        b => /grabar nueva serie/i.test(b.textContent || '')
-      );
-
-    if (historyBtn) {
-      historyBtn.hidden = !circuitMode;
-      historyBtn.style.display = circuitMode ? '' : 'none';
-    }
-
-    if (freeRecordBtn) {
-      freeRecordBtn.hidden = true;
-      freeRecordBtn.style.display = 'none';
-    }
-
-    /* Etiqueta inequívoca */
-    if ($('resetCount')) {
-      $('resetCount').textContent =
-        circuitMode ? 'Reiniciar circuito' : 'Reiniciar contador';
-    }
-  }
-
-  /* 2) Corregir apertura.
-     Conservamos el handler completo anterior, pero saneamos el estado
-     ANTES de ejecutarlo para que la parte opcional de evidencia no bloquee. */
-  const previousChooseHandler = choose.onclick;
-
-  choose.onclick = function(ev) {
-    const selected = selectedModeV1013();
-
-    if (selected === 'free') {
-      /* Ejercicio libre nunca debe intentar validar datos de competencia. */
-      disableEvidenceV1013();
-    } else if (
-      $('v9Enabled')?.checked &&
-      !competitionCompleteV1013()
-    ) {
-      /* Evidencia es opcional: datos incompletos no deben impedir abrir cámara. */
-      disableEvidenceV1013(
-        'Cámara abierta sin evidencia de competencia. Completa los datos si quieres guardar VAR.'
-      );
-    }
-
-    try {
-      if (typeof previousChooseHandler === 'function') {
-        previousChooseHandler.call(this, ev);
-      }
-    } catch (err) {
-      console.error(err);
-      if ($('setupMessage')) {
-        $('setupMessage').textContent =
-          'No se pudo abrir el modo seleccionado. Intenta nuevamente.';
-      }
-      return;
-    }
-
-    /* Refuerzo tras todos los listeners heredados de V10.11/V10.12. */
-    setTimeout(syncSetupV1013, 0);
-  };
-
-  /* 3) Mientras estamos en setup, el radio seleccionado siempre manda. */
-  document
-    .querySelectorAll('input[name="workoutMode"]')
-    .forEach(radio => {
-      radio.addEventListener('change', () => {
-        setTimeout(syncSetupV1013, 0);
-      });
-    });
-
-  /* 4) Si volvemos a setup desde otra pantalla, resincronizar. */
-  const setupObserver = new MutationObserver(() => {
-    setTimeout(syncSetupV1013, 0);
-  });
-  setupObserver.observe(stationSetup, {
-    attributes: true,
-    attributeFilter: ['hidden']
-  });
-
-  /* 5) CSS de refuerzo sin reordenar DOM. */
-  const style = document.createElement('style');
-  style.textContent = `
-    body[data-workout-kind="free"] #v9Setup{
-      display:none!important;
-    }
-
-    body[data-workout-kind="free"] #v1012HistoryButton,
-    body[data-workout-kind="free"] #v1012FreeStartButton{
-      display:none!important;
-    }
-
-    #v1012FreeStartButton{
-      display:none!important;
-    }
-
-    /* Los dibujos internos de guía permanecen visibles. */
-    #positionPreview{
-      display:block;
-      width:100%;
-      height:auto;
-      max-height:48dvh;
-      object-fit:contain;
-    }
-  `;
   document.head.appendChild(style);
 
-  syncSetupV1013();
+  /* Aplicar estado inicial sin tocar flujo de cámara. */
+  syncHiddenCompetitionFields();
+  syncSetupVisibility();
+  syncCameraButtons();
+  updateGuide();
 
-  document.title = 'Jueceo Calistenia AI · V10.13 Fix cámara';
-})();
-</script>
-
-
-<script>
-/* ============================================================
-   V10.14 — FIX DEFINITIVO APERTURA LIBRE / CIRCUITO
-   Reemplaza por completo el handler acumulado de chooseCamera.
-   No modifica validación de ejercicios.
-   ============================================================ */
-
-(() => {
-  const choose = document.getElementById('chooseCamera');
-  if (!choose) return;
-
-  function selectedModeV1014() {
-    return document.querySelector(
-      'input[name="workoutMode"]:checked'
-    )?.value === 'circuit' ? 'circuit' : 'free';
-  }
-
-  function disableCompetitionEvidenceV1014() {
-    try {
-      if ($('v9Enabled')) $('v9Enabled').checked = false;
-      if ($('v9Fields')) $('v9Fields').hidden = true;
-      if (typeof config === 'object' && config) {
-        config.enabled = false;
-        try { saveConfig(); } catch (_) {}
-      }
-    } catch (_) {}
-  }
-
-  function safeJudgeResetV1014() {
-    try {
-      resetJudge();
-      return true;
-    } catch (err) {
-      console.warn('resetJudge fallback V10.14', err);
-    }
-
-    /* Fallback mínimo: jamás debe bloquear el cambio de pantalla. */
-    try { reps = 0; } catch (_) {}
-    try { repNum.textContent = '0'; } catch (_) {}
-    try { missingPoseFrames = 0; } catch (_) {}
-    try { noRepCooldown = 0; } catch (_) {}
-    try { latestEvent = null; } catch (_) {}
-    try { cycle = null; } catch (_) {}
-    try { lockedSide = null; } catch (_) {}
-    try { phase = 'WAITING'; } catch (_) {}
-    try { resetAttemptMetrics(); } catch (_) {}
-    try { resetAdvanced(); } catch (_) {}
-    try { resetPistolV105(); } catch (_) {}
-    try { resetBurpeeV109(false); } catch (_) {}
-    try {
-      guideEl.textContent = initialHint(exerciseSelect.value);
-      setStatus(initialHint(exerciseSelect.value), 'warn');
-    } catch (_) {}
-    try { broadcast(); } catch (_) {}
-
-    return false;
-  }
-
-  function createCircuitSafeV1014(plan, rounds, capMs = 0) {
-    if (
-      !validCircuitPlan(plan, rounds) ||
-      !Number.isSafeInteger(capMs) ||
-      capMs < 0 ||
-      capMs > 10800000
-    ) return false;
-
-    circuit = {
-      plan: plan.map(x => ({ ...x })),
-      rounds,
-      round: 1,
-      index: 0,
-      state: 'ready',
-      completed: [],
-      capMs,
-      startedAt: null,
-      startedMono: null,
-      elapsedMs: 0,
-      finalElapsed: null
-    };
-
-    controlRevision++;
-
-    exerciseSelect.value = circuit.plan[0].exercise;
-    safeJudgeResetV1014();
-
-    try { renderPhoneCircuit(); } catch (_) {}
-
-    return true;
-  }
-
-  function openCameraWorkspaceV1014(isCircuit) {
-    mode = 'camera';
-    document.body.dataset.mode = 'camera';
-    document.body.dataset.workoutKind = isCircuit ? 'circuit' : 'free';
-
-    $('stationSetup').hidden = true;
-    $('scoreboard').hidden = true;
-    $('cameraTools').hidden = false;
-
-    try { stayAwake(); } catch (_) {}
-
-    $('pairSummary').hidden = !isCircuit;
-    $('pairCamera').hidden = !isCircuit;
-    $('toggleTools').textContent = isCircuit
-      ? 'Ajustes y conexión'
-      : 'Ajustes';
-
-    if ($('resetCount')) {
-      $('resetCount').textContent = isCircuit
-        ? 'Reiniciar circuito'
-        : 'Reiniciar contador';
-    }
-
-    /* Competencia/evidencia nunca aparece en libre. */
-    if ($('v9Setup')) $('v9Setup').hidden = true;
-
-    /* Historial/VAR solo en circuito. */
-    const historyBtn =
-      document.getElementById('v1012HistoryButton') ||
-      [...document.querySelectorAll('#cameraTools button')].find(
-        b => /historial\s*\/?\s*var/i.test(b.textContent || '')
-      );
-
-    if (historyBtn) {
-      historyBtn.hidden = !isCircuit;
-      historyBtn.style.display = isCircuit ? '' : 'none';
-    }
-
-    /* Grabar nueva serie fuera de la interfaz. */
-    const freeRecordBtn =
-      document.getElementById('v1012FreeStartButton') ||
-      [...document.querySelectorAll('#cameraTools button')].find(
-        b => /grabar nueva serie/i.test(b.textContent || '')
-      );
-
-    if (freeRecordBtn) {
-      freeRecordBtn.hidden = true;
-      freeRecordBtn.style.display = 'none';
-    }
-
-    if (isCircuit) {
-      try {
-        session = newCode();
-        connect('camera', session);
-      } catch (err) {
-        console.warn('Conexión de marcador pendiente', err);
-      }
-    } else {
-      try { disconnect(); } catch (_) {}
-      try { session = ''; } catch (_) {}
-      try { $('sessionCode').textContent = ''; } catch (_) {}
-    }
-  }
-
-  /* Sustituye COMPLETAMENTE el onclick anterior. */
-  choose.onclick = function () {
-    const isCircuit = selectedModeV1014() === 'circuit';
-
-    try {
-      $('setupMessage').textContent = '';
-
-      if (!isCircuit) {
-        circuit = null;
-        disableCompetitionEvidenceV1014();
-        safeJudgeResetV1014();
-        openCameraWorkspaceV1014(false);
-        return;
-      }
-
-      /* Circuito */
-      const capEnabled = !!$('capEnabled')?.checked;
-      const capMinutes = Number($('capMinutes')?.value);
-      const rounds = Number($('roundsInput')?.value);
-
-      if (
-        capEnabled &&
-        (
-          !Number.isInteger(capMinutes) ||
-          capMinutes < 1 ||
-          capMinutes > 180
-        )
-      ) {
-        $('setupMessage').textContent =
-          'Revisa el timecap: usa 1–180 minutos enteros.';
-        return;
-      }
-
-      /* Evidencia es opcional. Si está activa pero incompleta, se desactiva
-         para que jamás bloquee la cámara. */
-      try {
-        if ($('v9Enabled')?.checked) {
-          try { readSetup(); } catch (_) {}
-          const complete =
-            !!config?.meet &&
-            !!config?.test &&
-            !!config?.athlete;
-
-          if (!complete) {
-            disableCompetitionEvidenceV1014();
-          }
-        }
-      } catch (_) {
-        disableCompetitionEvidenceV1014();
-      }
-
-      const ok = createCircuitSafeV1014(
-        circuitDraft,
-        rounds,
-        capEnabled ? capMinutes * 60000 : 0
-      );
-
-      if (!ok) {
-        $('setupMessage').textContent =
-          'Revisa las metas del circuito y el timecap.';
-        return;
-      }
-
-      openCameraWorkspaceV1014(true);
-
-    } catch (err) {
-      console.error('V10.14 open mode error', err);
-
-      /* Mostramos el error real en lugar de un mensaje genérico. */
-      $('setupMessage').textContent =
-        'No se pudo abrir: ' +
-        (err?.message || 'error inesperado');
-    }
-  };
-
-  /* La selección de modo controla la visibilidad, sin mover DOM. */
-  function syncInitialV1014() {
-    if ($('stationSetup').hidden) return;
-
-    const isCircuit = selectedModeV1014() === 'circuit';
-    document.body.dataset.workoutKind = isCircuit ? 'circuit' : 'free';
-
-    if ($('v9Setup')) $('v9Setup').hidden = !isCircuit;
-
-    if (!isCircuit) {
-      disableCompetitionEvidenceV1014();
-    }
-
-    choose.textContent = isCircuit
-      ? 'Abrir cámara del circuito'
-      : 'Abrir ejercicio libre';
-  }
-
-  document
-    .querySelectorAll('input[name="workoutMode"]')
-    .forEach(radio => {
-      radio.addEventListener('change', () => {
-        setTimeout(syncInitialV1014, 0);
-      });
-    });
-
-  const style = document.createElement('style');
-  style.textContent = `
-    body[data-workout-kind="free"] #v9Setup{
-      display:none!important;
-    }
-    body[data-workout-kind="free"] #v1012HistoryButton,
-    body[data-workout-kind="free"] #v1012FreeStartButton{
-      display:none!important;
-    }
-    #v1012FreeStartButton{
-      display:none!important;
-    }
-  `;
-  document.head.appendChild(style);
-
-  syncInitialV1014();
-
-  document.title = 'Jueceo Calistenia AI · V10.14 Fix';
+  document.title = 'Jueceo Calistenia AI · V10.15 estable';
 })();
 </script>
 
