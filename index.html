@@ -9600,6 +9600,293 @@ refreshAdvanced();
 })();
 </script>
 
+
+<script>
+/* ============================================================
+   V10.12 — UX/UI CLEANUP 2
+   - Vuelve a dibujos internos.
+   - Competencia y evidencia vive físicamente dentro de Circuito.
+   - Historial/VAR y Grabar nueva serie se ocultan en Ejercicio libre.
+   - No modifica validación de movimientos.
+   ============================================================ */
+
+(() => {
+  /* ---------- 1) Guía: volver a dibujos internos ---------- */
+
+  const photoReference = document.getElementById('guideReference');
+  if (photoReference) photoReference.remove();
+
+  const preview = document.getElementById('positionPreview');
+  if (preview) {
+    preview.hidden = false;
+    preview.style.display = 'block';
+    preview.style.width = '100%';
+    preview.style.height = 'auto';
+    preview.style.maxHeight = '48dvh';
+    preview.style.objectFit = 'contain';
+    preview.style.margin = '6px auto 12px';
+    preview.style.borderRadius = '14px';
+    preview.style.background = '#05080d';
+  }
+
+  const QUICK_GUIDE_V1012 = {
+    pushup: {
+      camera: 'Lateral u oblicua · cuerpo completo visible.',
+      valid: 'Extensión → baja cerca de 90° → vuelve arriba.'
+    },
+    dip: {
+      camera: 'Lateral u oblicua · hombro, codo y muñeca visibles.',
+      valid: 'Extensión → baja cerca de 90° → vuelve arriba.'
+    },
+    pullup: {
+      camera: 'Frontal-oblicua · barra, manos, cara y brazo visibles.',
+      valid: 'Extensión abajo → cabeza llega a la altura de manos → vuelve abajo.'
+    },
+    squat: {
+      camera: 'Lateral u oblicua · cadera, rodilla y tobillo visibles.',
+      valid: 'Cadera al nivel o debajo de rodilla → vuelve arriba.'
+    },
+    muscleup: {
+      camera: 'Lateral-oblicua · barra y brazos completos.',
+      valid: 'Suspensión → pasa sobre barra → extensión arriba.'
+    },
+    frontlever: {
+      camera: 'Lateral · barra y cuerpo completo.',
+      valid: 'Mantén el cuerpo horizontal con brazos extendidos.'
+    },
+    handstand: {
+      camera: 'Lateral-oblicua · manos y cuerpo completo.',
+      valid: 'Mantente invertido sobre las manos.'
+    },
+    hspu: {
+      camera: 'Lateral u oblicua · hombro, codo y muñeca visibles.',
+      valid: 'Extensión → baja → vuelve a extensión.'
+    },
+    onearmpullup: {
+      camera: 'Frontal-oblicua · brazo de trabajo y cara visibles.',
+      valid: 'Extensión → cabeza llega a mano/barra → vuelve abajo.'
+    },
+    lunge: {
+      camera: 'Lateral u oblicua · ambas piernas visibles.',
+      valid: 'Paso adelante o atrás → rodilla y cadera ~90° → vuelve arriba.'
+    },
+    burpee: {
+      camera: 'Lateral-oblicua · cuerpo completo.',
+      valid: 'Fondo + salto claro + manos sobre hombros.'
+    },
+    boxjump: {
+      camera: 'Lateral-oblicua · caja y ambos pies visibles.',
+      valid: 'Salto → ambos pies en caja → extensión arriba.'
+    },
+    squatboxjump: {
+      camera: 'Lateral-oblicua · cuerpo, suelo y caja visibles.',
+      valid: 'Sentadilla → salto a caja → extensión arriba.'
+    },
+    pistolsquat: {
+      camera: 'Lateral u oblicua · pierna de apoyo completa.',
+      valid: 'Profundidad en una pierna → vuelve a extensión.'
+    }
+  };
+
+  function exerciseNameV1012(id) {
+    return EXERCISES[id]?.name || ADVANCED[id]?.name || id;
+  }
+
+  function updateGuideV1012() {
+    const id = exerciseSelect.value;
+    const q = QUICK_GUIDE_V1012[id];
+    if (!q) return;
+
+    if ($('guideTitle')) {
+      $('guideTitle').textContent = exerciseNameV1012(id) + ' · guía rápida';
+    }
+
+    if ($('advGuide')) {
+      $('advGuide').textContent = 'Cámara · ' + q.camera;
+      $('advGuide').className = 'guideQuickLine';
+    }
+
+    if ($('advRule')) {
+      $('advRule').textContent = 'Rep válida · ' + q.valid;
+      $('advRule').className = 'guideQuickLine';
+    }
+
+    const p = document.getElementById('positionPreview');
+    if (p) {
+      p.hidden = false;
+      p.style.display = 'block';
+      try {
+        drawInitialIllustration(p, id);
+        p.setAttribute(
+          'aria-label',
+          'Referencia ilustrativa para ' + exerciseNameV1012(id)
+        );
+      } catch (_) {}
+    }
+
+    if ($('advAuto')?.parentElement) $('advAuto').parentElement.hidden = true;
+    if ($('exportJudge')) $('exportJudge').hidden = true;
+
+    document.querySelectorAll('button').forEach(btn => {
+      if (/descargar posición inicial/i.test(btn.textContent || '')) {
+        btn.hidden = true;
+      }
+    });
+  }
+
+  if (typeof openGuide !== 'undefined') {
+    openGuide.textContent = 'Guía';
+    openGuide.onclick = () => {
+      updateGuideV1012();
+      if (!guideDialog.open) guideDialog.showModal();
+    };
+  }
+
+  exerciseSelect.addEventListener('change', updateGuideV1012);
+
+  /* ---------- 2) Competencia y evidencia: SOLO Circuito ---------- */
+
+  const circuitBuilderV1012 = document.getElementById('circuitBuilder');
+  const setupV1012 = document.getElementById('v9Setup');
+
+  if (circuitBuilderV1012 && setupV1012) {
+    /* Mover físicamente la sección dentro de Circuito.
+       Así Ejercicio libre nunca la muestra aunque otra función cambie hidden. */
+    circuitBuilderV1012.appendChild(setupV1012);
+    setupV1012.hidden = false;
+  }
+
+  function selectedWorkoutV1012() {
+    return document.querySelector(
+      'input[name="workoutMode"]:checked'
+    )?.value || 'free';
+  }
+
+  function markWorkoutModeV1012() {
+    const mode = circuit
+      ? 'circuit'
+      : selectedWorkoutV1012();
+
+    document.body.dataset.workoutKind = mode;
+
+    if (setupV1012) {
+      /* Dentro de circuitBuilder. En free el padre está hidden.
+         En circuito debe permanecer disponible. */
+      setupV1012.hidden = mode !== 'circuit';
+    }
+
+    syncCameraToolsV1012();
+  }
+
+  /* ---------- 3) Historial/VAR y Grabar nueva serie ---------- */
+
+  function findCameraToolV1012(pattern) {
+    return [...document.querySelectorAll('#cameraTools button')]
+      .find(btn => pattern.test((btn.textContent || '').trim()));
+  }
+
+  const historyBtnV1012 =
+    typeof historyButton !== 'undefined'
+      ? historyButton
+      : findCameraToolV1012(/historial\s*\/?\s*var/i);
+
+  const freeStartBtnV1012 =
+    typeof freeStart !== 'undefined'
+      ? freeStart
+      : findCameraToolV1012(/grabar nueva serie/i);
+
+  if (historyBtnV1012) historyBtnV1012.id = 'v1012HistoryButton';
+  if (freeStartBtnV1012) freeStartBtnV1012.id = 'v1012FreeStartButton';
+
+  function syncCameraToolsV1012() {
+    const circuitActive =
+      !!circuit || selectedWorkoutV1012() === 'circuit';
+
+    if (historyBtnV1012) {
+      historyBtnV1012.hidden = !circuitActive;
+      historyBtnV1012.style.display = circuitActive ? '' : 'none';
+    }
+
+    if (freeStartBtnV1012) {
+      /* "Grabar nueva serie" no pertenece a Ejercicio libre.
+         En circuito el registro ya se controla desde el flujo de circuito,
+         por lo que tampoco hace falta mostrar este botón. */
+      freeStartBtnV1012.hidden = true;
+      freeStartBtnV1012.style.display = 'none';
+    }
+  }
+
+  document.querySelectorAll('input[name="workoutMode"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      requestAnimationFrame(markWorkoutModeV1012);
+    });
+  });
+
+  const chooseCameraV1012 = document.getElementById('chooseCamera');
+  if (chooseCameraV1012) {
+    chooseCameraV1012.addEventListener('click', () => {
+      requestAnimationFrame(markWorkoutModeV1012);
+    });
+  }
+
+  /* Refuerzo durante render del circuito/teléfono. */
+  if (typeof renderPhoneCircuit === 'function') {
+    const renderPhoneCircuitV1012Base = renderPhoneCircuit;
+    renderPhoneCircuit = function () {
+      renderPhoneCircuitV1012Base();
+      markWorkoutModeV1012();
+    };
+  }
+
+  /* ---------- 4) CSS de refuerzo ---------- */
+
+  const styleV1012 = document.createElement('style');
+  styleV1012.textContent = `
+    #guideReference{
+      display:none!important;
+    }
+
+    #positionPreview{
+      display:block;
+      width:100%;
+      height:auto;
+      max-height:48dvh;
+      object-fit:contain;
+      margin:6px auto 12px;
+      border-radius:14px;
+      background:#05080d;
+    }
+
+    body[data-workout-kind="free"] #v9Setup{
+      display:none!important;
+    }
+
+    body[data-workout-kind="free"] #v1012HistoryButton,
+    body[data-workout-kind="free"] #v1012FreeStartButton{
+      display:none!important;
+    }
+
+    #v1012FreeStartButton{
+      display:none!important;
+    }
+
+    #advAuto,
+    #exportJudge{
+      display:none!important;
+    }
+  `;
+  document.head.appendChild(styleV1012);
+
+  /* Asegura que la opción de guía vieja debajo de Reiniciar/Salir siga fuera. */
+  if ($('guide')) $('guide').hidden = true;
+
+  updateGuideV1012();
+  markWorkoutModeV1012();
+
+  document.title = 'Jueceo Calistenia AI · V10.12 UX';
+})();
+</script>
+
 </body>
 </html>
 
