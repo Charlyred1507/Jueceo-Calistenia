@@ -10086,6 +10086,283 @@ refreshAdvanced();
 })();
 </script>
 
+
+<script>
+/* ============================================================
+   V10.14 — FIX DEFINITIVO APERTURA LIBRE / CIRCUITO
+   Reemplaza por completo el handler acumulado de chooseCamera.
+   No modifica validación de ejercicios.
+   ============================================================ */
+
+(() => {
+  const choose = document.getElementById('chooseCamera');
+  if (!choose) return;
+
+  function selectedModeV1014() {
+    return document.querySelector(
+      'input[name="workoutMode"]:checked'
+    )?.value === 'circuit' ? 'circuit' : 'free';
+  }
+
+  function disableCompetitionEvidenceV1014() {
+    try {
+      if ($('v9Enabled')) $('v9Enabled').checked = false;
+      if ($('v9Fields')) $('v9Fields').hidden = true;
+      if (typeof config === 'object' && config) {
+        config.enabled = false;
+        try { saveConfig(); } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
+  function safeJudgeResetV1014() {
+    try {
+      resetJudge();
+      return true;
+    } catch (err) {
+      console.warn('resetJudge fallback V10.14', err);
+    }
+
+    /* Fallback mínimo: jamás debe bloquear el cambio de pantalla. */
+    try { reps = 0; } catch (_) {}
+    try { repNum.textContent = '0'; } catch (_) {}
+    try { missingPoseFrames = 0; } catch (_) {}
+    try { noRepCooldown = 0; } catch (_) {}
+    try { latestEvent = null; } catch (_) {}
+    try { cycle = null; } catch (_) {}
+    try { lockedSide = null; } catch (_) {}
+    try { phase = 'WAITING'; } catch (_) {}
+    try { resetAttemptMetrics(); } catch (_) {}
+    try { resetAdvanced(); } catch (_) {}
+    try { resetPistolV105(); } catch (_) {}
+    try { resetBurpeeV109(false); } catch (_) {}
+    try {
+      guideEl.textContent = initialHint(exerciseSelect.value);
+      setStatus(initialHint(exerciseSelect.value), 'warn');
+    } catch (_) {}
+    try { broadcast(); } catch (_) {}
+
+    return false;
+  }
+
+  function createCircuitSafeV1014(plan, rounds, capMs = 0) {
+    if (
+      !validCircuitPlan(plan, rounds) ||
+      !Number.isSafeInteger(capMs) ||
+      capMs < 0 ||
+      capMs > 10800000
+    ) return false;
+
+    circuit = {
+      plan: plan.map(x => ({ ...x })),
+      rounds,
+      round: 1,
+      index: 0,
+      state: 'ready',
+      completed: [],
+      capMs,
+      startedAt: null,
+      startedMono: null,
+      elapsedMs: 0,
+      finalElapsed: null
+    };
+
+    controlRevision++;
+
+    exerciseSelect.value = circuit.plan[0].exercise;
+    safeJudgeResetV1014();
+
+    try { renderPhoneCircuit(); } catch (_) {}
+
+    return true;
+  }
+
+  function openCameraWorkspaceV1014(isCircuit) {
+    mode = 'camera';
+    document.body.dataset.mode = 'camera';
+    document.body.dataset.workoutKind = isCircuit ? 'circuit' : 'free';
+
+    $('stationSetup').hidden = true;
+    $('scoreboard').hidden = true;
+    $('cameraTools').hidden = false;
+
+    try { stayAwake(); } catch (_) {}
+
+    $('pairSummary').hidden = !isCircuit;
+    $('pairCamera').hidden = !isCircuit;
+    $('toggleTools').textContent = isCircuit
+      ? 'Ajustes y conexión'
+      : 'Ajustes';
+
+    if ($('resetCount')) {
+      $('resetCount').textContent = isCircuit
+        ? 'Reiniciar circuito'
+        : 'Reiniciar contador';
+    }
+
+    /* Competencia/evidencia nunca aparece en libre. */
+    if ($('v9Setup')) $('v9Setup').hidden = true;
+
+    /* Historial/VAR solo en circuito. */
+    const historyBtn =
+      document.getElementById('v1012HistoryButton') ||
+      [...document.querySelectorAll('#cameraTools button')].find(
+        b => /historial\s*\/?\s*var/i.test(b.textContent || '')
+      );
+
+    if (historyBtn) {
+      historyBtn.hidden = !isCircuit;
+      historyBtn.style.display = isCircuit ? '' : 'none';
+    }
+
+    /* Grabar nueva serie fuera de la interfaz. */
+    const freeRecordBtn =
+      document.getElementById('v1012FreeStartButton') ||
+      [...document.querySelectorAll('#cameraTools button')].find(
+        b => /grabar nueva serie/i.test(b.textContent || '')
+      );
+
+    if (freeRecordBtn) {
+      freeRecordBtn.hidden = true;
+      freeRecordBtn.style.display = 'none';
+    }
+
+    if (isCircuit) {
+      try {
+        session = newCode();
+        connect('camera', session);
+      } catch (err) {
+        console.warn('Conexión de marcador pendiente', err);
+      }
+    } else {
+      try { disconnect(); } catch (_) {}
+      try { session = ''; } catch (_) {}
+      try { $('sessionCode').textContent = ''; } catch (_) {}
+    }
+  }
+
+  /* Sustituye COMPLETAMENTE el onclick anterior. */
+  choose.onclick = function () {
+    const isCircuit = selectedModeV1014() === 'circuit';
+
+    try {
+      $('setupMessage').textContent = '';
+
+      if (!isCircuit) {
+        circuit = null;
+        disableCompetitionEvidenceV1014();
+        safeJudgeResetV1014();
+        openCameraWorkspaceV1014(false);
+        return;
+      }
+
+      /* Circuito */
+      const capEnabled = !!$('capEnabled')?.checked;
+      const capMinutes = Number($('capMinutes')?.value);
+      const rounds = Number($('roundsInput')?.value);
+
+      if (
+        capEnabled &&
+        (
+          !Number.isInteger(capMinutes) ||
+          capMinutes < 1 ||
+          capMinutes > 180
+        )
+      ) {
+        $('setupMessage').textContent =
+          'Revisa el timecap: usa 1–180 minutos enteros.';
+        return;
+      }
+
+      /* Evidencia es opcional. Si está activa pero incompleta, se desactiva
+         para que jamás bloquee la cámara. */
+      try {
+        if ($('v9Enabled')?.checked) {
+          try { readSetup(); } catch (_) {}
+          const complete =
+            !!config?.meet &&
+            !!config?.test &&
+            !!config?.athlete;
+
+          if (!complete) {
+            disableCompetitionEvidenceV1014();
+          }
+        }
+      } catch (_) {
+        disableCompetitionEvidenceV1014();
+      }
+
+      const ok = createCircuitSafeV1014(
+        circuitDraft,
+        rounds,
+        capEnabled ? capMinutes * 60000 : 0
+      );
+
+      if (!ok) {
+        $('setupMessage').textContent =
+          'Revisa las metas del circuito y el timecap.';
+        return;
+      }
+
+      openCameraWorkspaceV1014(true);
+
+    } catch (err) {
+      console.error('V10.14 open mode error', err);
+
+      /* Mostramos el error real en lugar de un mensaje genérico. */
+      $('setupMessage').textContent =
+        'No se pudo abrir: ' +
+        (err?.message || 'error inesperado');
+    }
+  };
+
+  /* La selección de modo controla la visibilidad, sin mover DOM. */
+  function syncInitialV1014() {
+    if ($('stationSetup').hidden) return;
+
+    const isCircuit = selectedModeV1014() === 'circuit';
+    document.body.dataset.workoutKind = isCircuit ? 'circuit' : 'free';
+
+    if ($('v9Setup')) $('v9Setup').hidden = !isCircuit;
+
+    if (!isCircuit) {
+      disableCompetitionEvidenceV1014();
+    }
+
+    choose.textContent = isCircuit
+      ? 'Abrir cámara del circuito'
+      : 'Abrir ejercicio libre';
+  }
+
+  document
+    .querySelectorAll('input[name="workoutMode"]')
+    .forEach(radio => {
+      radio.addEventListener('change', () => {
+        setTimeout(syncInitialV1014, 0);
+      });
+    });
+
+  const style = document.createElement('style');
+  style.textContent = `
+    body[data-workout-kind="free"] #v9Setup{
+      display:none!important;
+    }
+    body[data-workout-kind="free"] #v1012HistoryButton,
+    body[data-workout-kind="free"] #v1012FreeStartButton{
+      display:none!important;
+    }
+    #v1012FreeStartButton{
+      display:none!important;
+    }
+  `;
+  document.head.appendChild(style);
+
+  syncInitialV1014();
+
+  document.title = 'Jueceo Calistenia AI · V10.14 Fix';
+})();
+</script>
+
 </body>
 </html>
 
